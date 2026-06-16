@@ -6,3 +6,5 @@
 - Fixed heavy-role priority combos to avoid selecting a second primary from same pool.
 - Fixed stable allocation ordering to tolerate missing current scores.
 - Fixed scanner false-removal guard to require newest successful omission older than five minutes.
+- Added models.dev and authenticated Artificial Analysis metadata fetchers with deterministic external dependency errors.
+- Made PostgreSQL-backed tests skip when local Postgres cannot initialize due host shared-memory limits.

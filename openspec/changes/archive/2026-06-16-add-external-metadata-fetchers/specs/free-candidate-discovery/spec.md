@@ -1,8 +1,7 @@
 # free-candidate-discovery Specification
 
-## Purpose
-TBD - created by archiving change add-discovery. Update Purpose after archive.
-## Requirements
+## MODIFIED Requirements
+
 ### Requirement: Candidate selection rule
 
 The system SHALL fetch the models.dev provider-keyed catalog from
@@ -35,25 +34,25 @@ NOT use naive substring matching that catches `free` inside other words.
 - WHEN the candidate filter runs
 - THEN the model is NOT recorded as zero-cost solely due to the missing field
 
-#### Scenario: False free token
-- GIVEN a model id contains `freedom`, `carefree`, or `freebsd`
-- WHEN candidate detection runs
-- THEN it is not treated as a free token signal
+### Requirement: models.dev fetch errors
 
-#### Scenario: Cost is not an object
-- GIVEN cost metadata is not a dict/object
-- WHEN candidate detection runs
-- THEN it is not treated as zero cost
+The system SHALL fail metadata sync conservatively when the models.dev catalog
+cannot be fetched or parsed. Timeout, network failure, non-200 status, invalid
+JSON, non-object payload, or missing `providers` object SHALL produce a
+structured metadata error and SHALL NOT create or update free candidates from
+partial data.
 
-#### Scenario: Only input cost is zero
-- GIVEN input cost is zero but output cost is not zero
-- WHEN candidate detection runs
-- THEN it is not treated as zero cost
+#### Scenario: models.dev non-200
+- GIVEN `GET https://models.dev/api.json` returns a non-200 status
+- WHEN metadata sync runs
+- THEN candidate discovery is skipped
+- AND the sync result records a models.dev HTTP error
 
-#### Scenario: Multiple signals collapse
-- GIVEN two or more candidate signals are present
-- WHEN candidate evidence is recorded
-- THEN the signal is collapsed to `multiple_signals`
+#### Scenario: models.dev invalid payload
+- GIVEN models.dev returns invalid JSON or a JSON payload without a provider object
+- WHEN metadata sync parses the response
+- THEN the sync fails with an invalid payload error
+- AND no candidates are produced from that response
 
 ### Requirement: Cost is read per provider
 
@@ -76,23 +75,3 @@ quota research.
 - GIVEN a model whose name contains `free` but has no confirmed quota
 - WHEN the candidate enters classification
 - THEN it is not activated until free access is confirmed
-
-### Requirement: models.dev fetch errors
-
-The system SHALL fail metadata sync conservatively when the models.dev catalog
-cannot be fetched or parsed. Timeout, network failure, non-200 status, invalid
-JSON, non-object payload, or missing `providers` object SHALL produce a
-structured metadata error and SHALL NOT create or update free candidates from
-partial data.
-
-#### Scenario: models.dev non-200
-- GIVEN `GET https://models.dev/api.json` returns a non-200 status
-- WHEN metadata sync runs
-- THEN candidate discovery is skipped
-- AND the sync result records a models.dev HTTP error
-
-#### Scenario: models.dev invalid payload
-- GIVEN models.dev returns invalid JSON or a JSON payload without a provider object
-- WHEN metadata sync parses the response
-- THEN the sync fails with an invalid payload error
-- AND no candidates are produced from that response

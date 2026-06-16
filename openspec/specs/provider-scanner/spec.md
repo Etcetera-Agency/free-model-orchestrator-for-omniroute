@@ -5,17 +5,13 @@ TBD - created by archiving change add-discovery. Update Purpose after archive.
 ## Requirements
 ### Requirement: Daily catalog scan and snapshot
 
-The system SHALL fetch every registered provider's catalog once per daily batch
-via `/api/providers`, `/api/providers/{id}` and `/api/providers/{id}/models`,
-store an immutable `provider_catalog_snapshots` row keyed by `catalog_hash`, and
-skip diffing when the hash matches the last successful snapshot. Credentials
-SHALL NOT be copied.
+The system SHALL use only successful snapshots as the previous successful
+snapshot for unchanged detection.
 
-#### Scenario: Unchanged catalog
-- GIVEN a provider catalog whose hash equals the last successful snapshot
-- WHEN the scanner runs
-- THEN no diff is computed for that provider
-
+#### Scenario: Failed snapshot not previous
+- GIVEN the latest stored snapshot has non-success fetch status
+- WHEN unchanged detection runs
+- THEN that snapshot is ignored as previous
 ### Requirement: Catalog diff and endpoint upsert
 
 The system SHALL diff model id, name, type, flags, pricing, capabilities and
@@ -44,12 +40,22 @@ manually overridden.
 
 ### Requirement: False-removal protection
 
-The system SHALL mark a model `removed` (not delete it) only after two
-consecutive successful catalog fetches without it, at least 5 minutes apart. If a
-provider fetch errors, missing models SHALL NOT be marked removed.
+The system SHALL mark a previously known endpoint removed only after at least two
+successful snapshots both omit it and the newest successful omission is at least
+five minutes old. Failed snapshots SHALL NOT count toward previous-success or
+unchanged-catalog decisions.
 
-#### Scenario: Fetch error
-- GIVEN a provider catalog fetch fails
-- WHEN models appear missing in that failed fetch
-- THEN none of them are marked removed
+#### Scenario: Fewer than two snapshots
+- GIVEN fewer than two snapshots exist
+- WHEN removal protection evaluates an omitted endpoint
+- THEN it does not mark removed
 
+#### Scenario: Not both snapshots successful
+- GIVEN the relevant snapshots are not both successful
+- WHEN removal protection evaluates an omitted endpoint
+- THEN it does not mark removed
+
+#### Scenario: Omission too young
+- GIVEN two successful omissions exist but the newest is younger than five minutes
+- WHEN removal protection evaluates an omitted endpoint
+- THEN it does not mark removed

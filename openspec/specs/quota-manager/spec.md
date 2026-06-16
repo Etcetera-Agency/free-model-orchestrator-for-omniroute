@@ -5,27 +5,34 @@ TBD - created by archiving change add-quota. Update Purpose after archive.
 ## Requirements
 ### Requirement: Effective remaining counter
 
-The system SHALL compute, per metric, `effective_remaining = min(provider_reported_remaining,
-limit - locally_observed_usage) - pending_reserved - safety_buffer`, using only
-reliable values; if no reliable value exists the endpoint SHALL be excluded.
+The system SHALL compute effective remaining quota from live counters, recent
+attribution and reservations. If every counter source is unknown, effective
+remaining SHALL be unknown. Pending reservations and safety buffer MAY make
+effective remaining negative; that result SHALL be preserved.
 
 #### Scenario: No reliable counter
-- GIVEN neither provider-reported remaining nor a reliable local counter exists
+- GIVEN no reliable live, attributed or reserved counter exists
 - WHEN effective remaining is computed
-- THEN the endpoint is excluded
+- THEN the result is unknown
 
+#### Scenario: Negative effective remaining
+- GIVEN pending reservations plus safety buffer exceed remaining quota
+- WHEN effective remaining is computed
+- THEN the negative value is returned
 ### Requirement: Hard-stop gating
 
-The system SHALL admit an endpoint to a combo only if a hard stop after free
-quota is guaranteed by the provider or OmniRoute; otherwise the endpoint SHALL
-NOT be admitted at all. An endpoint already exhausted at calc time SHALL be
-excluded for that batch.
+The system SHALL require provider hard-stop semantics before treating free quota
+as usable.
 
 #### Scenario: No hard stop
-- GIVEN an endpoint whose provider cannot stop after free quota is exhausted
-- WHEN combos are built
-- THEN the endpoint is not admitted
+- GIVEN a provider has free quota but no confirmed hard stop
+- WHEN quota is evaluated for allocation
+- THEN the endpoint is rejected
 
+#### Scenario: Hard stop false
+- GIVEN `require_hard_stop(False)` is called
+- WHEN validation runs
+- THEN it raises `ValueError`
 ### Requirement: Reservation only for own probes
 
 The system SHALL reserve quota only for its own probes; production traffic flows

@@ -28,12 +28,21 @@ text foreign key.
 
 ### Requirement: Canonical status vocabulary
 
-The system SHALL use the single status set `confirmed | inferred | assumed_shared
-| unknown` for quota independence and quota attribution across all tables.
+The system SHALL enforce combo state transitions through the allowed transition
+set. It SHALL reject direct snapshot-to-commit, applied-to-commit without smoke,
+and any backward transition.
 
-#### Scenario: Independence default
-- GIVEN a newly discovered provider account
-- WHEN it is created
-- THEN its independence status defaults to `assumed_shared` and is constrained to
-  the canonical set
+#### Scenario: Snapshot directly committed
+- GIVEN a combo is in `SNAPSHOT_SAVED`
+- WHEN transition to `COMMITTED` is requested
+- THEN the transition is rejected
 
+#### Scenario: Applied directly committed
+- GIVEN a combo is in `APPLIED`
+- WHEN transition to `COMMITTED` is requested
+- THEN the transition is rejected
+
+#### Scenario: Backward combo transition
+- GIVEN a combo is in any later state
+- WHEN transition to an earlier state is requested
+- THEN the transition is rejected

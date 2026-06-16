@@ -21,37 +21,29 @@ quota pools, never the connection count times per-account quota.
 
 ### Requirement: Quota pool grouping order
 
-The system SHALL assign a connection to a quota pool in order: manual override;
-explicit upstream account id; rate-limit account id; identical credential
-fingerprint; identical usage/reset bucket; provider adapter; conservative
-fallback that groups connections as shared. Fingerprints SHALL use only non-secret
-attributes.
+The system SHALL merge endpoints into pools conservatively. If endpoints in one
+pool report conflicting independence statuses, merged pool status SHALL be
+unknown.
 
-#### Scenario: Unproven independence
-- GIVEN a new connection whose independence cannot be proven
-- WHEN grouping runs
-- THEN it joins an existing shared pool
-
+#### Scenario: Conflicting pool statuses
+- GIVEN endpoints in the same pool have different independence statuses
+- WHEN pools are merged
+- THEN the merged status is unknown
 ### Requirement: Independence status drives capacity
 
-The system SHALL record an independence status from the canonical set and add
-capacity only for `confirmed` independent pools; `inferred`, `assumed_shared` and
-`unknown` SHALL NOT add guaranteed capacity. A pool merge SHALL trigger an
-immediate allocation recalculation.
+The system SHALL count usable capacity only from confirmed independent
+connections and SHALL deduplicate repeated connection ids.
 
-#### Scenario: Pool merged
-- GIVEN two pools previously counted as independent are merged
-- WHEN the merge is detected
-- THEN allocation is recalculated because capacity may have been overstated
-
+#### Scenario: Non-confirmed and duplicate capacity
+- GIVEN capacity candidates include non-confirmed connections and duplicate ids
+- WHEN usable capacity is computed
+- THEN only unique confirmed independent connection ids count
 ### Requirement: Connection-source errors are conservative
 
-If `/api/providers` is unavailable the system SHALL forbid allocation/apply; if
-`/api/rate-limits` is unavailable it SHALL reuse the last confirmed grouping;
-conflicting data SHALL resolve to `unknown`.
+When connection metadata cannot prove rate-limit availability, the system SHALL
+fall back to previous pool keys so capacity grouping stays stable.
 
-#### Scenario: Rate-limit API down
-- GIVEN `/api/rate-limits` is unavailable
+#### Scenario: Rate limits unavailable
+- GIVEN `rate_limits_available` is false and previous pools exist
 - WHEN account discovery runs
-- THEN the last confirmed grouping is reused rather than inventing new capacity
-
+- THEN previous pool keys are reused

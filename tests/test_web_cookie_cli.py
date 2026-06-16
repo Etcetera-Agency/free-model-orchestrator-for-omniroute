@@ -1,4 +1,5 @@
 from fmo.cli import EXIT_CODES, parse_args, run_cli
+from fmo.external_metadata import ExternalMetadataError
 from fmo.web_cookie import (
     check_session_health,
     default_web_cookie_capabilities,
@@ -86,3 +87,41 @@ def test_cli_commands_flags_exit_codes_and_dry_run_no_combo_test():
     assert dry.combo_test_called is False
     assert aa.command == "aa-index"
     assert aa.aa_command == "status"
+
+
+def test_cli_sync_metadata_and_full_call_metadata_sync_before_pipeline():
+    calls = []
+
+    def metadata_sync(*, dry_run):
+        calls.append(("metadata", dry_run))
+
+    sync = run_cli(["sync-metadata"], preconditions_ok=True, metadata_sync=metadata_sync)
+    full = run_cli(["full"], preconditions_ok=True, metadata_sync=metadata_sync)
+
+    assert sync.exit_code == 0
+    assert full.exit_code == 0
+    assert calls == [("metadata", False), ("metadata", False)]
+
+
+def test_cli_sync_metadata_dry_run_validates_without_changes():
+    calls = []
+
+    def metadata_sync(*, dry_run):
+        calls.append(dry_run)
+
+    result = run_cli(["sync-metadata", "--dry-run"], preconditions_ok=True, metadata_sync=metadata_sync)
+
+    assert result.exit_code == 0
+    assert result.changed is False
+    assert calls == [True]
+
+
+def test_cli_metadata_sync_reports_external_dependency_failure_without_secret():
+    def metadata_sync(*, dry_run):
+        raise ExternalMetadataError("artificial_analysis", "aa_api_key_required")
+
+    result = run_cli(["sync-metadata"], preconditions_ok=True, metadata_sync=metadata_sync)
+
+    assert result.exit_code == EXIT_CODES["external_dependency_failed"]
+    assert result.changed is False
+    assert result.error_reason == "aa_api_key_required"

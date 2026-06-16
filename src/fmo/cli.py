@@ -1,5 +1,9 @@
 import argparse
+from collections.abc import Callable
 from dataclasses import dataclass
+
+from fmo.external_metadata import ExternalMetadataError
+from fmo.metadata_sync import sync_external_metadata
 
 
 COMMANDS = [
@@ -39,6 +43,7 @@ class CliResult:
     exit_code: int
     changed: bool
     combo_test_called: bool = False
+    error_reason: str | None = None
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -53,10 +58,16 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def run_cli(argv: list[str], *, preconditions_ok: bool) -> CliResult:
+def run_cli(argv: list[str], *, preconditions_ok: bool, metadata_sync: Callable[..., object] | None = None) -> CliResult:
     args = parse_args(argv)
     if args.command == "apply" and not preconditions_ok:
         return CliResult(exit_code=EXIT_CODES["unsafe_to_apply"], changed=False)
+    if args.command in {"sync-metadata", "full"}:
+        sync = metadata_sync or sync_external_metadata
+        try:
+            sync(dry_run=args.dry_run)
+        except ExternalMetadataError as exc:
+            return CliResult(exit_code=EXIT_CODES["external_dependency_failed"], changed=False, error_reason=exc.reason)
     if args.dry_run:
         return CliResult(exit_code=EXIT_CODES["success"], changed=False, combo_test_called=False)
     return CliResult(exit_code=EXIT_CODES["success"], changed=args.command == "apply")

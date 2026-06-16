@@ -16,25 +16,23 @@ counted as guaranteed capacity for several roles at once.
 
 ### Requirement: Hard constraints and heavy-role separation
 
-The system SHALL enforce per-pool and per-provider-group caps and SHALL NOT make
-`research_scout`, `health_reasoning` and `cross_domain_orchestrator` primary in
-the same quota pool.
+The system SHALL keep heavy roles separated across quota pools when possible and
+SHALL NOT assign a second primary for the same heavy role in the same pool.
 
-#### Scenario: Two heavy roles, one pool
-- GIVEN `research_scout` and `health_reasoning` both prefer pool G as primary
-- WHEN allocation runs
-- THEN they do not both take G as primary
-
+#### Scenario: Heavy role same pool second primary
+- GIVEN a heavy role already has a primary endpoint in a pool
+- WHEN another endpoint from the same pool is considered as second primary
+- THEN it is not selected
 ### Requirement: Oversubscription gate
 
-The system SHALL compute `oversubscription_ratio` per pool after shared-role
-expansion and SHALL NOT apply a plan where any pool ratio exceeds 1.
+The system SHALL reject plans where assigned demand exceeds usable free capacity.
+Zero-capacity pools SHALL be treated as oversubscribed instead of causing a
+division error.
 
-#### Scenario: Oversubscribed pool
-- GIVEN projected guaranteed+opportunistic usage exceeds usable capacity for a pool
+#### Scenario: Zero capacity pool
+- GIVEN a plan assigns demand to a pool with zero usable capacity
 - WHEN the plan is validated
-- THEN the plan is not applied
-
+- THEN the plan is rejected as oversubscribed
 ### Requirement: One priority combo per role, no weights
 
 The system SHALL emit exactly one combo per role as an ordered endpoint list with
@@ -48,23 +46,19 @@ NOT be calculated or stored.
 
 ### Requirement: Degraded modes, no paid fallback
 
-The system SHALL mark a role `unavailable`, `degraded_single_provider`,
-`degraded_low_quota` or `degraded_quality_capacity` rather than create a paid
-fallback when capacity is insufficient.
+If no free endpoint has enough capacity for a role, the system SHALL omit that
+role from the plan rather than allocate paid or unsafe fallback capacity.
 
-#### Scenario: Insufficient free capacity
-- GIVEN a role with no sufficient free capacity
+#### Scenario: No endpoint with capacity
+- GIVEN a role's demand exceeds every matching free endpoint capacity
 - WHEN allocation runs
-- THEN the role is marked degraded and no paid endpoint is added
-
+- THEN the role is absent from the plan
 ### Requirement: Stability
 
-The system SHALL NOT reorder or rebuild a combo when the eligible set is
-unchanged, score movement does not cross the reorder threshold, improvement is
-below threshold, or a new endpoint has not passed its stability period.
+The system SHALL keep stable allocation order when scores drift trivially and
+SHALL tolerate endpoints missing from the current score map.
 
-#### Scenario: Trivial score drift
-- GIVEN scores moved less than the reorder threshold
-- WHEN the daily run builds combos
-- THEN the existing combo order is kept
-
+#### Scenario: Missing score during stable order
+- GIVEN a previous endpoint is not present in current scores
+- WHEN stable order is computed
+- THEN no `KeyError` is raised

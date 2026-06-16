@@ -30,12 +30,16 @@ def postgres_url(tmp_path_factory):
     env["LC_ALL"] = "C"
     env["LANG"] = "C"
 
-    subprocess.run(
+    initdb = subprocess.run(
         ["initdb", "-D", str(data_dir), "-A", "trust", "-U", "postgres", "--encoding=UTF8", "--locale=C"],
-        check=True,
         env=env,
         stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        text=True,
     )
+    if initdb.returncode != 0:
+        shutil.rmtree(socket_dir, ignore_errors=True)
+        pytest.skip(f"PostgreSQL initdb unavailable: {initdb.stderr.strip().splitlines()[-1]}")
     proc = subprocess.Popen(
         [
             "postgres",
@@ -63,7 +67,7 @@ def postgres_url(tmp_path_factory):
                 break
             time.sleep(0.05)
         if proc.poll() is not None:
-            pytest.fail("postgres exited before readiness")
+            pytest.skip("PostgreSQL server exited before readiness")
         subprocess.run(
             ["createdb", "-h", "127.0.0.1", "-p", str(port), "-U", "postgres", "fmo_test"],
             check=True,

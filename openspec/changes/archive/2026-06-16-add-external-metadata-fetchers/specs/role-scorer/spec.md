@@ -1,48 +1,13 @@
 # role-scorer Specification
 
-## Purpose
-TBD - created by archiving change add-scoring. Update Purpose after archive.
-## Requirements
-### Requirement: Eligibility filter precedes scoring
-
-The system SHALL score an endpoint for a role only if it has an allowed free
-access status, passed the basic probe, has sufficient usable quota greater than
-zero, is matched to a canonical model, has a closed breaker, and supports the
-role's required capabilities. Each rejection branch SHALL expose a distinct
-reason.
-
-#### Scenario: Breaker not closed
-- GIVEN an otherwise eligible endpoint whose breaker is not closed
-- WHEN scoring eligibility runs
-- THEN it is rejected with a breaker reason
-
-#### Scenario: Zero quota boundary
-- GIVEN an endpoint has usable quota equal to zero
-- WHEN scoring eligibility runs
-- THEN it is rejected with a quota reason
-
-#### Scenario: Missing required capability
-- GIVEN an endpoint lacks a role-required capability
-- WHEN scoring eligibility runs
-- THEN it is rejected with a capability reason
-
-### Requirement: Additive score without price
-
-The system SHALL compute `score = benchmark_fit + capability_fit + health +
-latency + quota_headroom + stability - uncertainty`. Price SHALL NOT be a factor,
-because all eligible endpoints are already free within quota.
-
-#### Scenario: Price excluded
-- GIVEN two eligible free endpoints
-- WHEN they are scored
-- THEN no price term influences the score
+## MODIFIED Requirements
 
 ### Requirement: Artificial Analysis scoring v1
 
 The system SHALL fetch Artificial Analysis model benchmark metadata before role
 scoring unless an AA snapshot is explicitly injected by tests or offline tooling.
-The request SHALL use a configured API key in the `x-api-key` header and SHALL
-fail before network I/O when the API key is missing. Fetched `data` rows SHALL be normalized into only these
+The request SHALL use a configured API key and SHALL fail before network
+I/O when the API key is missing. Fetched rows SHALL be normalized into only these
 scoring inputs:
 `intelligence_index`, `coding_index`, `agentic_index`,
 `median_output_tokens_per_second`, and `median_end_to_end_seconds`, normalized to
@@ -67,7 +32,7 @@ unknown.
 #### Scenario: Artificial Analysis API key redacted
 - GIVEN an AA request fails after using a configured API key
 - WHEN the error is reported
-- THEN the API key and full `x-api-key` header are not present in the error text
+- THEN the API key and full x-api-key header are not present in the error text
 
 #### Scenario: One missing metric
 - GIVEN an endpoint missing `coding_index` only
@@ -80,37 +45,6 @@ unknown.
 - THEN `agentic_index` remains absent
 - AND it is not converted to `0`
 
-#### Scenario: Degenerate percentile range
-- GIVEN P95 is less than or equal to P5
-- WHEN a metric is normalized
-- THEN the normalized value is `0.0`
-
-### Requirement: Latency source priority
-
-The system SHALL prefer OmniRoute endpoint telemetry over OmniRoute provider
-telemetry over the Artificial Analysis model median for latency. If all latency
-sources are missing, latency source SHALL be unknown.
-
-#### Scenario: Endpoint telemetry available
-- GIVEN both endpoint telemetry and an AA median exist
-- WHEN latency is scored
-- THEN endpoint telemetry is used
-
-#### Scenario: No latency source
-- GIVEN endpoint telemetry, provider telemetry and AA median are all missing
-- WHEN latency source is selected
-- THEN no source is selected
-
-### Requirement: Immutable, hash-keyed scores
-
-The system SHALL store each score immutably with an `input_state_hash` and SHALL
-skip recomputation when the hash is unchanged.
-
-#### Scenario: Unchanged inputs
-- GIVEN an endpoint whose scoring inputs are unchanged
-- WHEN scoring runs
-- THEN no new score is computed
-
 ### Requirement: Artificial Analysis fetch errors
 
 The system SHALL treat Artificial Analysis fetch failures as metadata sync
@@ -118,7 +52,7 @@ failures for new scoring inputs. Missing API key, timeout, network failure,
 non-200 status, invalid JSON, missing `intelligence_index_version`, or non-list `data` rows SHALL
 produce a structured metadata error. The system SHALL NOT overwrite existing AA
 scoring snapshots with invalid or partial payloads. Error output SHALL redact
-API keys and `x-api-key` headers.
+API keys and x-api-key headers.
 
 #### Scenario: Artificial Analysis non-200
 - GIVEN the Artificial Analysis metadata request returns a non-200 status

@@ -5,27 +5,21 @@ TBD - created by archiving change add-scoring. Update Purpose after archive.
 ## Requirements
 ### Requirement: Probe only after free confirmation
 
-The system SHALL probe an endpoint only when the access classifier returned
-`free_unlimited`, `free_quota_available` or `free_promotional_available` and the
-quota manager reserved probe capacity. Probing SHALL NOT be used to test whether
-money is charged.
+The system SHALL probe only confirmed-free endpoints with reserved capacity.
 
-#### Scenario: Unconfirmed endpoint
-- GIVEN an endpoint classified `unknown_excluded`
-- WHEN the probe runner is invoked
-- THEN it does not probe the endpoint
-
+#### Scenario: No reserved capacity
+- GIVEN an endpoint does not have reserved capacity
+- WHEN probe eligibility is checked
+- THEN it is not probed
 ### Requirement: Isolated probe request
 
-The system SHALL probe via the dedicated `POST /v1/providers/{provider}/chat/completions`
-route with an explicit model and `X-OmniRoute-No-Cache: true`, so probing cannot
-be routed to another provider. Only test prompts are stored, never user content.
+The system SHALL pass a probe only when the response status is `200` and content
+is non-empty.
 
-#### Scenario: Probe routing
-- GIVEN a probe for provider P, model M
-- WHEN the probe executes
-- THEN it targets P's dedicated route with M explicitly, not generic routing
-
+#### Scenario: Non-200 or empty content
+- GIVEN a probe response has non-200 status or empty content
+- WHEN probe result is evaluated
+- THEN `passed` is false
 ### Requirement: Capability-gated suites
 
 The system SHALL run the basic-text suite for every new endpoint and run
@@ -39,14 +33,11 @@ capability is claimed and quota reserve allows.
 
 ### Requirement: Probe error handling and promotion
 
-The system SHALL handle probe errors as: one retry on network/5xx; no retry on
-429 (hand to quota manager); auth-degraded on 401/403; immediate exclusion plus
-quota research on 402; catalog-stale on invalid model. An endpoint becomes
-`active` only if the basic probe passed, free access is still valid, the breaker
-is closed, and match confidence is sufficient.
+The system SHALL map probe failures deterministically: `402` means paid charge
+risk, `429` means quota exhausted, `401/403` means auth/access failure, `5xx`
+means provider failure, and any other status means generic probe failure.
 
-#### Scenario: Paid charge during probe
-- GIVEN a probe returns 402
-- WHEN the error is handled
-- THEN the endpoint is excluded immediately and quota research is triggered
-
+#### Scenario: Probe error table
+- GIVEN probe responses with status `402`, `429`, `401`, `403`, `500`, and another code
+- WHEN probe error handling runs
+- THEN each response maps to the expected failure reason

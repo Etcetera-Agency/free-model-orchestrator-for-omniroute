@@ -7,8 +7,64 @@ from fmo.accounts import group_quota_pools, usable_capacity
 from fmo.candidates import build_free_candidates
 from fmo.db import MigrationRunner
 from fmo.matcher import MatchMethod, effective_context, match_model
+from fmo.models_dev import MODELS_DEV_API_URL, ExternalMetadataError, fetch_models_dev_catalog, sync_models_dev_candidates
 from fmo.registry import sync_free_registry
 from fmo.scanner import CatalogScanner, CatalogSnapshot, diff_catalogs, should_mark_removed
+
+
+class FakeResponse:
+    def __init__(self, status_code, payload=None, json_error=None):
+        self.status_code = status_code
+        self.payload = payload
+        self.json_error = json_error
+
+    def json(self):
+        if self.json_error:
+            raise self.json_error
+        return self.payload
+
+
+class FakeHttpClient:
+    def __init__(self, response=None, error=None):
+        self.response = response
+        self.error = error
+        self.calls = []
+
+    def get(self, url, **kwargs):
+        self.calls.append((url, kwargs))
+        if self.error:
+            raise self.error
+        return self.response
+
+
+def test_models_dev_fetches_api_json_and_syncs_candidates():
+    payload = {"providers": {"p": {"models": {"m/free": {"cost": {"input": 0, "output": 0}}}}}}
+    client = FakeHttpClient(FakeResponse(200, payload))
+
+    catalog = fetch_models_dev_catalog(client=client, timeout=12)
+    candidates = sync_models_dev_candidates(client=client)
+
+    assert catalog == payload
+    assert client.calls[0] == (MODELS_DEV_API_URL, {"timeout": 12})
+    assert candidates[("p", "m/free")].reasons == ("multiple_signals",)
+
+
+def test_models_dev_fetcher_rejects_network_http_json_and_payload_errors():
+    cases = [
+        FakeHttpClient(error=TimeoutError("timeout")),
+        FakeHttpClient(FakeResponse(503, {"providers": {}})),
+        FakeHttpClient(FakeResponse(200, json_error=ValueError("bad json"))),
+        FakeHttpClient(FakeResponse(200, [])),
+        FakeHttpClient(FakeResponse(200, {"providers": []})),
+    ]
+
+    for client in cases:
+        try:
+            fetch_models_dev_catalog(client=client)
+        except ExternalMetadataError as exc:
+            assert exc.source == "models_dev"
+        else:
+            raise AssertionError("models.dev fetch should fail")
 
 
 def test_candidate_filter_uses_zero_cost_and_standalone_free_only():
