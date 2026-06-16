@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "QuotaRuleExtraction",
+  "type": "object",
+  "required": [
+    "scope",
+    "access_type",
+    "limits",
+    "reset_policy",
+    "hard_stop",
+    "evidence_quotes"
+  ],
+  "properties": {
+    "scope": {
+      "type": "object",
+      "required": [
+        "provider",
+        "model_patterns"
+      ],
+      "properties": {
+        "provider": {
+          "type": "string"
+        },
+        "account_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "model_patterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "access_type": {
+      "enum": [
+        "free_unlimited",
+        "free_quota",
+        "free_promotional",
+        "paid_only",
+        "unknown"
+      ]
+    },
+    "limits": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "metric",
+          "amount",
+          "window"
+        ],
+        "properties": {
+          "metric": {
+            "enum": [
+              "requests",
+              "input_tokens",
+              "output_tokens",
+              "total_tokens",
+              "concurrency"
+            ]
+          },
+          "amount": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "window": {
+            "enum": [
+              "minute",
+              "hour",
+              "day",
+              "month",
+              "rolling",
+              "lifetime"
+            ]
+          }
+        }
+      }
+    },
+    "reset_policy": {
+      "type": "object"
+    },
+    "hard_stop": {
+      "enum": [
+        "confirmed",
+        "not_supported",
+        "unknown"
+      ]
+    },
+    "conditions": {
+      "type": "array"
+    },
+    "effective_from": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "effective_to": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "evidence_quotes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1
+    }
+  }
+}

@@ -1,0 +1,463 @@
+
+hermes_inventory:
+  enabled: true
+  # Inspector forecast runtime, model selection & prompt: see
+  # llm.sites.hermes_inspector
+  schedule_env: HERMES_INVENTORY_CRON
+  timezone_env: HERMES_INVENTORY_TIMEZONE
+  mode_env: HERMES_INVENTORY_MODE
+  unknown_role_trigger_env: HERMES_UNKNOWN_ROLE_TRIGGER
+  # Consumer-type-agnostic: applies to agent_profile, cron_job, webhook, service.
+  refresh_forecast_on:
+    - new_role
+    - new_consumer
+    - removed_consumer
+    - schedule_changed
+    - calls_per_run_changed
+    - consumer_definition_changed
+
+external_connections:
+  omniroute_url_env: OMNIROUTE_URL
+  omniroute_api_key_env: OMNIROUTE_API_KEY
+  database_url_env: DATABASE_URL
+  hermes_home_env: HERMES_HOME
+  hermes_agents_path_env: HERMES_AGENTS_PATH
+  hermes_routines_path_env: HERMES_ROUTINES_PATH
+  hermes_cron_jobs_path_env: HERMES_CRON_JOBS_PATH
+  hermes_state_db_path_env: HERMES_STATE_DB_PATH
+
+version: "3.19"
+
+# DB connection is registered once, under external_connections.database_url_env
+# (DATABASE_URL). No separate `database:` block to avoid two sources of truth.
+
+omniroute:
+  # base_url is the server root. Management endpoints live under /api/* (e.g.
+  # /api/free-models, /api/providers); the OpenAI-compatible path is /v1 and is
+  # used only by the migration/review agents. Local default is localhost:20128.
+  base_url: http://omniroute:20128
+  api_key_env: OMNIROUTE_API_KEY
+  management_auth_mode: cookie_or_token
+  timeout_seconds: 20
+  expected_versions: [">=3.7.0"]
+
+# ── Unified LLM runtime ──────────────────────────────────────────────────────
+# Single, uniform place for all FOUR Instructor/LLM sites. Shared runtime
+# defaults live here; each site only overrides model selection and its prompt
+# file. Prompts are external files under `prompts_dir`, one per use case, so each
+# can be edited independently without touching code or this config. Feature
+# blocks below (quota_research, smart_combo_review, index_migration,
+# hermes_inventory.inspector) keep only their policy and point here for runtime.
+llm:
+  runtime: instructor
+  transport: openai_compatible
+  endpoint: omniroute                 # OpenAI-compatible /v1 via OmniRoute
+  structured_output_mode: json_schema
+  schema_retries: 3
+  use_agent_framework: false
+  dependencies: [instructor, openai, pydantic]
+  prompts_dir: prompts
+  # Secrets are never injected into prompts (see environment-and-connections).
+  sites:
+    quota_research:
+      prompt_file: prompts/quota-research.md
+      # Search provider (gemini-grounded-search) is configured in `search`;
+      # this is the chat model that extracts the QuotaClaim from answer.text.
+      model_selection: highest_available_intelligence_index
+    hermes_inspector:
+      prompt_file: prompts/hermes-inspector.md
+      model_selection: highest_available_intelligence_index
+    smart_combo_review:
+      prompt_file: prompts/smart-combo-reviewer.md
+      model_selection: highest_available_intelligence_index
+      max_llm_calls: 1
+    aa_index_migration:
+      prompt_file: prompts/aa-index-migration.md
+      model_selection: highest_available_new_intelligence_index
+      max_repair_attempts: 3
+      operational_repair_retries: 3
+
+search:
+  # OmniRoute built-in search: POST /v1/search (same gateway + API key as chat).
+  # Fixed to gemini-grounded-search (Gemini + Google Search grounding): it
+  # returns the AI summary in `answer.text` and the grounding source URLs in
+  # `results[]`. No fallback provider — if it fails the run records the error
+  # and retries on the next batch.
+  via: omniroute
+  path: /v1/search
+  provider: gemini-grounded-search
+  model: gemini-2.5-flash                  # GEMINI_GROUNDED_SEARCH_MODEL
+  search_type: web
+  max_results: 10
+  time_range: any                          # day|week|month|year|any
+  query_language: natural                  # natural-language, date-aware queries
+  # `answer.text` is the source we extract from (grounding results are just the
+  # cited URLs, no page body). A quota rule is activated directly from it — no
+  # separate page fetch. Risk is contained by a capped confidence + the
+  # access_policy safety reserve.
+  allow_summary_only_activation: true
+  summary_confidence_cap: 0.6
+  summary_capacity_class: opportunistic
+  prefer_cited_source_when_present: true   # bump confidence if a result is official
+
+# Instructor-based quota inspector (Module 03). It is the PRIMARY source of
+# quota for endpoints not covered by an official quota API or OmniRoute (the
+# OmniRoute free registry / rate-limits cover only a subset of providers).
+# Flow: targeted web search -> fetch official page -> Instructor extraction ->
+# deterministic validation -> persist to quota_source_snapshots + quota_rules.
+quota_research:
+  enabled: true
+  # Runtime & prompt: see llm.sites.quota_research
+  llm_only_on_fetched_page: true        # never extract from search snippets
+  require_official_source_for_auto_activation: true
+  active_rule_recheck_days: 7
+  recheck_promo_ending_daily: true
+
+
+# Runtime & prompt for the migration agent: see llm.sites.aa_index_migration
+index_migration:
+  decision_mode: llm
+  approval_required: true
+  max_repair_attempts: 3
+  minimum_proposal_confidence: 0.75
+  percentile_mapping_as_reference: true
+  keep_current_combos_until_rollout: true
+  maintenance_quota_reservation: true
+  rollback_on_smoke_test_failure: true
+  auto_approval:
+    enabled: false
+    require_all_roles_safe: true
+    require_no_quota_pool_loss: true
+    require_smoke_tests_passed: true
+
+
+quality_gates:
+  allow_unverified_quality_gate: false
+  require_compatible_index_major_version: true
+  roles:
+    routing_fast:
+      metric: intelligence_index
+      value: 30
+    intake_structured:
+      metric: intelligence_index
+      value: 35
+    document_understanding:
+      metric: intelligence_index
+      value: 40
+    research_scout:
+      metric: agentic_index
+      value: 45
+    constraint_optimizer:
+      metric: intelligence_index
+      value: 42
+    admin_finance_precision:
+      metric: intelligence_index
+      value: 42
+    health_reasoning:
+      metric: intelligence_index
+      value: 45
+    psychology_relationship:
+      metric: intelligence_index
+      value: 40
+    cross_domain_orchestrator:
+      metric: agentic_index
+      value: 50
+
+artificial_analysis_scoring:
+  version: v1
+  fields:
+    - intelligence_index
+    - coding_index
+    - agentic_index
+    - median_output_tokens_per_second
+    - median_end_to_end_seconds
+  normalization:
+    method: percentile_clipped_minmax
+    lower_percentile: 5
+    upper_percentile: 95
+  prefer_omniroute_endpoint_latency: true
+  stale_after_days: 7
+  missing_metric_policy: redistribute_weights_with_penalty
+
+artificial_analysis:
+  api_key_env: ARTIFICIAL_ANALYSIS_API_KEY
+  refresh_hours: 24
+
+models_dev:
+  # catalog.json = { models, providers }. Pricing lives per provider→model in
+  # providers[*].models[*].cost; the flat top-level `models` map has no cost.
+  # api.json is the same data already keyed by provider and is preferred when
+  # only cost-bearing entries are needed.
+  catalog_url: https://models.dev/catalog.json
+  refresh_hours: 24
+
+
+
+omniroute_free_registry:
+  use_free_models_api: true
+  use_free_provider_rankings: true
+  use_free_tier_summary_for_validation: true
+  rankings_categories:
+    - default
+    - coding
+    - review
+    - documentation
+    - debugging
+  include_provider_categories:
+    - noauth
+    - oauth
+    - apikey
+  exclude_provider_categories_from_model_refresh:
+    - webcookie
+  unknown_noauth_quota_scope: installation_shared
+
+
+web_cookie:
+  allow_static_candidates: true
+  automatic_model_discovery: false
+  primary_allowed: false
+  fallback_only: true
+  max_weight: 10
+  unknown_quota_is_guaranteed: false
+  default_capabilities:
+    text_chat: true
+    tool_calling: false
+    structured_output: false
+    vision: false
+    files: false
+    audio: false
+
+tos_policy:
+  allow:
+    - ok
+    - caution
+    - ambiguous
+    - unknown
+  exclude:
+    - avoid
+
+account_discovery:
+  unknown_independence_policy: shared
+  create_virtual_account_for_no_auth: true
+  require_active_connection: true
+  use_rate_limit_identity: true
+  allow_manual_quota_pool_overrides: true
+
+access_policy:
+  free_only: true
+  allow_zero_price: true
+  allow_confirmed_free_quota: true
+  allow_confirmed_promo: true
+  require_hard_stop: true
+  exclude_unknown: true
+  quota_safety_percent: 0.10
+  minimum_request_reserve: 5
+
+
+context_windows:
+  safety_factor: 0.90
+  unknown_context_policy: exclude_unless_manual_override
+
+
+
+quota_attribution:
+  require_confirmed_independence_for_guaranteed_capacity: true
+  unknown_capacity_weight: 0.0
+  inferred_independent_capacity_weight: 0.5
+  conservative_same_provider_fallback: assumed_shared
+  source_priority:
+    - official_quota_api
+    - omniroute_pool_key
+    - official_documentation
+    - upstream_account_identifier
+    - credential_fingerprint
+    - observed_depletion_and_reset
+  allow_open_source_quota_definitions: true
+  account_grouping:
+    auto_merge_on_shared_counter_evidence: true
+    auto_split_requires_confirmed_independence: true
+  no_auth_default_scope: unknown
+  no_auth_unknown_capacity_class: opportunistic
+
+demand_forecast:
+  enabled: true
+  planning_levels:
+    - expected
+    - protected
+  protected_percentile: 0.95
+  historical_reserve_multiplier: 1.20
+  apply_historical_reserve_exactly_once: true
+  low_confidence_safety_multiplier: 1.50
+  cold_start:
+    enabled: true
+    never_allow_zero_demand_for_enabled_role: true
+    safety_multiplier: 1.50
+    transition_mode: blended
+    representative_history:
+      daily:
+        minimum_completed_runs: 14
+        minimum_distinct_days: 7
+      weekly:
+        minimum_completed_runs: 8
+        minimum_distinct_periods: 8
+      event_or_manual:
+        minimum_completed_runs: 20
+        minimum_distinct_days: 14
+    global_fallback:
+      minimum_requests_per_day: 2
+      input_tokens_per_request: 8000
+      output_tokens_per_request: 1500
+      peak_parallel_calls: 1
+  scheduled_jobs_use_exact_projection_until_reset: true
+  historical_usage:
+    enabled: true
+    daily_window_days: 30
+    weekly_window_weeks: 12
+    event_window_days: 60
+  shared_role_dependencies:
+    enabled: true
+    reject_cycles: true
+  maintenance_usage:
+    include_probes: true
+    include_catalog_llm_calls: true
+    include_index_migration: true
+
+# Values below are illustrative. Actual agents and coefficients are loaded
+# from the agent registry or configured deployment data.
+
+# Override per role when real estimates are known.
+# These are bootstrap planning values, not hard runtime limits.
+role_bootstrap_profiles:
+  routing_fast:
+    calls_per_run: 1
+    input_tokens_per_call: 3000
+    output_tokens_per_call: 500
+    minimum_requests_per_day: 10
+  intake_structured:
+    calls_per_run: 1
+    input_tokens_per_call: 8000
+    output_tokens_per_call: 1500
+    minimum_requests_per_day: 3
+  document_understanding:
+    calls_per_run: 1
+    input_tokens_per_call: 24000
+    output_tokens_per_call: 3000
+    minimum_requests_per_day: 1
+  research_scout:
+    calls_per_run: 1
+    input_tokens_per_call: 12000
+    output_tokens_per_call: 2500
+    minimum_requests_per_day: 2
+  constraint_optimizer:
+    calls_per_run: 1
+    input_tokens_per_call: 10000
+    output_tokens_per_call: 2500
+    minimum_requests_per_day: 1
+  admin_finance_precision:
+    calls_per_run: 1
+    input_tokens_per_call: 8000
+    output_tokens_per_call: 2000
+    minimum_requests_per_day: 1
+  health_reasoning:
+    calls_per_run: 1
+    input_tokens_per_call: 10000
+    output_tokens_per_call: 2500
+    minimum_requests_per_day: 1
+  psychology_relationship:
+    calls_per_run: 1
+    input_tokens_per_call: 10000
+    output_tokens_per_call: 2500
+    minimum_requests_per_day: 1
+  cross_domain_orchestrator:
+    calls_per_run: 1
+    input_tokens_per_call: 30000
+    output_tokens_per_call: 5000
+    minimum_requests_per_week: 1
+
+agent_usage_profiles: []
+
+agent_role_usage_profiles: []
+
+role_usage_dependencies: []
+
+
+
+role_lifecycle:
+  enabled: true
+  retirement_grace_days: 14
+  recent_usage_lookback_days: 30
+  require_no_active_bindings: true
+  require_no_enabled_cron_references: true
+  require_no_recent_hermes_sessions: true
+  require_no_recent_omniroute_requests: true
+  preserve_retired_history: true
+  delete_combo_after_retirement: true
+  protected_roles: []
+  role_aliases: {}
+
+apply_pipeline:
+  local_dry_run: true
+  call_omniroute_combo_test: false
+  upstream_smoke_test: false
+
+combo_output:
+  routing_strategy: priority
+  endpoint_weights_enabled: false
+  reviewer_may_change_strategy: false
+
+smart_combo_review:
+  enabled: true
+  # Runtime, model selection & prompt: see llm.sites.smart_combo_review
+  allowed_operations:
+    - add
+    - remove
+    - move
+  forbidden_operations:
+    - change_strategy
+  triggers:
+    first_production_build: true
+    cold_start: true
+    quota_grouping_changed: true
+    provider_or_account_added: true
+    bootstrap_to_history_transition: true
+    critical_capacity_loss: true
+    unknown_or_inferred_quota_present: true
+    minimum_combo_change_ratio: 0.25
+  on_reviewer_failure: apply_deterministic_combo
+  on_invalid_diff: reject_diff_only
+
+allocation:
+  max_primary_roles_per_quota_pool: 1
+  max_heavy_roles_per_quota_pool: 1
+  max_total_roles_per_quota_pool: 3
+  max_primary_roles_per_provider_group: 2
+  min_quota_pools_in_top3: 2
+  min_provider_groups_in_top3: 2
+  max_provider_group_projected_share: 0.40
+  opportunistic_max_weight: 5
+  expected_opportunistic_use_factor: 0.10
+  require_global_quota_validation: true
+  promotion_stability_hours: 24
+  minimum_score_improvement: 0.10
+  minimum_weight_change: 10
+
+apply:
+  enabled: false
+  managed_combo_prefix: fmo-
+  require_snapshot: true
+  require_smoke_test: true
+  auto_rollback: true
+  max_changes_per_run: 10
+
+schedules:
+  daily_batch: "15 3 * * *"
+
+# `combo` limits the shape of a single role combo (how many endpoints, and the
+# diversity caps within that one combo). This is distinct from `allocation`,
+# which caps how many ROLES may compete for the same quota pool / provider group
+# across the whole plan. The two blocks are not duplicates.
+combo:
+  target_size: 12
+  minimum_size: 4
+  maximum_per_quota_pool: 2
+  maximum_per_provider_group: 3
