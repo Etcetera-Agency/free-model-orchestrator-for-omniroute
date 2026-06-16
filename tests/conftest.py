@@ -17,7 +17,7 @@ def _free_port():
     return port
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture()
 def postgres_url(tmp_path_factory):
     if not shutil.which("initdb") or not shutil.which("postgres") or not shutil.which("createdb"):
         pytest.skip("PostgreSQL binaries unavailable")
