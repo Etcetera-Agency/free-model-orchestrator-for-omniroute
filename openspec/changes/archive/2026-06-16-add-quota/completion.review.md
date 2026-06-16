@@ -19,4 +19,4 @@ Code Simplifier:
 Verification:
 
 - `.venv/bin/python -m pytest tests/test_quota.py tests/test_discovery.py tests/test_foundation.py -q` — 26 passed.
-- `/Users/theDay/.nvm/versions/node/v24.1.0/bin/openspec validate add-quota --strict` — valid.
+- `openspec validate add-quota --strict` — valid.

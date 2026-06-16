@@ -46,6 +46,45 @@ def test_candidate_cost_is_read_per_provider():
     assert ("paid", "same") not in candidates
 
 
+def test_candidate_free_token_rejects_unrelated_words_and_platform_names():
+    catalog = {
+        "providers": {
+            "p": {
+                "models": {
+                    "freedom-chat": {"cost": {"input": 1, "output": 1}},
+                    "carefree-chat": {"cost": {"input": 1, "output": 1}},
+                    "freebsd-chat": {"cost": {"input": 1, "output": 1}},
+                }
+            }
+        }
+    }
+
+    assert build_free_candidates(catalog) == {}
+
+
+def test_candidate_cost_non_dict_or_partial_zero_is_not_zero_cost():
+    catalog = {
+        "providers": {
+            "p": {
+                "models": {
+                    "non-dict": {"cost": "free"},
+                    "input-only": {"cost": {"input": 0, "output": 1}},
+                }
+            }
+        }
+    }
+
+    assert build_free_candidates(catalog) == {}
+
+
+def test_candidate_multiple_signals_are_collapsed():
+    catalog = {"providers": {"p": {"models": {"vendor/free-chat": {"cost": {"input": 0, "output": 0}}}}}}
+
+    candidates = build_free_candidates(catalog)
+
+    assert candidates[("p", "vendor/free-chat")].reasons == ("multiple_signals",)
+
+
 def test_scanner_snapshots_by_hash_and_skips_unchanged_diff(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     scanner = CatalogScanner(postgres_url)
@@ -82,7 +121,25 @@ def test_diff_emits_events_and_false_removal_guard():
     now = datetime.now(timezone.utc)
     assert not should_mark_removed([CatalogSnapshot(True, now - timedelta(minutes=10))], now)
     assert not should_mark_removed([CatalogSnapshot(False, now - timedelta(minutes=10)), CatalogSnapshot(True, now)], now)
-    assert should_mark_removed([CatalogSnapshot(True, now - timedelta(minutes=6)), CatalogSnapshot(True, now)], now)
+    assert not should_mark_removed([CatalogSnapshot(True, now - timedelta(minutes=6)), CatalogSnapshot(True, now)], now)
+    assert should_mark_removed([CatalogSnapshot(True, now - timedelta(minutes=10)), CatalogSnapshot(True, now - timedelta(minutes=6))], now)
+
+
+def test_scanner_failed_snapshot_is_not_previous_for_unchanged_detection(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    scanner = CatalogScanner(postgres_url)
+    provider_id, _account_id = scanner.upsert_provider_account(
+        omniroute_instance_id="local",
+        provider_slug="provider-a",
+        provider_type="openai",
+        account_ref="acc-a",
+    )
+    scanner.store_snapshot(provider_id=provider_id, catalog={"models": [{"id": "m1"}]}, fetch_status="success")
+    failed = scanner.store_snapshot(provider_id=provider_id, catalog={"models": [{"id": "m2"}]}, fetch_status="error")
+    repeated = scanner.store_snapshot(provider_id=provider_id, catalog={"models": [{"id": "m2"}]}, fetch_status="success")
+
+    assert failed.is_unchanged is False
+    assert repeated.is_unchanged is False
 
 
 def test_quota_grouping_counts_only_confirmed_independent_capacity():
@@ -98,6 +155,39 @@ def test_quota_grouping_counts_only_confirmed_independent_capacity():
     assert usable_capacity(pools) == 150
     assert pools["d"].pool_key == "last-confirmed"
     assert pools["d"].independence_status == "assumed_shared"
+
+
+def test_quota_grouping_conflicting_statuses_merge_to_unknown():
+    pools = group_quota_pools(
+        [
+            {"id": "a", "provider": "p", "upstream_account_id": "shared", "quota": 100, "status": "confirmed"},
+            {"id": "b", "provider": "p", "upstream_account_id": "shared", "quota": 100, "status": "assumed_shared"},
+        ]
+    )
+
+    assert pools["shared"].independence_status == "unknown"
+
+
+def test_quota_grouping_rate_limits_unavailable_reuses_previous_pool_key():
+    pools = group_quota_pools(
+        [{"id": "a", "provider": "p", "upstream_account_id": "new", "quota": 100, "status": "confirmed"}],
+        previous_pools={"a": "previous"},
+        rate_limits_available=False,
+    )
+
+    assert pools["a"].pool_key == "previous"
+
+
+def test_usable_capacity_ignores_non_confirmed_and_duplicate_connection_ids():
+    pools = group_quota_pools(
+        [
+            {"id": "a", "provider": "p", "upstream_account_id": "pool-a", "quota": 100, "status": "confirmed"},
+            {"id": "a", "provider": "p", "upstream_account_id": "pool-a", "quota": 100, "status": "confirmed"},
+            {"id": "b", "provider": "p", "upstream_account_id": "pool-b", "quota": 100, "status": "assumed_shared"},
+        ]
+    )
+
+    assert usable_capacity(pools) == 100
 
 
 def test_free_registry_deduplicates_pool_key_and_excludes_web_cookie():

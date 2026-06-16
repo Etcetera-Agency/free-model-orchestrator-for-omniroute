@@ -18,4 +18,4 @@ Code Simplifier:
 Verification:
 
 - `.venv/bin/python -m pytest tests/test_foundation.py -q` — 13 passed.
-- `/Users/theDay/.nvm/versions/node/v24.1.0/bin/openspec validate add-foundation --strict` — valid.
+- `openspec validate add-foundation --strict` — valid.

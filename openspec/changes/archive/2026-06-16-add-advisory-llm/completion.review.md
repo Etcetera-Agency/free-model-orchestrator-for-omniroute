@@ -16,4 +16,4 @@ Code Simplifier:
 Verification:
 
 - `.venv/bin/python -m pytest tests/test_advisory.py tests/test_role_lifecycle.py tests/test_allocation.py tests/test_scoring.py tests/test_quota.py tests/test_discovery.py tests/test_foundation.py -q` — 52 passed.
-- `/Users/theDay/.nvm/versions/node/v24.1.0/bin/openspec validate add-advisory-llm --strict` — valid.
+- `openspec validate add-advisory-llm --strict` — valid.

@@ -83,6 +83,76 @@ def test_access_classifier_order_trust_and_free_quota_preconditions():
     assert available.status == "free_quota_available"
 
 
+def test_access_classifier_quota_exhausted_at_safety_buffer_boundary():
+    decision = classify_access(
+        {
+            "quota_rule": True,
+            "limit": 100,
+            "remaining": 10,
+            "reset_at": datetime.now(timezone.utc),
+            "hard_stop": True,
+            "safety_buffer": 10,
+        }
+    )
+
+    assert decision.status == "free_quota_exhausted"
+    assert decision.reason_code == "safety_buffer_exhausted"
+
+
+@pytest.mark.parametrize(
+    "missing",
+    [
+        {"hard_stop": False},
+        {"limit": None},
+        {"remaining": None},
+        {"reset_at": None},
+    ],
+)
+def test_access_classifier_quota_rule_missing_precondition(missing):
+    evidence = {
+        "quota_rule": True,
+        "limit": 100,
+        "remaining": 50,
+        "reset_at": datetime.now(timezone.utc),
+        "hard_stop": True,
+    }
+    evidence.update(missing)
+
+    decision = classify_access(evidence)
+
+    assert decision.status == "unknown_excluded"
+    assert decision.reason_code == "missing_quota_precondition"
+
+
+def test_access_classifier_promotion_expired():
+    decision = classify_access({"promotion_expired": True})
+
+    assert decision.status == "free_promotional_expired"
+    assert decision.reason_code == "promotion_expired"
+
+
+def test_access_classifier_empty_evidence_fails_closed():
+    decision = classify_access({})
+
+    assert decision.status == "unknown_excluded"
+    assert decision.reason_code == "fail_closed"
+
+
+@pytest.mark.parametrize("unavailable_flag", ["removed", "permanently_broken"])
+def test_access_classifier_unavailable_beats_zero_price(unavailable_flag):
+    decision = classify_access({unavailable_flag: True, "price_input": 0, "price_output": 0})
+
+    assert decision.status == "unavailable"
+    assert decision.reason_code == "endpoint_unavailable"
+
+
+def test_access_classifier_manual_deny_beats_zero_price():
+    decision = classify_access({"manual_deny": True, "price_input": 0, "price_output": 0})
+
+    assert decision.status == "paid_only_excluded"
+    assert decision.reason_code == "trusted_paid_evidence"
+
+
 def test_attribution_capacity_status_and_merge_split_evidence():
     groups = [
         AttributionGroup("a", "confirmed", 100),
@@ -122,3 +192,16 @@ def test_effective_remaining_hard_stop_reset_and_historical_reserve():
 
     reset_and_reclassify(fetch_live, reclassify)
     assert calls == ["fetch", "classify"]
+
+
+def test_effective_remaining_all_sources_unknown_is_none():
+    assert effective_remaining(limit=None, provider_remaining=None, local_used=None, pending_reserved=5, safety_buffer=5) is None
+
+
+def test_effective_remaining_preserves_negative_after_reservations_and_buffer():
+    assert effective_remaining(limit=100, provider_remaining=3, local_used=99, pending_reserved=4, safety_buffer=2) == -5
+
+
+def test_require_hard_stop_false_raises_value_error():
+    with pytest.raises(ValueError, match="hard stop required"):
+        require_hard_stop(False)

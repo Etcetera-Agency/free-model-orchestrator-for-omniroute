@@ -1,0 +1,8 @@
+# Completion Review
+
+- Fixed HTTP inventory URL validation to reject missing host.
+- Fixed cron validation to reject empty fields instead of collapsing whitespace.
+- Fixed latency source selection to return unknown when all latency inputs are missing.
+- Fixed heavy-role priority combos to avoid selecting a second primary from same pool.
+- Fixed stable allocation ordering to tolerate missing current scores.
+- Fixed scanner false-removal guard to require newest successful omission older than five minutes.

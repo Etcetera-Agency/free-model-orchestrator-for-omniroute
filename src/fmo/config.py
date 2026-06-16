@@ -48,12 +48,12 @@ def validate_static_config(config: StartupConfig) -> None:
         raise ValueError("HERMES_INVENTORY_COMMAND is required")
     if config.hermes_inventory_mode == "http":
         parsed = urlparse(config.hermes_inventory_url or "")
-        if parsed.scheme not in {"http", "https"}:
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
             raise ValueError("HERMES_INVENTORY_URL must be http or https")
 
 
 def _valid_cron(value: str) -> bool:
-    parts = value.split()
+    parts = value.split(" ")
     if len(parts) != 5:
         return False
     return all(part for part in parts)

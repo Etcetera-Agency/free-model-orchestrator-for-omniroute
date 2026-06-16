@@ -58,9 +58,49 @@ def test_priority_combo_no_weights_oversubscription_and_degraded_modes():
     assert degraded.role_status == "unavailable"
 
 
+def test_validate_plan_zero_capacity_pool_is_oversubscribed():
+    blocked = validate_plan({"pool-a": {"usage": 1, "capacity": 0}})
+
+    assert blocked.apply is False
+    assert blocked.reason == "oversubscribed"
+
+
+def test_allocation_omits_role_when_no_endpoint_has_capacity():
+    plan = allocate_globally(
+        roles=["routing_fast"],
+        endpoints=[
+            {"id": "e1", "pool": "pool-a", "score": 100, "capacity": 5},
+            {"id": "e2", "pool": "pool-b", "score": 90, "capacity": 9},
+        ],
+        demand={"routing_fast": 10},
+    )
+
+    assert "routing_fast" not in plan.allocations
+
+
+def test_heavy_role_priority_combo_skips_second_primary_in_same_pool():
+    combo = build_priority_combo(
+        "research_scout",
+        [
+            {"id": "e1", "pool": "pool-a", "score": 100},
+            {"id": "e2", "pool": "pool-a", "score": 99},
+            {"id": "e3", "pool": "pool-b", "score": 98},
+        ],
+        per_pool_cap=2,
+    )
+
+    assert combo.endpoints == ["e1", "e3"]
+
+
 def test_stability_keeps_order_for_subthreshold_drift():
     current = ["e1", "e2"]
     assert keep_stable_order(current, {"e1": 1.0, "e2": 1.01}, threshold=0.05) == current
+
+
+def test_stability_tolerates_missing_score_for_previous_endpoint():
+    current = ["e1", "e2"]
+
+    assert keep_stable_order(current, {"e2": 1.0}, threshold=0.05) == current
 
 
 def test_applier_manages_only_fmo_transaction_smoke_rollback_and_drift():

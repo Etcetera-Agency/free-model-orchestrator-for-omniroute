@@ -13,4 +13,4 @@ Foundation implemented with TDD in `tests/test_foundation.py`.
 Verification:
 
 - `.venv/bin/python -m pytest tests/test_foundation.py -q`
-- `/Users/theDay/.nvm/versions/node/v24.1.0/bin/openspec validate add-foundation --strict`
+- `openspec validate add-foundation --strict`

@@ -127,7 +127,7 @@ def should_mark_removed(snapshots: list[CatalogSnapshot], now: datetime | None =
     if len(snapshots) < 2:
         return False
     last_two = snapshots[-2:]
-    return all(snapshot.fetch_success for snapshot in last_two) and last_two[0].fetched_at <= now - timedelta(minutes=5)
+    return all(snapshot.fetch_success for snapshot in last_two) and last_two[-1].fetched_at <= now - timedelta(minutes=5)
 
 
 def _stable_hash(value: Any) -> str:

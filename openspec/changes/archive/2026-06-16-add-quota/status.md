@@ -12,4 +12,4 @@ Quota implemented with TDD in `tests/test_quota.py`.
 Verification:
 
 - `.venv/bin/python -m pytest tests/test_quota.py tests/test_discovery.py tests/test_foundation.py -q`
-- `/Users/theDay/.nvm/versions/node/v24.1.0/bin/openspec validate add-quota --strict`
+- `openspec validate add-quota --strict`

@@ -52,7 +52,17 @@ def allocate_globally(roles: list[str], endpoints: list[dict], demand: dict[str,
 
 
 def build_priority_combo(role_id: str, endpoints: list[dict], *, per_pool_cap: int) -> Combo:
-    ordered = [endpoint["id"] for endpoint in sorted(endpoints, key=lambda item: item["score"], reverse=True)[:per_pool_cap]]
+    ordered = []
+    used_pools = set()
+    for endpoint in sorted(endpoints, key=lambda item: item["score"], reverse=True):
+        pool = endpoint.get("pool")
+        if role_id in HEAVY_ROLES and pool is not None and pool in used_pools:
+            continue
+        ordered.append(endpoint["id"])
+        if pool is not None:
+            used_pools.add(pool)
+        if len(ordered) == per_pool_cap:
+            break
     return Combo(role_id=role_id, endpoints=ordered, strategy="priority")
 
 
@@ -66,6 +76,8 @@ def validate_plan(pool_reports: dict[str, dict], *, role_has_primary: bool = Tru
 
 
 def keep_stable_order(current: list[str], scores: dict[str, float], *, threshold: float) -> list[str]:
+    if any(endpoint_id not in scores for endpoint_id in current):
+        return current
     reordered = sorted(current, key=lambda endpoint_id: scores[endpoint_id], reverse=True)
     if reordered == current:
         return current

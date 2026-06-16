@@ -4,6 +4,7 @@ from fmo.context import context_eligible, effective_context_window
 from fmo.probes import handle_probe_error, probe_endpoint, should_probe
 from fmo.quality import evaluate_quality_gate
 from fmo.scoring import (
+    _normalize,
     aa_subscore,
     eligible_for_scoring,
     latency_score_source,
@@ -14,13 +15,14 @@ from fmo.telemetry import degrade_endpoint, normalize_latency
 
 
 class ProbeClient:
-    def __init__(self, status_code=200):
+    def __init__(self, status_code=200, content="ok"):
         self.status_code = status_code
+        self.content = content
         self.calls = []
 
     def post(self, path, payload, headers=None):
         self.calls.append((path, payload, headers or {}))
-        return {"status_code": self.status_code, "content": "ok", "model": payload["model"]}
+        return {"status_code": self.status_code, "content": self.content, "model": payload["model"]}
 
 
 def test_probe_runs_only_after_free_classification_and_reserved_capacity():
@@ -46,6 +48,28 @@ def test_probe_error_map_and_promotion_preconditions():
     assert handle_probe_error(500) == ("retry", "provider_5xx")
 
 
+@pytest.mark.parametrize(
+    ("status_code", "expected"),
+    [
+        (402, ("exclude", "quota_research")),
+        (429, ("quota_manager", "no_retry")),
+        (401, ("auth_degraded", "no_retry")),
+        (403, ("auth_degraded", "no_retry")),
+        (500, ("retry", "provider_5xx")),
+        (418, ("failed", "unknown")),
+    ],
+)
+def test_probe_error_table(status_code, expected):
+    assert handle_probe_error(status_code) == expected
+
+
+@pytest.mark.parametrize("client", [ProbeClient(status_code=500), ProbeClient(content="")])
+def test_probe_endpoint_fails_on_non_200_or_empty_content(client):
+    result = probe_endpoint(client, provider="p", model="m", capabilities={})
+
+    assert result.passed is False
+
+
 def test_telemetry_granularity_and_degradation_is_endpoint_scoped():
     latency = normalize_latency({"p95_ms": 800}, granularity="provider")
     degraded = degrade_endpoint({"consecutive_errors": 3}, sibling_ids=["sib"])
@@ -62,6 +86,31 @@ def test_eligibility_filter_rejects_before_scoring():
     assert eligible_for_scoring(endpoint, required_capabilities=set()).eligible is False
 
 
+@pytest.mark.parametrize(
+    ("endpoint_patch", "required_capabilities", "reason"),
+    [
+        ({"breaker": "open"}, set(), "breaker"),
+        ({"quota": 0}, set(), "quota"),
+        ({"capabilities": {"text"}}, {"tools"}, "capabilities"),
+    ],
+)
+def test_eligibility_filter_returns_distinct_edge_reasons(endpoint_patch, required_capabilities, reason):
+    endpoint = {
+        "access": "free_unlimited",
+        "basic_probe": True,
+        "quota": 100,
+        "matched": True,
+        "breaker": "closed",
+        "capabilities": {"text", "tools"},
+    }
+    endpoint.update(endpoint_patch)
+
+    decision = eligible_for_scoring(endpoint, required_capabilities=required_capabilities)
+
+    assert decision.eligible is False
+    assert decision.reason == reason
+
+
 def test_aa_subscore_missing_metric_redistributes_and_all_missing_unknown():
     score = aa_subscore(
         {"intelligence_index": 50, "agentic_index": 50, "median_end_to_end_seconds": 5},
@@ -73,6 +122,11 @@ def test_aa_subscore_missing_metric_redistributes_and_all_missing_unknown():
     assert 0 < score.value < 1
     assert score.uncertainty_penalty > 0
     assert unknown.unknown is True
+
+
+def test_normalize_degenerate_percentiles_is_zero():
+    assert _normalize(50, 100, 100) == 0.0
+    assert _normalize(50, 100, 90) == 0.0
 
 
 def test_latency_priority_score_excludes_price_and_hash_skips_recompute():
@@ -91,6 +145,10 @@ def test_latency_priority_score_excludes_price_and_hash_skips_recompute():
     )
     assert result.total == 5.5
     assert should_recompute_score("abc", "abc") is False
+
+
+def test_latency_score_source_unknown_when_every_source_missing():
+    assert latency_score_source(endpoint_p95=None, provider_p95=None, aa_latency=None) == ("unknown", None)
 
 
 def test_context_hard_filter_unknown_override_and_no_bonus():

@@ -19,4 +19,4 @@ Code Simplifier:
 Verification:
 
 - `.venv/bin/python -m pytest tests/test_allocation.py tests/test_scoring.py tests/test_quota.py tests/test_discovery.py tests/test_foundation.py -q` — 42 passed.
-- `/Users/theDay/.nvm/versions/node/v24.1.0/bin/openspec validate add-allocation --strict` — valid.
+- `openspec validate add-allocation --strict` — valid.

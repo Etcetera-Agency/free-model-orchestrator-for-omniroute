@@ -21,6 +21,21 @@ def test_web_cookie_sources_no_daily_auto_discovery():
     assert all(endpoint.auto_discovered is False for endpoint in endpoints)
 
 
+def test_web_cookie_connection_source_filters_non_cookie_auth():
+    endpoints = source_web_cookie_endpoints(
+        connections=[
+            {"id": "c1", "auth_type": "api_key", "model": "m1"},
+            {"id": "c2", "auth_type": "web_cookie", "model": "m2"},
+        ],
+        static=[],
+        manual=[],
+        previous=[],
+        daily_refresh=True,
+    )
+
+    assert [endpoint.id for endpoint in endpoints] == ["c2"]
+
+
 def test_capability_gate_default_text_only_and_raise_after_probe():
     capabilities = default_web_cookie_capabilities()
     assert web_cookie_role_eligible(required_capabilities={"text_chat"}, confirmed_capabilities=capabilities) is True
@@ -29,10 +44,24 @@ def test_capability_gate_default_text_only_and_raise_after_probe():
     assert raised.confirmed_capabilities["structured_output"] is True
 
 
+def test_web_cookie_role_ineligible_when_capability_false_or_missing():
+    assert web_cookie_role_eligible(required_capabilities={"tool_calling"}, confirmed_capabilities={"tool_calling": False}) is False
+    assert web_cookie_role_eligible(required_capabilities={"vision"}, confirmed_capabilities={}) is False
+
+
 def test_basic_text_probe_and_session_health():
     assert web_cookie_text_probe("plain answer").passed is True
     assert web_cookie_text_probe("<html>login challenge</html>").passed is False
     assert check_session_health({"expired": True}) == "unavailable"
+
+
+def test_web_cookie_text_probe_rejects_login_challenge_html_empty_and_whitespace():
+    for response_text in ("login required", "challenge required", "<html>shell</html>", "", "   "):
+        assert web_cookie_text_probe(response_text).passed is False
+
+
+def test_session_health_challenge_is_unavailable():
+    assert check_session_health({"challenge": True}) == "unavailable"
 
 
 def test_fallback_only_unknown_quota_opportunistic():

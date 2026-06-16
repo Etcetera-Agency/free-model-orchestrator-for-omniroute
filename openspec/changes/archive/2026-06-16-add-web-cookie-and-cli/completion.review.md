@@ -16,4 +16,4 @@ Code Simplifier:
 Verification:
 
 - `.venv/bin/python -m pytest tests/test_web_cookie_cli.py tests/test_advisory.py tests/test_role_lifecycle.py tests/test_allocation.py tests/test_scoring.py tests/test_quota.py tests/test_discovery.py tests/test_foundation.py -q` — 57 passed.
-- `/Users/theDay/.nvm/versions/node/v24.1.0/bin/openspec validate add-web-cookie-and-cli --strict` — valid.
+- `openspec validate add-web-cookie-and-cli --strict` — valid.

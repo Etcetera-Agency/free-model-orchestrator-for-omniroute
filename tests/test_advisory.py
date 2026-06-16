@@ -40,6 +40,65 @@ def test_review_diffs_validated_independently_fail_open_no_combo_test():
     assert skipped.combo_test_called is False
 
 
+def test_combo_review_trigger_false_skips_without_instructor_call():
+    def instructor(_payload):
+        raise AssertionError("instructor should not run")
+
+    review = run_combo_review(instructor, deterministic_combo={"r": ["e1"]}, trigger=False)
+
+    assert review.status == "skipped_trigger"
+    assert review.valid_diffs == []
+
+
+def test_review_diffs_reject_unknown_endpoint_add():
+    combo, audit = apply_review_diffs(
+        {"r": ["e1"]},
+        [{"op": "add", "role": "r", "endpoint_id": "unknown"}],
+        candidate_registry={"e1"},
+        minimum_combo_size=1,
+    )
+
+    assert combo == {"r": ["e1"]}
+    assert audit["rejected"][0]["reason"] == "unknown_endpoint"
+
+
+def test_review_diffs_reject_remove_below_minimum_combo_size():
+    combo, audit = apply_review_diffs(
+        {"r": ["e1"]},
+        [{"op": "remove", "role": "r", "endpoint_id": "e1"}],
+        candidate_registry={"e1"},
+        minimum_combo_size=1,
+    )
+
+    assert combo == {"r": ["e1"]}
+    assert audit["rejected"][0]["reason"] == "minimum_combo_size"
+
+
+@pytest.mark.parametrize("op", ["remove", "move"])
+def test_review_diffs_reject_missing_endpoint_remove_or_move(op):
+    combo, audit = apply_review_diffs(
+        {"r": ["e1", "e2"]},
+        [{"op": op, "role": "r", "endpoint_id": "missing", "position": 0}],
+        candidate_registry={"e1", "e2"},
+        minimum_combo_size=1,
+    )
+
+    assert combo == {"r": ["e1", "e2"]}
+    assert audit["rejected"][0]["reason"] == "endpoint_missing"
+
+
+def test_review_diffs_duplicate_add_is_idempotent():
+    combo, audit = apply_review_diffs(
+        {"r": ["e1"]},
+        [{"op": "add", "role": "r", "endpoint_id": "e1"}],
+        candidate_registry={"e1"},
+        minimum_combo_size=1,
+    )
+
+    assert combo == {"r": ["e1"]}
+    assert audit["rejected"] == []
+
+
 def test_aa_index_change_freezes_thresholds_and_keeps_combos():
     migration = detect_index_change(active_version="v1", fetched_version="v2", thresholds={"r": 40}, combos={"r": ["e1"]})
     assert migration.created is True
