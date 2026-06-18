@@ -4,6 +4,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
+from pydantic import BaseModel, Field
+
+from fmo.llm_runtime import LlmSiteConfig, complete_with_adapter
 from fmo.omniroute import OmniRouteRequestError
 
 
@@ -49,6 +52,14 @@ class QuotaResearchResult:
     snapshot: SearchSnapshot | None
     rule: ActiveQuotaRule | None
     error: QuotaResearchError | None = None
+
+
+class QuotaClaimResponse(BaseModel):
+    metric: str
+    amount: float
+    window: str
+    evidence: list[str] = Field(default_factory=list)
+    hard_stop: bool = False
 
 
 def build_quota_query(provider: str, model_id: str, *, today: datetime) -> str:
@@ -107,6 +118,28 @@ def extract_summary_claim(snapshot: SearchSnapshot) -> QuotaClaim:
         hard_stop=hard_stop,
     )
     return validate_claim(claim)
+
+
+def run_quota_inspector(call_instructor, prompt: str) -> QuotaClaim:
+    response = complete_with_adapter(
+        call_instructor,
+        site=LlmSiteConfig(
+            name="quota-research-inspector",
+            model="omniroute/free-quota-inspector",
+            max_prompt_chars=7000,
+        ),
+        context={"prompt": prompt},
+        response_model=QuotaClaimResponse,
+    )
+    return validate_claim(
+        QuotaClaim(
+            metric=response.metric,
+            amount=response.amount,
+            window=response.window,
+            evidence=response.evidence,
+            hard_stop=response.hard_stop,
+        )
+    )
 
 
 def validate_claim(claim: QuotaClaim) -> QuotaClaim:

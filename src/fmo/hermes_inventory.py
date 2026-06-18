@@ -4,6 +4,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from pydantic import BaseModel
+
+from fmo.llm_runtime import LlmSiteConfig, complete_with_adapter
+
 
 @dataclass(frozen=True)
 class Consumer:
@@ -37,6 +41,14 @@ class InspectorForecast:
     confidence: str
     model_choice: None = None
     quota_change: None = None
+
+
+class InspectorForecastResponse(BaseModel):
+    role: str
+    expected_calls: float
+    average_input_tokens: float
+    average_output_tokens: float
+    confidence: str
 
 
 def normalize_filesystem_inventory(payload: dict, *, env: dict[str, str]) -> Inventory:
@@ -79,13 +91,22 @@ def assemble_inspector_prompt(inventory: Inventory, *, changes: list[str], secre
 
 
 def run_inspector(call_instructor, prompt: str) -> InspectorForecast:
-    payload = call_instructor(prompt)
+    payload = complete_with_adapter(
+        call_instructor,
+        site=LlmSiteConfig(
+            name="hermes-inspector",
+            model="omniroute/free-inspector",
+            max_prompt_chars=6000,
+        ),
+        context={"prompt": prompt},
+        response_model=InspectorForecastResponse,
+    )
     return InspectorForecast(
-        role=payload["role"],
-        expected_calls=payload["expected_calls"],
-        average_input_tokens=payload["average_input_tokens"],
-        average_output_tokens=payload["average_output_tokens"],
-        confidence=payload["confidence"],
+        role=payload.role,
+        expected_calls=payload.expected_calls,
+        average_input_tokens=payload.average_input_tokens,
+        average_output_tokens=payload.average_output_tokens,
+        confidence=payload.confidence,
     )
 
 
