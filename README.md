@@ -63,6 +63,16 @@ The test suite fixture starts an isolated temporary PostgreSQL instance using
 local `initdb`, `postgres`, and `createdb` binaries. No shared database is
 required for tests.
 
+On macOS, PostgreSQL `initdb` can fail after a laptop reboot if SysV shared
+memory limits reset to low defaults. If DB-backed tests skip with
+`could not create shared memory segment`, restore the local limits before
+running tests:
+
+```bash
+sudo sysctl -w kern.sysv.shmmax=268435456
+sudo sysctl -w kern.sysv.shmall=65536
+```
+
 ## Configuration
 
 Startup validation expects:
