@@ -6,6 +6,8 @@ from typing import Any
 
 import psycopg
 
+from fmo.omniroute import OmniRouteRequestError
+
 
 @dataclass(frozen=True)
 class CatalogSnapshot:
@@ -17,6 +19,22 @@ class CatalogSnapshot:
 class StoredSnapshot:
     catalog_hash: str
     is_unchanged: bool
+
+
+@dataclass(frozen=True)
+class CatalogFetchError(Exception):
+    source: str
+    reason: str
+    status_code: int | None = None
+
+
+@dataclass(frozen=True)
+class CatalogScanResult:
+    provider_slug: str
+    fetch_status: str
+    model_count: int
+    snapshot: StoredSnapshot
+    error: CatalogFetchError | None = None
 
 
 @dataclass(frozen=True)
@@ -128,6 +146,134 @@ def should_mark_removed(snapshots: list[CatalogSnapshot], now: datetime | None =
         return False
     last_two = snapshots[-2:]
     return all(snapshot.fetch_success for snapshot in last_two) and last_two[-1].fetched_at <= now - timedelta(minutes=5)
+
+
+def scan_live_omniroute_catalogs(
+    scanner: CatalogScanner,
+    client: Any,
+    *,
+    omniroute_instance_id: str,
+) -> dict[str, CatalogScanResult]:
+    provider_accounts = _fetch_provider_accounts(client)
+    provider_ids = _upsert_provider_accounts(scanner, omniroute_instance_id, provider_accounts)
+    try:
+        catalogs = _fetch_models_catalogs(client)
+    except CatalogFetchError as exc:
+        return {
+            provider_slug: _store_failed_catalog(scanner, provider_slug, provider_id, exc)
+            for provider_slug, provider_id in provider_ids.items()
+        }
+
+    results = {}
+    for provider_slug, provider_id in provider_ids.items():
+        catalog = {"models": catalogs.get(provider_slug, [])}
+        snapshot = scanner.store_snapshot(provider_id=provider_id, catalog=catalog, fetch_status="success")
+        for account_id in _account_ids_for_provider(scanner, omniroute_instance_id, provider_slug):
+            for model in catalog["models"]:
+                scanner.upsert_endpoint(account_id, model["id"])
+        results[provider_slug] = CatalogScanResult(
+            provider_slug=provider_slug,
+            fetch_status="success",
+            model_count=len(catalog["models"]),
+            snapshot=snapshot,
+        )
+    return results
+
+
+def _fetch_provider_accounts(client: Any) -> list[dict[str, Any]]:
+    try:
+        payload = client.get("/api/providers")
+    except OmniRouteRequestError as exc:
+        raise CatalogFetchError("omniroute_catalog", "http_error", exc.status_code) from exc
+    except Exception as exc:
+        raise CatalogFetchError("omniroute_catalog", "network_error") from exc
+    connections = payload.get("connections") if isinstance(payload, dict) else None
+    if not isinstance(connections, list):
+        raise CatalogFetchError("omniroute_catalog", "invalid_payload")
+    return [connection for connection in connections if isinstance(connection, dict) and connection.get("provider")]
+
+
+def _upsert_provider_accounts(
+    scanner: CatalogScanner,
+    omniroute_instance_id: str,
+    provider_accounts: list[dict[str, Any]],
+) -> dict[str, str]:
+    provider_ids = {}
+    for account in provider_accounts:
+        provider_slug = str(account["provider"])
+        provider_id, _account_id = scanner.upsert_provider_account(
+            omniroute_instance_id=omniroute_instance_id,
+            provider_slug=provider_slug,
+            provider_type=str(account.get("authType") or "unknown"),
+            account_ref=str(account.get("id") or account.get("name") or provider_slug),
+        )
+        provider_ids[provider_slug] = provider_id
+    return provider_ids
+
+
+def _fetch_models_catalogs(client: Any) -> dict[str, list[dict[str, Any]]]:
+    try:
+        payload = client.get("/v1/models")
+    except OmniRouteRequestError as exc:
+        raise CatalogFetchError("omniroute_catalog", "http_error", exc.status_code) from exc
+    except Exception as exc:
+        raise CatalogFetchError("omniroute_catalog", "network_error") from exc
+    models = payload.get("data") if isinstance(payload, dict) else None
+    if not isinstance(models, list):
+        raise CatalogFetchError("omniroute_catalog", "invalid_payload")
+
+    catalogs: dict[str, list[dict[str, Any]]] = {}
+    for model in models:
+        if not isinstance(model, dict) or not isinstance(model.get("id"), str):
+            raise CatalogFetchError("omniroute_catalog", "invalid_payload")
+        provider_slug = _catalog_provider_slug(model)
+        if provider_slug:
+            catalogs.setdefault(provider_slug, []).append(model)
+    return catalogs
+
+
+def _catalog_provider_slug(model: dict[str, Any]) -> str | None:
+    owned_by = model.get("owned_by")
+    if isinstance(owned_by, str) and owned_by:
+        return owned_by
+    model_id = model.get("id")
+    if isinstance(model_id, str) and "/" in model_id:
+        return model_id.split("/", 1)[0]
+    return None
+
+
+def _account_ids_for_provider(scanner: CatalogScanner, omniroute_instance_id: str, provider_slug: str) -> list[str]:
+    with psycopg.connect(scanner.database_url) as connection:
+        rows = connection.execute(
+            """
+            SELECT pa.id
+            FROM provider_accounts pa
+            JOIN providers p ON p.id = pa.provider_id
+            WHERE p.omniroute_instance_id = %s AND p.omniroute_provider_id = %s
+            """,
+            (omniroute_instance_id, provider_slug),
+        ).fetchall()
+    return [str(row[0]) for row in rows]
+
+
+def _store_failed_catalog(
+    scanner: CatalogScanner,
+    provider_slug: str,
+    provider_id: str,
+    error: CatalogFetchError,
+) -> CatalogScanResult:
+    snapshot = scanner.store_snapshot(
+        provider_id=provider_id,
+        catalog={"error": {"source": error.source, "reason": error.reason, "status_code": error.status_code}},
+        fetch_status="error",
+    )
+    return CatalogScanResult(
+        provider_slug=provider_slug,
+        fetch_status="error",
+        model_count=0,
+        snapshot=snapshot,
+        error=error,
+    )
 
 
 def _stable_hash(value: Any) -> str:

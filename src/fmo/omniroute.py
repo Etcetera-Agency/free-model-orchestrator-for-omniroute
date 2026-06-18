@@ -28,6 +28,14 @@ class HttpxTransport:
         return httpx.request(method, url, headers=headers, json=json, timeout=timeout)
 
 
+class OmniRouteRequestError(RuntimeError):
+    def __init__(self, method: str, path: str, status_code: int) -> None:
+        self.method = method
+        self.path = path
+        self.status_code = status_code
+        super().__init__(f"OmniRoute {method} {path} failed with HTTP {status_code}")
+
+
 class OmniRouteClient:
     def __init__(
         self,
@@ -70,7 +78,7 @@ class OmniRouteClient:
             if 200 <= response.status_code < 300:
                 return response.json()
             break
-        raise RuntimeError(f"OmniRoute {method} {path} failed with HTTP {last_response.status_code}")
+        raise OmniRouteRequestError(method, path, last_response.status_code)
 
     def _headers(self) -> dict[str, str]:
         headers = {"X-Request-Id": str(uuid.uuid4())}
