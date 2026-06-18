@@ -95,6 +95,7 @@ def test_rate_limits_and_rankings_fixtures_have_expected_shape(client):
     assert "modelId" in ranking["topModel"]
 
 
+@pytest.mark.spec("omniroute-client::Module needs OmniRoute data")
 def test_client_requests_management_paths(client):
     client.get("/api/free-models")
 

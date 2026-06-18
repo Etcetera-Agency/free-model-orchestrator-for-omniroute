@@ -52,6 +52,7 @@ def _build_state_db(path):
     return conn
 
 
+@pytest.mark.spec("hermes-inventory::Real cron job schedule mapped")
 def test_parse_cron_jobs_maps_real_jobs_json_and_skips_disabled():
     payload = load_hermes_fixture("cron_jobs.json")
 
@@ -73,6 +74,7 @@ def test_parse_cron_jobs_maps_real_jobs_json_and_skips_disabled():
     assert by_consumer["9988776655aa"].role_id == "default"
 
 
+@pytest.mark.spec("hermes-inventory::Event-driven consumer cadence")
 def test_parse_webhook_subscriptions_maps_real_routes():
     payload = load_hermes_fixture("webhook_subscriptions.json")
 
@@ -86,6 +88,7 @@ def test_parse_webhook_subscriptions_maps_real_routes():
     assert by_consumer["alert-triage"].cadence == "event-driven"  # API trigger, no events
 
 
+@pytest.mark.spec("hermes-inventory::Profile gateway state selects consumer type")
 def test_parse_profiles_distinguishes_service_from_agent_profile():
     payload = load_hermes_fixture("profiles.json")
 
@@ -100,6 +103,7 @@ def test_parse_profiles_distinguishes_service_from_agent_profile():
     assert by_consumer["research"].cadence == "manual"
 
 
+@pytest.mark.spec("hermes-inventory::Observed calls_per_run from state.db")
 def test_observe_session_demand_reads_real_state_db_schema(tmp_path):
     conn = _build_state_db(tmp_path / "state.db")
     try:
@@ -113,6 +117,7 @@ def test_observe_session_demand_reads_real_state_db_schema(tmp_path):
     assert demand["chat-combo"] == pytest.approx((2 + 5) / 2)
 
 
+@pytest.mark.spec("hermes-inventory::Mixed consumers recorded")
 def test_build_hermes_inventory_records_all_four_consumer_types_with_observed_demand(tmp_path):
     conn = _build_state_db(tmp_path / "state.db")
     try:
@@ -153,6 +158,7 @@ def test_read_hermes_home_reads_real_directory_layout(tmp_path):
     assert any(c.consumer == "gateway:github" and c.role_id == "coding-combo" for c in inventory.consumers)
 
 
+@pytest.mark.spec("hermes-inventory::Command adapter returns real shapes")
 def test_command_adapter_returns_real_source_shapes_and_structured_errors(tmp_path):
     payload = {
         "cron_jobs": load_hermes_fixture("cron_jobs.json"),
@@ -202,6 +208,7 @@ def test_http_adapter_returns_real_source_shapes_and_structured_errors():
         server.server_close()
 
 
+@pytest.mark.spec("hermes-inventory::Live profile enumeration")
 def test_live_profile_enumeration_scans_profile_dirs_and_config_models(tmp_path):
     home = tmp_path / "hermes"
     (home / "profiles" / "research").mkdir(parents=True)
@@ -220,6 +227,7 @@ def test_live_profile_enumeration_scans_profile_dirs_and_config_models(tmp_path)
     assert by_consumer["ops"].role_id == "ops-combo"
 
 
+@pytest.mark.spec("hermes-inventory::Service from gateway config")
 def test_gateway_platform_config_derives_enabled_service_consumers():
     config_text = hermes_fixture_path("gateway_config.yaml").read_text()
     config = yaml.safe_load(config_text)

@@ -37,6 +37,7 @@ class FakeHttpClient:
         return self.response
 
 
+@pytest.mark.spec("role-scorer::Artificial Analysis metadata fetch")
 def test_artificial_analysis_fetcher_requires_api_key_and_sends_x_api_key():
     payload = {"intelligence_index_version": 4.1, "data": []}
     client = FakeHttpClient(FakeResponse(200, payload))
@@ -52,6 +53,7 @@ def test_artificial_analysis_fetcher_requires_api_key_and_sends_x_api_key():
     ]
 
 
+@pytest.mark.spec("role-scorer::Artificial Analysis API key missing")
 def test_artificial_analysis_missing_api_key_fails_before_network():
     client = FakeHttpClient(FakeResponse(200, {"intelligence_index_version": "4.1", "data": []}))
 
@@ -63,6 +65,7 @@ def test_artificial_analysis_missing_api_key_fails_before_network():
     assert client.calls == []
 
 
+@pytest.mark.spec("role-scorer::Artificial Analysis API key redacted")
 def test_artificial_analysis_error_does_not_expose_api_key():
     client = FakeHttpClient(FakeResponse(500, {"error": "down"}))
 
@@ -106,6 +109,7 @@ def test_artificial_analysis_fetcher_normalizes_scoring_metrics():
     }
 
 
+@pytest.mark.spec("role-scorer::Missing metric remains missing")
 def test_artificial_analysis_missing_metric_remains_missing():
     payload = {
         "intelligence_index_version": 4.1,
@@ -123,6 +127,7 @@ def test_artificial_analysis_missing_metric_remains_missing():
     assert "agentic_index" not in snapshot.models[0].metrics
 
 
+@pytest.mark.spec("role-scorer::Artificial Analysis invalid payload")
 @pytest.mark.parametrize(
     "payload",
     [
@@ -140,6 +145,7 @@ def test_artificial_analysis_rejects_invalid_payload_shape(payload):
     assert exc.value.reason == "invalid_payload"
 
 
+@pytest.mark.spec("role-scorer::Artificial Analysis non-200")
 def test_artificial_analysis_invalid_json_and_network_errors_are_structured():
     for client in (
         FakeHttpClient(FakeResponse(200, json_error=ValueError("bad json"))),
@@ -162,6 +168,7 @@ def test_artificial_analysis_snapshot_index_version_feeds_migration_detection():
     assert migration.created is True
 
 
+@pytest.mark.spec("aa-index-migration::AA fetch fails")
 def test_artificial_analysis_fetch_failure_leaves_index_migration_unstarted():
     with pytest.raises(ExternalMetadataError):
         fetch_artificial_analysis_snapshot(client=FakeHttpClient(FakeResponse(503, {})), api_key="aa-secret")
@@ -194,6 +201,7 @@ def _aa_page(version, slugs, *, has_more, page, page_size=200):
     )
 
 
+@pytest.mark.spec("role-scorer::Artificial Analysis free-tier pagination")
 def test_artificial_analysis_free_snapshot_follows_pagination_and_aggregates():
     client = PaginatingHttpClient(
         [
@@ -228,6 +236,7 @@ def test_artificial_analysis_free_snapshot_requires_api_key_before_network():
     assert client.calls == []
 
 
+@pytest.mark.spec("role-scorer::End-to-end latency alias")
 def test_artificial_analysis_free_snapshot_normalizes_end_to_end_alias():
     payload = {
         "intelligence_index_version": 4.1,

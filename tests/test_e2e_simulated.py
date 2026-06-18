@@ -149,6 +149,7 @@ def test_simulated_daily_batch_builds_and_applies_free_combo():
     assert log[0]["after_json"] == ["free-provider/free-chat"]
 
 
+@pytest.mark.spec("scheduler::Apply pipeline runs")
 def test_simulated_e2e_failure_paths_fail_closed_without_paid_or_combo_test():
     web_cookie = source_web_cookie_endpoints(
         connections=[{"id": "cookie-1", "auth_type": "web_cookie", "model": "browser-only"}],

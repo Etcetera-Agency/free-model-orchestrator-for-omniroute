@@ -1,3 +1,5 @@
+import pytest
+
 from fmo.cli import EXIT_CODES, parse_args, run_cli
 from fmo.external_metadata import ExternalMetadataError
 from fmo.web_cookie import (
@@ -10,6 +12,7 @@ from fmo.web_cookie import (
 )
 
 
+@pytest.mark.spec("web-cookie-candidates::No auto-discovery")
 def test_web_cookie_sources_no_daily_auto_discovery():
     endpoints = source_web_cookie_endpoints(
         connections=[{"id": "c1", "auth_type": "web_cookie", "model": "m1"}],
@@ -22,6 +25,7 @@ def test_web_cookie_sources_no_daily_auto_discovery():
     assert all(endpoint.auto_discovered is False for endpoint in endpoints)
 
 
+@pytest.mark.spec("web-cookie-candidates::Non-web-cookie connection source")
 def test_web_cookie_connection_source_filters_non_cookie_auth():
     endpoints = source_web_cookie_endpoints(
         connections=[
@@ -45,6 +49,7 @@ def test_capability_gate_default_text_only_and_raise_after_probe():
     assert raised.confirmed_capabilities["structured_output"] is True
 
 
+@pytest.mark.spec("web-cookie-candidates::Capability false or missing")
 def test_web_cookie_role_ineligible_when_capability_false_or_missing():
     assert web_cookie_role_eligible(required_capabilities={"tool_calling"}, confirmed_capabilities={"tool_calling": False}) is False
     assert web_cookie_role_eligible(required_capabilities={"vision"}, confirmed_capabilities={}) is False
@@ -56,15 +61,18 @@ def test_basic_text_probe_and_session_health():
     assert check_session_health({"expired": True}) == "unavailable"
 
 
+@pytest.mark.spec("web-cookie-candidates::Text probe bad response")
 def test_web_cookie_text_probe_rejects_login_challenge_html_empty_and_whitespace():
     for response_text in ("login required", "challenge required", "<html>shell</html>", "", "   "):
         assert web_cookie_text_probe(response_text).passed is False
 
 
+@pytest.mark.spec("web-cookie-candidates::Session challenge")
 def test_session_health_challenge_is_unavailable():
     assert check_session_health({"challenge": True}) == "unavailable"
 
 
+@pytest.mark.spec("web-cookie-candidates::Unknown quota")
 def test_fallback_only_unknown_quota_opportunistic():
     policy = web_cookie_allocation_policy(quota_known=False, primary_override=False)
     override = web_cookie_allocation_policy(quota_known=True, primary_override=True)
@@ -74,6 +82,8 @@ def test_fallback_only_unknown_quota_opportunistic():
     assert override.primary_allowed is True
 
 
+@pytest.mark.spec("cli-and-operations::Unsafe apply")
+@pytest.mark.spec("cli-and-operations::Dry-run validation")
 def test_cli_commands_flags_exit_codes_and_dry_run_no_combo_test():
     args = parse_args(["apply", "--dry-run", "--role", "research_scout", "--json"])
     assert args.command == "apply"
@@ -89,6 +99,8 @@ def test_cli_commands_flags_exit_codes_and_dry_run_no_combo_test():
     assert aa.aa_command == "status"
 
 
+@pytest.mark.spec("cli-and-operations::sync-metadata fetches external metadata")
+@pytest.mark.spec("cli-and-operations::full command order")
 def test_cli_sync_metadata_and_full_call_metadata_sync_before_pipeline():
     calls = []
 
@@ -103,6 +115,7 @@ def test_cli_sync_metadata_and_full_call_metadata_sync_before_pipeline():
     assert calls == [("metadata", False), ("metadata", False)]
 
 
+@pytest.mark.spec("cli-and-operations::sync-metadata dry run")
 def test_cli_sync_metadata_dry_run_validates_without_changes():
     calls = []
 
@@ -116,6 +129,7 @@ def test_cli_sync_metadata_dry_run_validates_without_changes():
     assert calls == [True]
 
 
+@pytest.mark.spec("cli-and-operations::sync-metadata missing AA API key")
 def test_cli_metadata_sync_reports_external_dependency_failure_without_secret():
     def metadata_sync(*, dry_run):
         raise ExternalMetadataError("artificial_analysis", "aa_api_key_required")

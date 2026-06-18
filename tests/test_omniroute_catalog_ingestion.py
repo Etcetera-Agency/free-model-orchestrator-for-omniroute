@@ -42,6 +42,7 @@ def _prepare_scanner(postgres_url):
     return CatalogScanner(postgres_url)
 
 
+@pytest.mark.spec("provider-scanner::Catalog fetched before scan")
 def test_live_catalog_scan_fetches_omniroute_fixtures_before_snapshot(postgres_url):
     scanner = _prepare_scanner(postgres_url)
     transport = _CatalogTransport()
@@ -71,6 +72,7 @@ def test_live_catalog_scan_fetches_omniroute_fixtures_before_snapshot(postgres_u
     assert endpoint[1:] == ("discovered", "access_pending", "not_run")
 
 
+@pytest.mark.spec("provider-scanner::Fetch failure does not overwrite")
 def test_live_catalog_scan_records_failed_snapshots_without_overwriting_success(postgres_url):
     scanner = _prepare_scanner(postgres_url)
     provider_id, _account_id = scanner.upsert_provider_account(

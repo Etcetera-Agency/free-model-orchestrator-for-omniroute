@@ -1,10 +1,13 @@
 from copy import deepcopy
 from urllib.parse import urlsplit
 
+import pytest
+
 from fmo.accounts import discover_live_accounts, usable_capacity
 from fmo.omniroute import OmniRouteClient
 
 from _fixtures import fixture_body
+import pytest
 
 
 class _FixtureResponse:
@@ -36,6 +39,7 @@ class _AccountTransport:
         raise AssertionError(f"unexpected account request: {path}")
 
 
+@pytest.mark.spec("account-discovery::Connections fetched before grouping")
 def test_live_account_discovery_fetches_connections_and_rate_limits_before_grouping():
     transport = _AccountTransport()
     client = OmniRouteClient(base_url="https://omniroute.test", api_key="manage-key", transport=transport)
@@ -50,6 +54,7 @@ def test_live_account_discovery_fetches_connections_and_rate_limits_before_group
     assert windsurf["rate_limit"]["enabled"] is False
 
 
+@pytest.mark.spec("account-discovery::Rate-limit fetch unavailable")
 def test_live_account_discovery_rate_limit_failure_is_conservative():
     providers_body = deepcopy(fixture_body("omniroute_api_providers"))
     providers_body["connections"][0].update(

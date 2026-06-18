@@ -35,6 +35,7 @@ class SearchClient:
         }
 
 
+@pytest.mark.spec("quota-research::Quota query")
 def test_research_search_uses_date_aware_query_and_persists_summary():
     client = SearchClient()
     query = build_quota_query("kilo", "kilo/free-model", today=datetime(2026, 6, 16, tzinfo=timezone.utc))
@@ -47,6 +48,7 @@ def test_research_search_uses_date_aware_query_and_persists_summary():
     assert snapshot.content_hash
 
 
+@pytest.mark.spec("quota-research::Invalid extracted claim")
 def test_quota_claim_validation_rejects_bad_amount_window_and_missing_evidence():
     valid = QuotaClaim(metric="requests", amount=100, window="day", evidence=["docs"], hard_stop=True)
     assert validate_claim(valid).amount == 100
@@ -59,6 +61,7 @@ def test_quota_claim_validation_rejects_bad_amount_window_and_missing_evidence()
         validate_claim(QuotaClaim(metric="requests", amount=10, window="day", evidence=[], hard_stop=True))
 
 
+@pytest.mark.spec("quota-research::Summary worsens quota")
 def test_summary_activation_caps_confidence_and_worsened_quota_safe_mode():
     active = activate_summary_rule(
         QuotaClaim(metric="requests", amount=100, window="day", evidence=["summary"], hard_stop=True),
@@ -72,6 +75,7 @@ def test_summary_activation_caps_confidence_and_worsened_quota_safe_mode():
     assert active.safe_mode is True
 
 
+@pytest.mark.spec("access-classifier::Live API overrides models.dev")
 def test_access_classifier_order_trust_and_free_quota_preconditions():
     assert classify_access({"disabled": True}).status == "unavailable"
     assert classify_access({"price_input": 0, "price_output": 0}).status == "free_unlimited"
@@ -83,6 +87,7 @@ def test_access_classifier_order_trust_and_free_quota_preconditions():
     assert available.status == "free_quota_available"
 
 
+@pytest.mark.spec("access-classifier::Exhausted by safety buffer")
 def test_access_classifier_quota_exhausted_at_safety_buffer_boundary():
     decision = classify_access(
         {
@@ -99,6 +104,7 @@ def test_access_classifier_quota_exhausted_at_safety_buffer_boundary():
     assert decision.reason_code == "safety_buffer_exhausted"
 
 
+@pytest.mark.spec("access-classifier::Missing quota precondition")
 @pytest.mark.parametrize(
     "missing",
     [
@@ -124,6 +130,7 @@ def test_access_classifier_quota_rule_missing_precondition(missing):
     assert decision.reason_code == "missing_quota_precondition"
 
 
+@pytest.mark.spec("access-classifier::Promotion expired")
 def test_access_classifier_promotion_expired():
     decision = classify_access({"promotion_expired": True})
 
@@ -131,6 +138,7 @@ def test_access_classifier_promotion_expired():
     assert decision.reason_code == "promotion_expired"
 
 
+@pytest.mark.spec("access-classifier::Empty evidence")
 def test_access_classifier_empty_evidence_fails_closed():
     decision = classify_access({})
 
@@ -138,6 +146,7 @@ def test_access_classifier_empty_evidence_fails_closed():
     assert decision.reason_code == "fail_closed"
 
 
+@pytest.mark.spec("access-classifier::Removed beats zero price")
 @pytest.mark.parametrize("unavailable_flag", ["removed", "permanently_broken"])
 def test_access_classifier_unavailable_beats_zero_price(unavailable_flag):
     decision = classify_access({unavailable_flag: True, "price_input": 0, "price_output": 0})
@@ -146,6 +155,7 @@ def test_access_classifier_unavailable_beats_zero_price(unavailable_flag):
     assert decision.reason_code == "endpoint_unavailable"
 
 
+@pytest.mark.spec("access-classifier::Manual deny beats zero price")
 def test_access_classifier_manual_deny_beats_zero_price():
     decision = classify_access({"manual_deny": True, "price_input": 0, "price_output": 0})
 
@@ -153,6 +163,10 @@ def test_access_classifier_manual_deny_beats_zero_price():
     assert decision.reason_code == "trusted_paid_evidence"
 
 
+@pytest.mark.spec("quota-attribution::No OmniRoute pool")
+@pytest.mark.spec("quota-attribution::Two accounts, independence unknown")
+@pytest.mark.spec("quota-attribution::Confirmed independence")
+@pytest.mark.spec("quota-attribution::IP-scoped no-auth provider")
 def test_attribution_capacity_status_and_merge_split_evidence():
     groups = [
         AttributionGroup("a", "confirmed", 100),
@@ -171,6 +185,9 @@ def test_attribution_capacity_status_and_merge_split_evidence():
     assert all(group.recalculate_allocation for group in split)
 
 
+@pytest.mark.spec("quota-manager::Production request")
+@pytest.mark.spec("quota-manager::After reset")
+@pytest.mark.spec("quota-manager::Missing reserve")
 def test_effective_remaining_hard_stop_reset_and_historical_reserve():
     assert effective_remaining(limit=100, provider_remaining=60, local_used=30, pending_reserved=10, safety_buffer=5) == 45
     assert effective_remaining(limit=None, provider_remaining=None, local_used=None, pending_reserved=0, safety_buffer=0) is None
@@ -194,14 +211,18 @@ def test_effective_remaining_hard_stop_reset_and_historical_reserve():
     assert calls == ["fetch", "classify"]
 
 
+@pytest.mark.spec("quota-manager::No reliable counter")
 def test_effective_remaining_all_sources_unknown_is_none():
     assert effective_remaining(limit=None, provider_remaining=None, local_used=None, pending_reserved=5, safety_buffer=5) is None
 
 
+@pytest.mark.spec("quota-manager::Negative effective remaining")
 def test_effective_remaining_preserves_negative_after_reservations_and_buffer():
     assert effective_remaining(limit=100, provider_remaining=3, local_used=99, pending_reserved=4, safety_buffer=2) == -5
 
 
+@pytest.mark.spec("quota-manager::No hard stop")
+@pytest.mark.spec("quota-manager::Hard stop false")
 def test_require_hard_stop_false_raises_value_error():
     with pytest.raises(ValueError, match="hard stop required"):
         require_hard_stop(False)

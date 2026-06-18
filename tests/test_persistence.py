@@ -14,6 +14,7 @@ def repository(postgres_url):
 
 
 @pytest.mark.spec("persistence::Failed write rolls back")
+@pytest.mark.spec("persistence::Failed write rolls back")
 def test_failed_transaction_rolls_back_rows(repository):
     with pytest.raises(RuntimeError, match="boom"):
         with repository.database.transaction() as transaction:
@@ -32,6 +33,7 @@ def test_failed_transaction_rolls_back_rows(repository):
 
 
 @pytest.mark.spec("persistence::Committed write is durable")
+@pytest.mark.spec("persistence::Committed write is durable")
 def test_committed_transaction_is_visible_to_new_connection(repository):
     with repository.database.transaction() as transaction:
         run = repository.runs.create(
@@ -47,6 +49,7 @@ def test_committed_transaction_is_visible_to_new_connection(repository):
         assert repository.runs.get(transaction, run["id"]) == run
 
 
+@pytest.mark.spec("persistence::Round-trip a provider endpoint")
 @pytest.mark.spec("persistence::Round-trip a provider endpoint")
 def test_domain_repository_round_trips(repository):
     with repository.database.transaction() as transaction:
@@ -164,6 +167,7 @@ def test_domain_repository_round_trips(repository):
 
 
 @pytest.mark.spec("persistence::Re-run does not duplicate")
+@pytest.mark.spec("persistence::Re-run does not duplicate")
 def test_idempotent_repository_writes_do_not_duplicate(repository):
     with repository.database.transaction() as transaction:
         provider = repository.providers.upsert(
@@ -212,6 +216,7 @@ def test_idempotent_repository_writes_do_not_duplicate(repository):
         assert repository.probes.count_by_request_hash(transaction, "same-key") == 1
 
 
+@pytest.mark.spec("persistence::Duplicate payload is one snapshot")
 @pytest.mark.spec("persistence::Duplicate payload is one snapshot")
 def test_content_hashed_snapshots_are_immutable_and_deduplicated(repository):
     payload = {"provider": "openai", "limits": {"requests": 10}}

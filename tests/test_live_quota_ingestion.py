@@ -48,6 +48,7 @@ def _quota_body(*, generated_at: datetime) -> dict:
     return body
 
 
+@pytest.mark.spec("quota-manager::Quota fetched at reset")
 def test_live_quota_fetch_uses_omniroute_fixture_and_recomputes_remaining():
     now = datetime(2026, 6, 18, 8, 0, tzinfo=timezone.utc)
     transport = _QuotaTransport(body=_quota_body(generated_at=now - timedelta(minutes=2)))
@@ -76,6 +77,7 @@ def test_live_quota_stale_source_fails_closed():
     assert decision.status == "unknown_excluded"
 
 
+@pytest.mark.spec("quota-manager::Quota source unavailable")
 def test_live_quota_unavailable_source_fails_closed():
     now = datetime(2026, 6, 18, 8, 0, tzinfo=timezone.utc)
     transport = _QuotaTransport(

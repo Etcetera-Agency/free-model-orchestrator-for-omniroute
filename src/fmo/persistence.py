@@ -95,6 +95,54 @@ class RunRepository:
     def list(self, connection: psycopg.Connection[Record]) -> list[Record]:
         return _many(connection, "SELECT * FROM sync_runs ORDER BY started_at, id")
 
+    def finish(
+        self,
+        connection: psycopg.Connection[Record],
+        run_id: Any,
+        *,
+        status: str,
+        stages: list[dict[str, Any]],
+    ) -> Record:
+        return _one(
+            connection,
+            """
+            UPDATE sync_runs
+            SET status = %(status)s,
+                finished_at = now(),
+                error_json = %(error_json)s
+            WHERE id = %(id)s
+            RETURNING *
+            """,
+            {
+                "id": run_id,
+                "status": status,
+                "error_json": _jsonb({"stages": stages}),
+            },
+        )
+
+    def last_successful_stage(
+        self,
+        connection: psycopg.Connection[Record],
+        *,
+        stage_name: str,
+        idempotency_key: str,
+    ) -> dict[str, Any] | None:
+        for run in reversed(self.list(connection)):
+            payload = run.get("error_json")
+            if not isinstance(payload, dict):
+                continue
+            for stage in payload.get("stages", []):
+                if not isinstance(stage, dict):
+                    continue
+                if (
+                    stage.get("name") == stage_name
+                    and stage.get("idempotency_key") == idempotency_key
+                    and stage.get("status") == "success"
+                    and not stage.get("skipped")
+                ):
+                    return stage
+        return None
+
 
 class ProviderRepository:
     def upsert(

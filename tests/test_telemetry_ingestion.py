@@ -1,9 +1,12 @@
 from urllib.parse import urlsplit
 
+import pytest
+
 from fmo.omniroute import OmniRouteClient
 from fmo.telemetry import sync_live_telemetry
 
 from _fixtures import fixture_body
+import pytest
 
 
 class _FixtureResponse:
@@ -32,6 +35,7 @@ class _TelemetryTransport:
         raise AssertionError(f"unexpected telemetry request: {path}")
 
 
+@pytest.mark.spec("telemetry-sync::Telemetry fetched before normalization")
 def test_live_telemetry_fetches_usage_analytics_and_normalizes_real_shapes():
     transport = _TelemetryTransport()
     client = OmniRouteClient(base_url="https://omniroute.test", api_key="manage-key", transport=transport)
@@ -49,6 +53,7 @@ def test_live_telemetry_fetches_usage_analytics_and_normalizes_real_shapes():
     assert snapshot.model_metrics[("longcat", "longcat-2.0-preview")].requests == 2
 
 
+@pytest.mark.spec("telemetry-sync::Telemetry source unavailable")
 def test_live_telemetry_unavailable_source_leaves_metrics_unknown():
     transport = _TelemetryTransport(
         status_code=500,

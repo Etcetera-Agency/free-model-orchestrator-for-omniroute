@@ -22,6 +22,8 @@ def test_reviewer_single_call_and_forbidden_ops_rejected():
     assert review.rejected[0]["reason"] == "forbidden_op"
 
 
+@pytest.mark.spec("smart-combo-reviewer::Instructor call fails")
+@pytest.mark.spec("smart-combo-reviewer::Reviewer model unavailable")
 def test_review_diffs_validated_independently_fail_open_no_combo_test():
     combo, audit = apply_review_diffs(
         {"r": ["e1"]},
@@ -40,6 +42,7 @@ def test_review_diffs_validated_independently_fail_open_no_combo_test():
     assert skipped.combo_test_called is False
 
 
+@pytest.mark.spec("smart-combo-reviewer::Trigger disabled")
 def test_combo_review_trigger_false_skips_without_instructor_call():
     def instructor(_payload):
         raise AssertionError("instructor should not run")
@@ -50,6 +53,7 @@ def test_combo_review_trigger_false_skips_without_instructor_call():
     assert review.valid_diffs == []
 
 
+@pytest.mark.spec("smart-combo-reviewer::Unknown endpoint add")
 def test_review_diffs_reject_unknown_endpoint_add():
     combo, audit = apply_review_diffs(
         {"r": ["e1"]},
@@ -62,6 +66,7 @@ def test_review_diffs_reject_unknown_endpoint_add():
     assert audit["rejected"][0]["reason"] == "unknown_endpoint"
 
 
+@pytest.mark.spec("smart-combo-reviewer::Remove below minimum combo size")
 def test_review_diffs_reject_remove_below_minimum_combo_size():
     combo, audit = apply_review_diffs(
         {"r": ["e1"]},
@@ -74,6 +79,7 @@ def test_review_diffs_reject_remove_below_minimum_combo_size():
     assert audit["rejected"][0]["reason"] == "minimum_combo_size"
 
 
+@pytest.mark.spec("smart-combo-reviewer::Missing endpoint remove or move")
 @pytest.mark.parametrize("op", ["remove", "move"])
 def test_review_diffs_reject_missing_endpoint_remove_or_move(op):
     combo, audit = apply_review_diffs(
@@ -87,6 +93,7 @@ def test_review_diffs_reject_missing_endpoint_remove_or_move(op):
     assert audit["rejected"][0]["reason"] == "endpoint_missing"
 
 
+@pytest.mark.spec("smart-combo-reviewer::Duplicate add")
 def test_review_diffs_duplicate_add_is_idempotent():
     combo, audit = apply_review_diffs(
         {"r": ["e1"]},
@@ -99,6 +106,7 @@ def test_review_diffs_duplicate_add_is_idempotent():
     assert audit["rejected"] == []
 
 
+@pytest.mark.spec("aa-index-migration::New major index arrives")
 def test_aa_index_change_freezes_thresholds_and_keeps_combos():
     migration = detect_index_change(active_version="v1", fetched_version="v2", thresholds={"r": 40}, combos={"r": ["e1"]})
     assert migration.created is True
@@ -107,6 +115,7 @@ def test_aa_index_change_freezes_thresholds_and_keeps_combos():
     assert migration.production_recalculation_stopped is True
 
 
+@pytest.mark.spec("aa-index-migration::Proposal generation")
 def test_migration_agent_selects_highest_intelligence_and_validates_approval():
     selected = select_migration_model(
         [
@@ -128,6 +137,8 @@ def test_migration_agent_selects_highest_intelligence_and_validates_approval():
     assert approved.can_rollout is True
 
 
+@pytest.mark.spec("aa-index-migration::No migration model")
+@pytest.mark.spec("aa-index-migration::Smoke test fails after rollout")
 def test_no_model_and_smoke_failure_keep_or_rollback_production():
     assert select_migration_model([]) is None
     proposal = {"index_version": "v2", "roles": {"r": {"metric": "coding_index", "threshold": 999}}}

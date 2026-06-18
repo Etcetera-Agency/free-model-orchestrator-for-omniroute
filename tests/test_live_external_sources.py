@@ -38,7 +38,11 @@ def _aa_api_key() -> str | None:
 
 
 def _skip_if_offline(exc: ExternalMetadataError) -> None:
-    if exc.reason in {"network_error"} or (exc.reason == "http_error" and (exc.status_code or 0) >= 500):
+    transient_http_statuses = {408, 425, 429}
+    transient_http_error = exc.reason == "http_error" and (
+        (exc.status_code or 0) >= 500 or exc.status_code in transient_http_statuses
+    )
+    if exc.reason in {"network_error"} or transient_http_error:
         pytest.skip(f"external source unavailable: {exc}")
 
 

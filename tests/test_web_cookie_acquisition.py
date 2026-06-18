@@ -1,3 +1,5 @@
+import pytest
+
 from fmo.web_cookie import (
     WebCookieEndpoint,
     acquire_web_cookie_sessions,
@@ -5,12 +7,14 @@ from fmo.web_cookie import (
 )
 
 from _fixtures import fixture_body
+import pytest
 
 
 def _web_cookie_fixture():
     return fixture_body("omniroute_web_cookie_sessions")
 
 
+@pytest.mark.spec("web-cookie-candidates::Configured session acquired and probed")
 def test_acquisition_loads_only_explicit_eligible_web_cookie_session_sources():
     body = _web_cookie_fixture()
     endpoints = [
@@ -59,6 +63,7 @@ def test_acquisition_respects_eligible_source_allowlist():
     assert acquisitions == []
 
 
+@pytest.mark.spec("web-cookie-candidates::Failure mode separated")
 def test_probe_classifies_expired_challenge_login_and_unsupported_auth_modes():
     body = _web_cookie_fixture()
     sources_by_id = {source["source_id"]: source for source in body["sessionSources"]}
@@ -84,6 +89,7 @@ def test_probe_classifies_expired_challenge_login_and_unsupported_auth_modes():
         assert outcome.failure_mode == expected_failure
 
 
+@pytest.mark.spec("web-cookie-candidates::Usable session becomes fallback capacity")
 def test_confirmed_usable_session_is_reduced_weight_fallback_and_failed_session_unused():
     body = _web_cookie_fixture()
     acquisitions = acquire_web_cookie_sessions(

@@ -23,6 +23,7 @@ def _transport():
     return RecordingCompletionTransport(fixture_body("omniroute_structured_llm_completions"))
 
 
+@pytest.mark.spec("llm-runtime::All sites use the adapter")
 def test_all_structured_llm_sites_use_shared_adapter_and_validate_pydantic_outputs():
     transport = _transport()
 
@@ -66,6 +67,7 @@ def test_adapter_redacts_prompt_and_applies_site_limit_before_transport_call():
     assert calls[0]["model"] == "free:model"
 
 
+@pytest.mark.spec("llm-runtime::Malformed completion repaired or rejected")
 def test_malformed_completion_uses_repair_path_and_unrepairable_result_fails_deterministically():
     completions = fixture_body("omniroute_structured_llm_completions")
     transport = RecordingCompletionTransport({"smart_combo_reviewer": completions["smart_combo_reviewer"]})
@@ -82,6 +84,7 @@ def test_malformed_completion_uses_repair_path_and_unrepairable_result_fails_det
         )
 
 
+@pytest.mark.spec("llm-runtime::Advisory site fails open")
 def test_advisory_sites_fail_open_when_llm_returns_nothing_usable():
     review = run_combo_review(lambda _payload: "", deterministic_combo={"r": ["e1"]}, trigger=True)
     migration = run_migration_agent(lambda _payload: "", {"endpoint": "free:model-a", "available": True})

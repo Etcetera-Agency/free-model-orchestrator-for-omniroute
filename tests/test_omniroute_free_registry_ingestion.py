@@ -3,12 +3,14 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 import psycopg
+import pytest
 
 from fmo.db import MigrationRunner
 from fmo.omniroute import OmniRouteClient
 from fmo.registry import persist_free_registry_outcome, sync_live_free_registry, validate_free_registry_payload
 
 from _fixtures import fixture_body
+import pytest
 
 
 class _FixtureResponse:
@@ -35,6 +37,7 @@ class _RegistryTransport:
         raise AssertionError(f"unexpected free-registry request: {path}")
 
 
+@pytest.mark.spec("free-provider-registry-sync::Registry fetched before build")
 def test_live_free_registry_fetches_omniroute_fixtures_before_build():
     transport = _RegistryTransport()
     client = OmniRouteClient(base_url="https://omniroute.test", api_key="manage-key", transport=transport)
@@ -47,6 +50,7 @@ def test_live_free_registry_fetches_omniroute_fixtures_before_build():
     assert ("gemini", "gemini-2.0-flash") in outcome.registry.models
 
 
+@pytest.mark.spec("free-provider-registry-sync::Schema drift reported")
 def test_free_registry_schema_drift_is_reported_from_realistic_payload():
     payload = deepcopy(fixture_body("omniroute_api_free_models"))
     payload["models"][0]["unexpectedFreeFlag"] = True

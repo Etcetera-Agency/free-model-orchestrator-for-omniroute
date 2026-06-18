@@ -1,10 +1,13 @@
 from datetime import datetime, timezone
 from urllib.parse import urlsplit
 
+import pytest
+
 from fmo.omniroute import OmniRouteClient
 from fmo.quota_research import QuotaResearchError, research_quota_rule
 
 from _fixtures import fixture_body
+import pytest
 
 
 class _FixtureResponse:
@@ -31,6 +34,7 @@ class _SearchTransport:
         raise AssertionError(f"unexpected search request: {path}")
 
 
+@pytest.mark.spec("quota-research::Live search performed")
 def test_live_quota_research_calls_omniroute_search_and_extracts_summary_rule():
     transport = _SearchTransport()
     client = OmniRouteClient(base_url="https://omniroute.test", api_key="search-key", transport=transport)
@@ -55,6 +59,7 @@ def test_live_quota_research_calls_omniroute_search_and_extracts_summary_rule():
     assert result.rule.activated_by == "summary"
 
 
+@pytest.mark.spec("quota-research::Search unavailable")
 def test_live_quota_research_unavailable_source_produces_no_rule():
     transport = _SearchTransport(
         status_code=500,
