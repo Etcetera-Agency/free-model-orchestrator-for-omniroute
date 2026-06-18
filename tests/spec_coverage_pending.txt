@@ -1,0 +1,203 @@
+# Scenarios not yet bound to an executable test (pending allowlist).
+# Remove a line once a test carries @pytest.mark.spec("<that id>").
+# This file must shrink over time; the coverage gate forbids leaving a
+# scenario both here and already covered.
+aa-index-migration::New major index arrives
+aa-index-migration::AA fetch fails
+aa-index-migration::AA API key missing
+aa-index-migration::Proposal generation
+aa-index-migration::No migration model
+aa-index-migration::Smoke test fails after rollout
+access-classifier::Removed beats zero price
+access-classifier::Manual deny beats zero price
+access-classifier::Exhausted by safety buffer
+access-classifier::Missing quota precondition
+access-classifier::Promotion expired
+access-classifier::Live API overrides models.dev
+access-classifier::Empty evidence
+account-discovery::Shared upstream account
+account-discovery::Independent accounts
+account-discovery::Conflicting pool statuses
+account-discovery::Non-confirmed and duplicate capacity
+account-discovery::Rate limits unavailable
+account-discovery::Connections fetched before grouping
+account-discovery::Rate-limit fetch unavailable
+allocator::Shared endpoint across roles
+allocator::Heavy role same pool second primary
+allocator::Zero capacity pool
+allocator::Combo output
+allocator::No endpoint with capacity
+allocator::Missing score during stable order
+audit-rollback::Combo change logged
+audit-rollback::Inspect an assignment
+audit-rollback::Roll back a run
+cli-and-operations::Explain an endpoint
+cli-and-operations::Unsafe apply
+cli-and-operations::Dry-run validation
+cli-and-operations::sync-metadata fetches external metadata
+cli-and-operations::sync-metadata missing AA API key
+cli-and-operations::sync-metadata dry run
+cli-and-operations::full command order
+combo-applier::Foreign combo
+combo-applier::State changed under us
+combo-applier::Smoke test fails
+combo-applier::Manual edit detected
+context-window-eligibility::Provider smaller than canonical
+context-window-eligibility::Below minimum
+context-window-eligibility::Far above minimum
+context-window-eligibility::Unknown context, no override
+data-model::Role reference type
+data-model::Repository is the only writer
+demand-forecast::Multiple agents and a shared role
+demand-forecast::Dependency cycle
+demand-forecast::Bursty weekly load
+demand-forecast::Reserve applied once
+demand-forecast::Unknown new role
+dynamic-role-lifecycle::Role disappears once
+dynamic-role-lifecycle::Role reappears within grace
+dynamic-role-lifecycle::Brand-new role
+environment-and-connections::Secret in repo config
+environment-and-connections::Bad OmniRoute URL
+environment-and-connections::Missing database URL
+environment-and-connections::Invalid inventory mode
+environment-and-connections::Bad inventory cron
+environment-and-connections::Missing filesystem inventory path
+environment-and-connections::Missing command inventory command
+environment-and-connections::Bad HTTP inventory URL
+environment-and-connections::Health check payload is not an object
+environment-and-connections::Building an LLM prompt
+free-candidate-discovery::Fetch models.dev api catalog
+free-candidate-discovery::Zero-cost provider offering
+free-candidate-discovery::Free token in model id
+free-candidate-discovery::Missing cost is not free
+free-candidate-discovery::False free token
+free-candidate-discovery::Cost is not an object
+free-candidate-discovery::Only input cost is zero
+free-candidate-discovery::Multiple signals collapse
+free-candidate-discovery::Same model differs by provider
+free-candidate-discovery::Name match stays unconfirmed
+free-candidate-discovery::models.dev non-200
+free-candidate-discovery::models.dev real top-level provider-keyed body
+free-candidate-discovery::models.dev invalid payload
+free-provider-registry-sync::No-auth provider has no connection
+free-provider-registry-sync::Shared pool across models
+free-provider-registry-sync::Unscored provider
+free-provider-registry-sync::Web-cookie provider in registry
+free-provider-registry-sync::Registry fetched before build
+free-provider-registry-sync::Schema drift reported
+hermes-inventory::Unknown role observed
+hermes-inventory::Mixed consumers recorded
+hermes-inventory::Real cron job schedule mapped
+hermes-inventory::Profile gateway state selects consumer type
+hermes-inventory::Event-driven consumer cadence
+hermes-inventory::Observed calls_per_run from state.db
+hermes-inventory::Missing required env
+hermes-inventory::Schedule changed
+hermes-inventory::Inspector does not inspect
+hermes-inventory::Inspector output
+hermes-inventory::Command adapter returns real shapes
+hermes-inventory::Live profile enumeration
+hermes-inventory::Service from gateway config
+llm-runtime::Add or change runtime defaults
+llm-runtime::Edit one prompt
+llm-runtime::PostgreSQL URL redaction
+llm-runtime::Bearer token redaction
+llm-runtime::Cookie assignment redaction
+llm-runtime::Secret-like key removal
+llm-runtime::Unresolved placeholder cleanup
+llm-runtime::All sites use the adapter
+llm-runtime::Advisory site fails open
+llm-runtime::Malformed completion repaired or rejected
+model-matcher::Exact slug match
+model-matcher::Base vs instruct
+model-matcher::Low-confidence match
+model-matcher::Smaller provider context
+omniroute-client::Module needs OmniRoute data
+omniroute-client::Unknown OmniRoute version
+omniroute-client::429 with Retry-After
+omniroute-client::GET 429 retries exhausted
+omniroute-client::GET non-retriable error
+omniroute-client::Invalid Retry-After
+omniroute-client::Leading slash path
+persistence::Stages do not embed schema SQL
+probe-runner::No reserved capacity
+probe-runner::Non-200 or empty content
+probe-runner::Unclaimed capability
+probe-runner::Probe error table
+provider-scanner::Failed snapshot not previous
+provider-scanner::New model discovered
+provider-scanner::Non-candidate model
+provider-scanner::Fewer than two snapshots
+provider-scanner::Not both snapshots successful
+provider-scanner::Omission too young
+provider-scanner::Catalog fetched before scan
+provider-scanner::Fetch failure does not overwrite
+quality-gate::Below the gate
+quality-gate::Missing gate metric
+quality-gate::Major index change
+quota-attribution::No OmniRoute pool
+quota-attribution::Two accounts, independence unknown
+quota-attribution::Confirmed independence
+quota-attribution::IP-scoped no-auth provider
+quota-manager::No reliable counter
+quota-manager::Negative effective remaining
+quota-manager::No hard stop
+quota-manager::Hard stop false
+quota-manager::Production request
+quota-manager::After reset
+quota-manager::Missing reserve
+quota-manager::Quota fetched at reset
+quota-manager::Quota source unavailable
+quota-research::Endpoint absent from OmniRoute registry
+quota-research::Quota query
+quota-research::Invalid extracted claim
+quota-research::Summary worsens quota
+quota-research::Live search performed
+quota-research::Search unavailable
+role-scorer::Breaker not closed
+role-scorer::Zero quota boundary
+role-scorer::Missing required capability
+role-scorer::Price excluded
+role-scorer::Artificial Analysis metadata fetch
+role-scorer::Artificial Analysis free-tier pagination
+role-scorer::Artificial Analysis API key missing
+role-scorer::Artificial Analysis API key redacted
+role-scorer::End-to-end latency alias
+role-scorer::Missing metric remains missing
+role-scorer::Endpoint telemetry available
+role-scorer::No latency source
+role-scorer::Unchanged inputs
+role-scorer::Artificial Analysis non-200
+role-scorer::Artificial Analysis invalid payload
+scheduler::Scheduled daily run
+scheduler::Overlapping daily runs
+scheduler::Urgent run after paid charge
+scheduler::Apply pipeline runs
+scheduler::External metadata before discovery and scoring
+scheduler::Metadata sync failure is conservative
+smart-combo-reviewer::Trigger disabled
+smart-combo-reviewer::Instructor call fails
+smart-combo-reviewer::Unknown endpoint add
+smart-combo-reviewer::Remove below minimum combo size
+smart-combo-reviewer::Missing endpoint remove or move
+smart-combo-reviewer::Duplicate add
+smart-combo-reviewer::Reviewer model unavailable
+system-architecture::Same model on two providers
+system-architecture::Intraday failure not rebuilt
+system-architecture::Missing snapshot blocks apply
+system-architecture::Re-run with unchanged inputs
+system-architecture::Reactivate exhausted endpoint too early
+telemetry-sync::Daily sync before scoring
+telemetry-sync::Only provider-level latency
+telemetry-sync::Consecutive failures
+telemetry-sync::Telemetry fetched before normalization
+telemetry-sync::Telemetry source unavailable
+web-cookie-candidates::Non-web-cookie connection source
+web-cookie-candidates::Capability false or missing
+web-cookie-candidates::Text probe bad response
+web-cookie-candidates::Session challenge
+web-cookie-candidates::Unknown quota
+web-cookie-candidates::Configured session acquired and probed
+web-cookie-candidates::Failure mode separated
+web-cookie-candidates::Usable session becomes fallback capacity
+web-cookie-candidates::No auto-discovery

@@ -30,4 +30,5 @@ pythonpath = ["src"]
 testpaths = ["tests"]
 markers = [
   "live: hits real external services (models.dev / Artificial Analysis); skips when unavailable",
+  "spec(scenario_id): bind this test to an openspec scenario, id 'capability::Scenario name'",
 ]

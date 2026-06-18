@@ -45,4 +45,8 @@ each ingestion slice's fixtures task for its boundary.
 
 ## Deferred Work
 
-None — all items above have been moved into change proposals.
+- Migrate existing direct SQL writers (`src/fmo/scanner.py`,
+  `src/fmo/registry.py`) to the repository layer during the pipeline/CLI wiring
+  slices, then remove `data-model::Repository is the only writer` and
+  `persistence::Stages do not embed schema SQL` from
+  `tests/spec_coverage_pending.txt`.

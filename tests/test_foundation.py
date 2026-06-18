@@ -45,6 +45,7 @@ class FakeResponse:
         return self._payload
 
 
+@pytest.mark.spec("data-model::Fresh install")
 def test_schema_sql_applies_on_real_postgres(postgres_url):
     runner = MigrationRunner(postgres_url)
     runner.apply_schema(Path("reference/db/schema.sql"))
@@ -272,6 +273,9 @@ def test_planned_combo_cannot_apply_without_snapshot():
         (ComboState.VALIDATED, ComboState.PLANNED),
     ],
 )
+@pytest.mark.spec("data-model::Snapshot directly committed")
+@pytest.mark.spec("data-model::Applied directly committed")
+@pytest.mark.spec("data-model::Backward combo transition")
 def test_forbidden_combo_transitions_rejected(state, target):
     with pytest.raises(ValueError):
         transition_combo(state, target)
