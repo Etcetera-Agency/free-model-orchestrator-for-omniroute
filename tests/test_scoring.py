@@ -87,6 +87,7 @@ def test_telemetry_granularity_and_degradation_is_endpoint_scoped():
     assert degraded.sibling_statuses == {"sib": "unchanged"}
 
 
+@pytest.mark.spec("role-scorer::Breaker not closed")
 def test_eligibility_filter_rejects_before_scoring():
     endpoint = {"matched": True, "breaker": "open", "quota": 100, "basic_probe": True, "access": "free_unlimited"}
 
@@ -95,6 +96,7 @@ def test_eligibility_filter_rejects_before_scoring():
 
 @pytest.mark.spec("context-window-eligibility::Below minimum")
 @pytest.mark.spec("role-scorer::Missing required capability")
+@pytest.mark.spec("role-scorer::Zero quota boundary")
 @pytest.mark.parametrize(
     ("endpoint_patch", "required_capabilities", "reason"),
     [
@@ -165,6 +167,7 @@ def test_latency_score_source_unknown_when_every_source_missing():
 
 @pytest.mark.spec("context-window-eligibility::Unknown context, no override")
 @pytest.mark.spec("context-window-eligibility::Far above minimum")
+@pytest.mark.spec("context-window-eligibility::Provider smaller than canonical")
 def test_context_hard_filter_unknown_override_and_no_bonus():
     assert effective_context_window([128_000, 64_000, None]) == 64_000
     assert context_eligible(effective_context=32_000, minimum_context=64_000).eligible is False

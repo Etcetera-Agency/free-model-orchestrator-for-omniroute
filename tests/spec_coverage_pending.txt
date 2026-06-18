@@ -3,43 +3,23 @@
 # This file must shrink over time; the coverage gate forbids leaving a
 # scenario both here and already covered.
 aa-index-migration::AA API key missing
-access-classifier::Live API overrides models.dev
-access-classifier::Removed beats zero price
-allocator::Combo output
-audit-rollback::Inspect an assignment
 cli-and-operations::Apply surfaces gating outcomes
 cli-and-operations::Explain an endpoint
 cli-and-operations::Stage command invokes its stage
-context-window-eligibility::Provider smaller than canonical
 data-model::Repository is the only writer
 data-model::Role reference type
-demand-forecast::Bursty weekly load
 environment-and-connections::Secret in repo config
-free-candidate-discovery::Free token in model id
-free-candidate-discovery::Missing cost is not free
 free-candidate-discovery::Name match stays unconfirmed
 free-provider-registry-sync::No-auth provider has no connection
-free-provider-registry-sync::Unscored provider
-hermes-inventory::Inspector output
 llm-runtime::Add or change runtime defaults
 llm-runtime::Edit one prompt
 persistence::Stages do not embed schema SQL
-provider-scanner::Fewer than two snapshots
 provider-scanner::Non-candidate model
 quota-research::Endpoint absent from OmniRoute registry
-role-scorer::Breaker not closed
-role-scorer::Zero quota boundary
-runtime-bootstrap::Entrypoint uses real arguments
-runtime-bootstrap::Health check precedes the pipeline
-runtime-bootstrap::Invalid environment fails before running
-scheduler::Daily lock blocks a concurrent run
 scheduler::External metadata before discovery and scoring
-scheduler::Lock released on failure
-scheduler::Manual trigger starts a run
 scheduler::Metadata sync failure is conservative
 scheduler::Overlapping daily runs
 scheduler::Scheduled daily run
-scheduler::Scheduler fires at cron time
 scheduler::Urgent run after paid charge
 system-architecture::Intraday failure not rebuilt
 system-architecture::Same model on two providers

@@ -3,6 +3,7 @@ from pathlib import Path
 
 import psycopg
 import pytest
+import pytest
 
 from fmo.accounts import group_quota_pools, usable_capacity
 from fmo.candidates import build_free_candidates
@@ -11,7 +12,6 @@ from fmo.matcher import MatchMethod, effective_context, match_model
 from fmo.models_dev import MODELS_DEV_API_URL, ExternalMetadataError, fetch_models_dev_catalog, sync_models_dev_candidates
 from fmo.registry import sync_free_registry
 from fmo.scanner import CatalogScanner, CatalogSnapshot, diff_catalogs, should_mark_removed
-import pytest
 
 
 class FakeResponse:
@@ -101,6 +101,8 @@ def test_models_dev_fetcher_rejects_network_http_json_and_payload_errors():
 
 
 @pytest.mark.spec("free-candidate-discovery::Zero-cost provider offering")
+@pytest.mark.spec("free-candidate-discovery::Free token in model id")
+@pytest.mark.spec("free-candidate-discovery::Missing cost is not free")
 def test_candidate_filter_uses_zero_cost_and_standalone_free_only():
     catalog = {
         "providers": {
@@ -208,6 +210,7 @@ def test_scanner_snapshots_by_hash_and_skips_unchanged_diff(postgres_url):
 
 @pytest.mark.spec("provider-scanner::New model discovered")
 @pytest.mark.spec("provider-scanner::Omission too young")
+@pytest.mark.spec("provider-scanner::Fewer than two snapshots")
 def test_diff_emits_events_and_false_removal_guard():
     previous = [{"id": "old", "name": "Old"}, {"id": "same", "name": "Same"}]
     current = [{"id": "same", "name": "Same"}, {"id": "new", "name": "New"}]
@@ -296,6 +299,7 @@ def test_usable_capacity_ignores_non_confirmed_and_duplicate_connection_ids():
 
 @pytest.mark.spec("free-provider-registry-sync::Shared pool across models")
 @pytest.mark.spec("free-provider-registry-sync::Web-cookie provider in registry")
+@pytest.mark.spec("free-provider-registry-sync::Unscored provider")
 def test_free_registry_deduplicates_pool_key_and_excludes_web_cookie():
     payload = {
         "models": [

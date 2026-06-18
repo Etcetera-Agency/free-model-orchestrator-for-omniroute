@@ -161,12 +161,30 @@ Validate OpenSpec:
 openspec validate --all --strict
 ```
 
-Current expected validation after the edge-case coverage slice:
+### Executable-spec coverage gate
 
-```text
-144 passed
-31 OpenSpec items passed
+OpenSpec scenarios are executable: `tests/test_spec_coverage.py` statically
+cross-references every `#### Scenario:` in `openspec/specs/**` (and in active,
+non-archived `openspec/changes/**`) against `@pytest.mark.spec(...)` markers on
+the real tests, and runs as part of the normal `pytest` suite. It fails the
+build on drift in either direction:
+
+- a scenario with no test and not on the pending allowlist;
+- a marker pointing at a scenario that is neither shipped nor proposed;
+- a pending entry that is actually covered (the allowlist must shrink);
+- a pending entry referencing a scenario that no longer exists.
+
+Bind a test to a scenario, then drop the matching line from
+`tests/spec_coverage_pending.txt`:
+
+```python
+@pytest.mark.spec("data-model::Snapshot directly committed")
+def test_snapshot_cannot_commit():
+    ...
 ```
+
+The pending allowlist tracks scenarios not yet bound (mostly scenarios of
+not-yet-implemented change proposals); it must shrink over time, never grow.
 
 ## Safety Model
 
@@ -188,10 +206,11 @@ OpenSpec workflow:
 
 ```text
 proposal + tasks
-→ failing tests
+→ failing tests (bound to their scenarios with @pytest.mark.spec)
 → minimal implementation fixes
 → targeted pytest
-→ full pytest
+→ full pytest (includes the executable-spec coverage gate)
+→ remove the now-covered scenarios from tests/spec_coverage_pending.txt
 → openspec validate --all --strict
 → archive when approved
 ```

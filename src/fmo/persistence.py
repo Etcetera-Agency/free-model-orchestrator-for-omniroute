@@ -50,6 +50,7 @@ class Repository:
         object.__setattr__(self, "allocation_plans", AllocationPlanRepository())
         object.__setattr__(self, "combo_snapshots", ComboSnapshotRepository())
         object.__setattr__(self, "audit", AuditRepository())
+        object.__setattr__(self, "locks", LockRepository())
 
 
 class RunRepository:
@@ -142,6 +143,45 @@ class RunRepository:
                 ):
                     return stage
         return None
+
+
+class LockRepository:
+    def acquire(self, connection: psycopg.Connection[Record], name: str) -> str | None:
+        existing = _optional(
+            connection,
+            """
+            SELECT id FROM sync_runs
+            WHERE run_type = 'lock'
+              AND trigger = %(name)s
+              AND status = 'held'
+              AND finished_at IS NULL
+            LIMIT 1
+            """,
+            {"name": name},
+        )
+        if existing:
+            return None
+        row = _one(
+            connection,
+            """
+            INSERT INTO sync_runs (run_type, trigger, status, code_version, config_hash)
+            VALUES ('lock', %(name)s, 'held', 'lock', %(name)s)
+            RETURNING id
+            """,
+            {"name": name},
+        )
+        return str(row["id"])
+
+    def release(self, connection: psycopg.Connection[Record], token: str) -> None:
+        connection.execute(
+            """
+            UPDATE sync_runs
+            SET status = 'released',
+                finished_at = now()
+            WHERE id = %(id)s AND run_type = 'lock'
+            """,
+            {"id": token},
+        )
 
 
 class ProviderRepository:

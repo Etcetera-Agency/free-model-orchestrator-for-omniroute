@@ -1,7 +1,10 @@
 import argparse
+import os
+import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from fmo.bootstrap import bootstrap_and_dispatch
 from fmo.external_metadata import ExternalMetadataError
 from fmo.metadata_sync import sync_external_metadata
 
@@ -73,8 +76,20 @@ def run_cli(argv: list[str], *, preconditions_ok: bool, metadata_sync: Callable[
     return CliResult(exit_code=EXIT_CODES["success"], changed=args.command == "apply")
 
 
-def main() -> int:
-    return run_cli([], preconditions_ok=True).exit_code
+def main(
+    argv: list[str] | None = None,
+    *,
+    env: dict[str, str] | None = None,
+    health_check: Callable[[], dict] | None = None,
+    dispatcher: Callable[[list[str], bool], int] | None = None,
+) -> int:
+    args = list(sys.argv[1:] if argv is None else argv)
+    run = dispatcher or _dispatch_cli
+    return bootstrap_and_dispatch(args, env=env or os.environ, health_check=health_check, dispatcher=run)
+
+
+def _dispatch_cli(argv: list[str], preconditions_ok: bool) -> int:
+    return run_cli(argv, preconditions_ok=preconditions_ok).exit_code
 
 
 def _add_common_flags(parser: argparse.ArgumentParser) -> None:

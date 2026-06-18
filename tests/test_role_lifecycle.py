@@ -51,6 +51,7 @@ def test_inventory_diff_marks_forecast_stale_and_material_allocation_gate():
 
 
 @pytest.mark.spec("hermes-inventory::Inspector does not inspect")
+@pytest.mark.spec("hermes-inventory::Inspector output")
 def test_inspector_prompt_and_scope_no_secret_or_file_reads():
     inventory = normalize_command_inventory({"roles": [{"role": "r", "consumer_type": "webhook", "consumer": "w", "cadence": "observed", "calls_per_run": 3}]}, env={"HERMES_INVENTORY_COMMAND": "cmd"})
     prompt = assemble_inspector_prompt(inventory, changes=["cadence changed"], secrets={"HERMES_INVENTORY_TOKEN": "secret"})

@@ -62,6 +62,15 @@ the minimum code to pass (green), then refactor. Each change's `tasks.md` is
 ordered test-before-implementation. A capability requirement's `#### Scenario`
 blocks are the acceptance tests — encode them.
 
+**Scenarios are executable and the binding is enforced.** Bind each test to the
+scenario it encodes with `@pytest.mark.spec("<capability>::<Scenario name>")`,
+and remove that scenario from `tests/spec_coverage_pending.txt`. The
+`tests/test_spec_coverage.py` gate (part of the normal `pytest` run) fails the
+build when a scenario has no test and is not on the pending allowlist, when a
+marker points at a non-existent scenario, or when a pending entry is stale or
+already covered. The pending allowlist must shrink over time, never grow — a new
+change's scenarios are bound as its tests land, before it is archived.
+
 **Mock realistically — never hand-fabricate payload shapes.** Mock only the
 network boundary, and only with responses recorded from the real services:
 
