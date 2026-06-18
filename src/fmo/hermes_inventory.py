@@ -1,9 +1,12 @@
 import json
 import sqlite3
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import httpx
+import yaml
 from pydantic import BaseModel
 
 from fmo.llm_runtime import LlmSiteConfig, complete_with_adapter
@@ -21,6 +24,13 @@ class Consumer:
 @dataclass(frozen=True)
 class Inventory:
     consumers: list[Consumer]
+
+
+@dataclass(frozen=True)
+class HermesInventoryError(Exception):
+    source: str
+    reason: str
+    detail: str | None = None
 
 
 @dataclass(frozen=True)
@@ -249,11 +259,34 @@ def parse_profiles(payload: Any, *, demand_by_role: dict[str, float] | None = No
     return consumers
 
 
+def parse_gateway_services(payload: Any, *, demand_by_role: dict[str, float] | None = None) -> list[Consumer]:
+    demand_by_role = demand_by_role or {}
+    config = payload or {}
+    default_model = _combo_role(config.get("model"))
+    platforms = (config.get("gateway") or {}).get("platforms") or {}
+    consumers = []
+    for name, platform in sorted(platforms.items()):
+        if not platform.get("enabled"):
+            continue
+        role = _combo_role(platform.get("model") or default_model)
+        consumers.append(
+            Consumer(
+                role_id=role,
+                consumer_type="service",
+                consumer=f"gateway:{name}",
+                cadence="continuous",
+                calls_per_run=demand_by_role.get(role, BOOTSTRAP_CALLS_PER_RUN),
+            )
+        )
+    return consumers
+
+
 def build_hermes_inventory(
     *,
     cron_jobs: Any = None,
     webhook_subscriptions: Any = None,
     profiles: Any = None,
+    gateway_config: Any = None,
     session_connection: sqlite3.Connection | None = None,
 ) -> Inventory:
     """Combine real Hermes surfaces into one normalized Inventory."""
@@ -265,23 +298,27 @@ def build_hermes_inventory(
         consumers += parse_webhook_subscriptions(webhook_subscriptions, demand_by_role=demand_by_role)
     if profiles is not None:
         consumers += parse_profiles(profiles, demand_by_role=demand_by_role)
+    if gateway_config is not None:
+        consumers += parse_gateway_services(gateway_config, demand_by_role=demand_by_role)
     return Inventory(consumers=consumers)
 
 
-def read_hermes_home(home: str | Path, *, profiles: Any = None) -> Inventory:
+def read_hermes_home(home: str | Path) -> Inventory:
     """Read a real `HERMES_HOME` directory layout into an Inventory.
 
     Reads `cron/jobs.json` and `webhook_subscriptions.json`, and opens
-    `state.db` read-only for observed demand. Profile enumeration is supplied by
-    the caller (Hermes derives it from a CLI/HTTP listing, not a single file).
+    `state.db` read-only for observed demand. Profiles are enumerated from the
+    live profile directories and their `config.yaml` model values.
     """
     home = Path(home)
     jobs_file = home / "cron" / "jobs.json"
     subs_file = home / "webhook_subscriptions.json"
     state_db = home / "state.db"
+    gateway_config = read_gateway_config(home)
 
     cron_jobs = json.loads(jobs_file.read_text()) if jobs_file.is_file() else None
     webhook_subscriptions = json.loads(subs_file.read_text()) if subs_file.is_file() else None
+    profiles = enumerate_live_profiles(home)
 
     connection = None
     if state_db.is_file():
@@ -291,8 +328,77 @@ def read_hermes_home(home: str | Path, *, profiles: Any = None) -> Inventory:
             cron_jobs=cron_jobs,
             webhook_subscriptions=webhook_subscriptions,
             profiles=profiles,
+            gateway_config=gateway_config,
             session_connection=connection,
         )
     finally:
         if connection is not None:
             connection.close()
+
+
+def read_hermes_command_sources(command: list[str], *, timeout: float = 10) -> dict:
+    try:
+        completed = subprocess.run(command, check=False, capture_output=True, text=True, timeout=timeout)
+    except OSError as exc:
+        raise HermesInventoryError("command", "execution_failed", str(exc)) from exc
+    except subprocess.TimeoutExpired as exc:
+        raise HermesInventoryError("command", "timeout", str(exc)) from exc
+    if completed.returncode != 0:
+        raise HermesInventoryError("command", "nonzero_exit", completed.stderr.strip() or completed.stdout.strip())
+    try:
+        return json.loads(completed.stdout)
+    except json.JSONDecodeError as exc:
+        raise HermesInventoryError("command", "invalid_json", str(exc)) from exc
+
+
+def read_hermes_http_sources(url: str, *, timeout: float = 10) -> dict:
+    try:
+        response = httpx.get(url, timeout=timeout)
+    except httpx.HTTPError as exc:
+        raise HermesInventoryError("http", "request_failed", str(exc)) from exc
+    if response.status_code >= 400:
+        raise HermesInventoryError("http", "http_error", str(response.status_code))
+    try:
+        return response.json()
+    except json.JSONDecodeError as exc:
+        raise HermesInventoryError("http", "invalid_json", str(exc)) from exc
+
+
+def enumerate_live_profiles(home: str | Path) -> dict[str, list[dict[str, Any]]]:
+    home = Path(home)
+    profiles = []
+    default_config = _read_yaml_file(home / "config.yaml")
+    if default_config:
+        profiles.append(_profile_record("default", home, default_config, is_default=True))
+
+    profiles_dir = home / "profiles"
+    if profiles_dir.is_dir():
+        for profile_dir in sorted(path for path in profiles_dir.iterdir() if path.is_dir()):
+            config = _read_yaml_file(profile_dir / "config.yaml")
+            if config:
+                profiles.append(_profile_record(profile_dir.name, profile_dir, config, is_default=False))
+    return {"profiles": profiles}
+
+
+def read_gateway_config(home: str | Path) -> dict[str, Any] | None:
+    return _read_yaml_file(Path(home) / "config.yaml")
+
+
+def _profile_record(name: str, path: Path, config: dict[str, Any], *, is_default: bool) -> dict[str, Any]:
+    return {
+        "name": name,
+        "path": str(path),
+        "is_default": is_default,
+        "gateway_running": False,
+        "model": config.get("model"),
+        "provider": config.get("provider"),
+    }
+
+
+def _read_yaml_file(path: Path) -> dict[str, Any] | None:
+    if not path.is_file():
+        return None
+    data = yaml.safe_load(path.read_text()) or {}
+    if not isinstance(data, dict):
+        raise HermesInventoryError("filesystem", "invalid_config", str(path))
+    return data
