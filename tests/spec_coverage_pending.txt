@@ -3,9 +3,6 @@
 # This file must shrink over time; the coverage gate forbids leaving a
 # scenario both here and already covered.
 aa-index-migration::AA API key missing
-cli-and-operations::Apply surfaces gating outcomes
-cli-and-operations::Explain an endpoint
-cli-and-operations::Stage command invokes its stage
 data-model::Repository is the only writer
 data-model::Role reference type
 environment-and-connections::Secret in repo config
