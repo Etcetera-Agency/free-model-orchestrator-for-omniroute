@@ -1,0 +1,13 @@
+{
+  "source": "OmniRoute src/app/api/usage/analytics/route.ts catch block",
+  "captured_at": "2026-06-18T00:00:00Z",
+  "method": "GET",
+  "path": "/api/usage/analytics",
+  "status": 500,
+  "body": {
+    "error": {
+      "message": "Failed to compute analytics",
+      "type": "api_error"
+    }
+  }
+}
