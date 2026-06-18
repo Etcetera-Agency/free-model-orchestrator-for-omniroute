@@ -1,0 +1,6017 @@
+{
+  "captured_at": "2026-06-18T07:36:26.470Z",
+  "source": "omniroute-shlink-20129",
+  "name": "omniroute_v1_models",
+  "method": "GET",
+  "path": "/v1/models",
+  "status": 200,
+  "headers": {
+    "access-control-allow-headers": "[REDACTED]",
+    "access-control-allow-methods": "[REDACTED]",
+    "connection": "keep-alive",
+    "content-security-policy": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; media-src 'self' data: blob:; connect-src 'self' http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:* https: wss:; worker-src 'self' blob:; manifest-src 'self'",
+    "content-type": "application/json",
+    "date": "Thu, 18 Jun 2026 07:36:11 GMT",
+    "keep-alive": "timeout=5",
+    "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=()",
+    "referrer-policy": "strict-origin-when-cross-origin",
+    "strict-transport-security": "max-age=63072000; includeSubDomains; preload",
+    "transfer-encoding": "chunked",
+    "vary": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "DENY",
+    "x-model-catalog-version": "model-metadata-v1:static",
+    "x-omniroute-route-class": "CLIENT_API",
+    "x-request-id": "[UUID]"
+  },
+  "body": {
+    "object": "list",
+    "data": [
+      {
+        "id": "antigravity/claude-opus-4-6-thinking",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "antigravity",
+        "permission": [],
+        "root": "claude-opus-4-6-thinking",
+        "parent": null,
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": true,
+          "thinking": true
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "context_length": 200000,
+        "max_output_tokens": 65536,
+        "max_input_tokens": 200000,
+        "name": "Claude Opus 4.6 (Thinking)"
+      },
+      {
+        "id": "antigravity/claude-sonnet-4-6",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "antigravity",
+        "permission": [],
+        "root": "claude-sonnet-4-6",
+        "parent": null,
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": false,
+          "thinking": false
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "context_length": 200000,
+        "max_output_tokens": 65536,
+        "max_input_tokens": 200000,
+        "name": "Claude Sonnet 4.6 (Thinking)"
+      },
+      {
+        "id": "antigravity/gemini-3.5-flash-low",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "antigravity",
+        "permission": [],
+        "root": "gemini-3.5-flash-low",
+        "parent": null,
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": false,
+          "thinking": false
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "context_length": 1048576,
+        "max_output_tokens": 65536,
+        "max_input_tokens": 1048576,
+        "name": "Gemini 3.5 Flash (Low)"
+      },
+      {
+        "id": "antigravity/gemini-3.5-flash-medium",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "antigravity",
+        "permission": [],
+        "root": "gemini-3.5-flash-medium",
+        "parent": null,
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": false,
+          "thinking": false
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "context_length": 1048576,
+        "max_output_tokens": 65536,
+        "max_input_tokens": 1048576,
+        "name": "Gemini 3.5 Flash (Medium)"
+      },
+      {
+        "id": "antigravity/gemini-3.5-flash-high",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "antigravity",
+        "permission": [],
+        "root": "gemini-3.5-flash-high",
+        "parent": null,
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": false,
+          "thinking": false
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "context_length": 1048576,
+        "max_output_tokens": 65536,
+        "max_input_tokens": 1048576,
+        "name": "Gemini 3.5 Flash (High)"
+      },
+      {
+        "id": "antigravity/gemini-3-pro-preview",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "antigravity",
+        "permission": [],
+        "root": "gemini-3-pro-preview",
+        "parent": null,
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": false,
+          "thinking": false
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "context_length": 1048576,
+        "max_output_tokens": 65535,
+        "max_input_tokens": 1048576,
+        "name": "Gemini 3.1 Pro"
+      },
+      {
+        "id": "antigravity/gemini-3.1-pro-high",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "antigravity",
+        "permission": [],
+        "root": "gemini-3.1-pro-high",
+        "parent": null,
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": false,
+          "thinking": false
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "context_length": 1048576,
+        "max_output_tokens": 65535,
+        "max_input_tokens": 1048576,
+        "name": "Gemini 3.1 Pro (High)"
+      },
+      {
+        "id": "antigravity/gemini-3.1-pro-low",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "antigravity",
+        "permission": [],
+        "root": "gemini-3.1-pro-low",
+        "parent": null,
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": false,
+          "thinking": false
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "context_length": 1048576,
+        "max_output_tokens": 65535,
+        "max_input_tokens": 1048576,
+        "name": "Gemini 3.1 Pro (Low)"
+      },
+      {
+        "id": "antigravity/gemini-3.1-flash-lite",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "antigravity",
+        "permission": [],
+        "root": "gemini-3.1-flash-lite",
+        "parent": null,
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": false,
+          "thinking": false
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "context_length": 1048576,
+        "max_output_tokens": 65535,
+        "max_input_tokens": 1048576,
+        "name": "Gemini 3.1 Flash Lite"
+      },
+      {
+        "id": "antigravity/gemini-2.5-pro",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "antigravity",
+        "permission": [],
+        "root": "gemini-2.5-pro",
+        "parent": null,
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": false,
+          "thinking": false
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "context_length": 1048576,
+        "max_output_tokens": 65535,
+        "max_input_tokens": 1048576,
+        "name": "Gemini 2.5 Pro"
+      },
+      {
+        "id": "antigravity/gemini-2.5-flash",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "antigravity",
+        "permission": [],
+        "root": "gemini-2.5-flash",
+        "parent": null,
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": false,
+          "thinking": false
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "context_length": 1048576,
+        "max_output_tokens": 65535,
+        "max_input_tokens": 1048576,
+        "name": "Gemini 2.5 Flash"
+      },
+      {
+        "id": "antigravity/gemini-2.5-flash-lite",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "antigravity",
+        "permission": [],
+        "root": "gemini-2.5-flash-lite",
+        "parent": null,
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": false,
+          "thinking": false
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "context_length": 1048576,
+        "max_output_tokens": 65535,
+        "max_input_tokens": 1048576,
+        "name": "Gemini 2.5 Flash Lite"
+      },
+      {
+        "id": "antigravity/gemini-2.5-flash-thinking",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "antigravity",
+        "permission": [],
+        "root": "gemini-2.5-flash-thinking",
+        "parent": null,
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": false,
+          "thinking": false
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "context_length": 1048576,
+        "max_output_tokens": 65535,
+        "max_input_tokens": 1048576,
+        "name": "Gemini 2.5 Flash Thinking"
+      },
+      {
+        "id": "antigravity/gemini-pro-agent",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "antigravity",
+        "permission": [],
+        "root": "gemini-pro-agent",
+        "parent": null,
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": false,
+          "thinking": false
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "context_length": 1048576,
+        "max_output_tokens": 65535,
+        "max_input_tokens": 1048576,
+        "name": "Gemini 3.1 Pro (High)"
+      },
+      {
+        "id": "antigravity/gpt-oss-120b-medium",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "antigravity",
+        "permission": [],
+        "root": "gpt-oss-120b-medium",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": false,
+          "thinking": false
+        },
+        "context_length": 131072,
+        "max_output_tokens": 32768,
+        "max_input_tokens": 131072,
+        "name": "GPT-OSS 120B (Medium)"
+      },
+      {
+        "id": "antigravity/gemini-3-pro-image-preview",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "antigravity",
+        "permission": [],
+        "root": "gemini-3-pro-image-preview",
+        "parent": null,
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": false,
+          "thinking": false
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "max_output_tokens": 8192,
+        "name": "Gemini 3 Pro Image",
+        "context_length": 1000000
+      },
+      {
+        "id": "antigravity/gemini-3.1-flash-image",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "antigravity",
+        "permission": [],
+        "root": "gemini-3.1-flash-image",
+        "parent": null,
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": false,
+          "thinking": false
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "max_output_tokens": 8192,
+        "name": "Gemini 3.1 Flash Image",
+        "context_length": 1000000
+      },
+      {
+        "id": "antigravity/gemini-2.5-computer-use-preview-10-2025",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "antigravity",
+        "permission": [],
+        "root": "gemini-2.5-computer-use-preview-10-2025",
+        "parent": null,
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": false,
+          "thinking": false
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "max_output_tokens": 8192,
+        "name": "Gemini 2.5 Computer Use Preview (10/2025)",
+        "context_length": 1000000
+      },
+      {
+        "id": "oc/big-pickle",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "opencode",
+        "permission": [],
+        "root": "big-pickle",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true,
+          "thinking": true
+        },
+        "max_output_tokens": 8192,
+        "name": "Big Pickle",
+        "context_length": 200000
+      },
+      {
+        "id": "oc/deepseek-v4-flash-free",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "opencode",
+        "permission": [],
+        "root": "deepseek-v4-flash-free",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true,
+          "thinking": true
+        },
+        "context_length": 1000000,
+        "max_output_tokens": 384000,
+        "max_input_tokens": 1000000,
+        "name": "DeepSeek V4 Flash Free"
+      },
+      {
+        "id": "oc/minimax-m3-free",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "opencode",
+        "permission": [],
+        "root": "minimax-m3-free",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true,
+          "thinking": true
+        },
+        "context_length": 1048576,
+        "max_output_tokens": 512000,
+        "max_input_tokens": 1048576,
+        "name": "minimax-m3-free"
+      },
+      {
+        "id": "oc/minimax-m2.5-free",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "opencode",
+        "permission": [],
+        "root": "minimax-m2.5-free",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true,
+          "thinking": true
+        },
+        "context_length": 204800,
+        "max_output_tokens": 131072,
+        "max_input_tokens": 204800,
+        "name": "MiniMax M2.5 Free"
+      },
+      {
+        "id": "oc/ling-2.6-1t-free",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "opencode",
+        "permission": [],
+        "root": "ling-2.6-1t-free",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "ling-2.6-1t-free",
+        "context_length": 200000
+      },
+      {
+        "id": "oc/trinity-large-preview-free",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "opencode",
+        "permission": [],
+        "root": "trinity-large-preview-free",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "trinity-large-preview-free",
+        "context_length": 200000
+      },
+      {
+        "id": "oc/nemotron-3-super-free",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "opencode",
+        "permission": [],
+        "root": "nemotron-3-super-free",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "context_length": 1000000,
+        "max_output_tokens": 8192,
+        "max_input_tokens": 1000000,
+        "name": "Nemotron 3 Super Free"
+      },
+      {
+        "id": "oc/qwen3.6-plus-free",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "opencode",
+        "permission": [],
+        "root": "qwen3.6-plus-free",
+        "parent": null,
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": true,
+          "thinking": true
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "context_length": 200000,
+        "max_output_tokens": 65536,
+        "max_input_tokens": 200000,
+        "name": "Qwen3.6 Plus Free"
+      },
+      {
+        "id": "kc/openrouter/free",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "kilocode",
+        "permission": [],
+        "root": "openrouter/free",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "Free Models Router",
+        "context_length": 128000
+      },
+      {
+        "id": "kilocode/openrouter/free",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "kilocode",
+        "permission": [],
+        "root": "openrouter/free",
+        "parent": "kc/openrouter/free",
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "Free Models Router",
+        "context_length": 128000
+      },
+      {
+        "id": "publicai/aisingapore/Qwen-SEA-LION-v4-32B-IT",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "publicai",
+        "permission": [],
+        "root": "aisingapore/Qwen-SEA-LION-v4-32B-IT",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "aisingapore/Qwen-SEA-LION-v4-32B-IT",
+        "context_length": 128000
+      },
+      {
+        "id": "codestral/codestral-latest",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "codestral",
+        "permission": [],
+        "root": "codestral-latest",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "codestral-latest",
+        "context_length": 128000
+      },
+      {
+        "id": "mcode/mimo-auto",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mimocode",
+        "permission": [],
+        "root": "mimo-auto",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "context_length": 1000000,
+        "max_output_tokens": 128000,
+        "max_input_tokens": 1000000,
+        "name": "MiMo Auto"
+      },
+      {
+        "id": "mimocode/mimo-auto",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mimocode",
+        "permission": [],
+        "root": "mimo-auto",
+        "parent": "mcode/mimo-auto",
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "context_length": 1000000,
+        "max_output_tokens": 128000,
+        "max_input_tokens": 1000000,
+        "name": "MiMo Auto"
+      },
+      {
+        "id": "gemini/gemini-2.5-flash",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "gemini-2.5-flash",
+        "parent": null,
+        "context_length": 1048576,
+        "max_output_tokens": 65536,
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": false,
+          "thinking": false
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "max_input_tokens": 1048576,
+        "name": "Gemini 2.5 Flash"
+      },
+      {
+        "id": "gemini/gemini-2.5-pro",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "gemini-2.5-pro",
+        "parent": null,
+        "context_length": 1048576,
+        "max_output_tokens": 8192,
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "name": "Gemini 2.5 Pro"
+      },
+      {
+        "id": "gemini/gemini-2.0-flash",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "gemini-2.0-flash",
+        "parent": null,
+        "context_length": 1048576,
+        "max_output_tokens": 8192,
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "name": "Gemini 2.0 Flash"
+      },
+      {
+        "id": "gemini/gemini-2.0-flash-001",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "gemini-2.0-flash-001",
+        "parent": null,
+        "context_length": 1048576,
+        "max_output_tokens": 8192,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "gemini-2.0-flash-001"
+      },
+      {
+        "id": "gemini/gemini-2.0-flash-lite-001",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "gemini-2.0-flash-lite-001",
+        "parent": null,
+        "context_length": 1048576,
+        "max_output_tokens": 8192,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "gemini-2.0-flash-lite-001"
+      },
+      {
+        "id": "gemini/gemini-2.0-flash-lite",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "gemini-2.0-flash-lite",
+        "parent": null,
+        "context_length": 1048576,
+        "max_output_tokens": 8192,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "gemini-2.0-flash-lite"
+      },
+      {
+        "id": "gemini/gemini-2.5-flash-preview-tts",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "gemini-2.5-flash-preview-tts",
+        "parent": null,
+        "context_length": 8192,
+        "max_output_tokens": 65536,
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": false,
+          "thinking": false
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "max_input_tokens": 1048576,
+        "name": "gemini-2.5-flash-preview-tts"
+      },
+      {
+        "id": "gemini/gemini-2.5-pro-preview-tts",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "gemini-2.5-pro-preview-tts",
+        "parent": null,
+        "context_length": 8192,
+        "max_output_tokens": 8192,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "gemini-2.5-pro-preview-tts"
+      },
+      {
+        "id": "gemini/gemma-4-26b-a4b-it",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "gemma-4-26b-a4b-it",
+        "parent": null,
+        "context_length": 262144,
+        "max_output_tokens": 8192,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "gemma-4-26b-a4b-it"
+      },
+      {
+        "id": "gemini/gemma-4-31b-it",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "gemma-4-31b-it",
+        "parent": null,
+        "context_length": 262144,
+        "max_output_tokens": 8192,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "gemma-4-31b-it"
+      },
+      {
+        "id": "gemini/gemini-flash-latest",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "gemini-flash-latest",
+        "parent": null,
+        "context_length": 1048576,
+        "max_output_tokens": 8192,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "gemini-flash-latest"
+      },
+      {
+        "id": "gemini/gemini-flash-lite-latest",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "gemini-flash-lite-latest",
+        "parent": null,
+        "context_length": 1048576,
+        "max_output_tokens": 8192,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "gemini-flash-lite-latest"
+      },
+      {
+        "id": "gemini/gemini-pro-latest",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "gemini-pro-latest",
+        "parent": null,
+        "context_length": 1048576,
+        "max_output_tokens": 8192,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "gemini-pro-latest"
+      },
+      {
+        "id": "gemini/gemini-2.5-flash-lite",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "gemini-2.5-flash-lite",
+        "parent": null,
+        "context_length": 1048576,
+        "max_output_tokens": 65536,
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": false,
+          "thinking": false
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "max_input_tokens": 1048576,
+        "name": "Gemini 2.5 Flash Lite"
+      },
+      {
+        "id": "gemini/gemini-2.5-flash-image",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "gemini-2.5-flash-image",
+        "parent": null,
+        "context_length": 32768,
+        "max_output_tokens": 65536,
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": false,
+          "thinking": false
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "max_input_tokens": 1048576,
+        "name": "gemini-2.5-flash-image"
+      },
+      {
+        "id": "gemini/gemini-3-pro-preview",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "gemini-3-pro-preview",
+        "parent": null,
+        "context_length": 1048576,
+        "max_output_tokens": 65535,
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": true,
+          "thinking": true
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "max_input_tokens": 1048576,
+        "name": "gemini-3-pro-preview"
+      },
+      {
+        "id": "gemini/gemini-3-flash-preview",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "gemini-3-flash-preview",
+        "parent": null,
+        "context_length": 1048576,
+        "max_output_tokens": 65536,
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": false,
+          "thinking": false
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "max_input_tokens": 1048576,
+        "name": "Gemini 3 Flash Preview"
+      },
+      {
+        "id": "gemini/gemini-3.1-pro-preview",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "gemini-3.1-pro-preview",
+        "parent": null,
+        "context_length": 1048576,
+        "max_output_tokens": 65535,
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": true,
+          "thinking": true
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "max_input_tokens": 1048576,
+        "name": "Gemini 3.1 Pro Preview"
+      },
+      {
+        "id": "gemini/gemini-3.1-pro-preview-customtools",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "gemini-3.1-pro-preview-customtools",
+        "parent": null,
+        "context_length": 1048576,
+        "max_output_tokens": 65535,
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": true,
+          "thinking": true
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "max_input_tokens": 1048576,
+        "name": "gemini-3.1-pro-preview-customtools"
+      },
+      {
+        "id": "gemini/gemini-3.1-flash-lite-preview",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "gemini-3.1-flash-lite-preview",
+        "parent": null,
+        "context_length": 1048576,
+        "max_output_tokens": 65536,
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": false,
+          "thinking": false
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "max_input_tokens": 1048576,
+        "name": "Gemini 3.1 Flash Lite Preview"
+      },
+      {
+        "id": "gemini/gemini-3.1-flash-lite",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "gemini-3.1-flash-lite",
+        "parent": null,
+        "context_length": 1048576,
+        "max_output_tokens": 8192,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "gemini-3.1-flash-lite"
+      },
+      {
+        "id": "gemini/gemini-3-pro-image-preview",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "gemini-3-pro-image-preview",
+        "parent": null,
+        "context_length": 131072,
+        "max_output_tokens": 8192,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "gemini-3-pro-image-preview"
+      },
+      {
+        "id": "gemini/gemini-3-pro-image",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "gemini-3-pro-image",
+        "parent": null,
+        "context_length": 131072,
+        "max_output_tokens": 8192,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "gemini-3-pro-image"
+      },
+      {
+        "id": "gemini/nano-banana-pro-preview",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "nano-banana-pro-preview",
+        "parent": null,
+        "context_length": 131072,
+        "max_output_tokens": 8192,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "nano-banana-pro-preview"
+      },
+      {
+        "id": "gemini/gemini-3.1-flash-image-preview",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "gemini-3.1-flash-image-preview",
+        "parent": null,
+        "context_length": 65536,
+        "max_output_tokens": 8192,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "gemini-3.1-flash-image-preview"
+      },
+      {
+        "id": "gemini/gemini-3.1-flash-image",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "gemini-3.1-flash-image",
+        "parent": null,
+        "context_length": 65536,
+        "max_output_tokens": 8192,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "gemini-3.1-flash-image"
+      },
+      {
+        "id": "gemini/gemini-3.5-flash",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "gemini-3.5-flash",
+        "parent": null,
+        "context_length": 1048576,
+        "max_output_tokens": 65536,
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": false,
+          "thinking": false
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "max_input_tokens": 1048576,
+        "name": "Gemini 3.5 Flash"
+      },
+      {
+        "id": "gemini/lyria-3-clip-preview",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "lyria-3-clip-preview",
+        "parent": null,
+        "context_length": 1048576,
+        "max_output_tokens": 8192,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "lyria-3-clip-preview"
+      },
+      {
+        "id": "gemini/lyria-3-pro-preview",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "lyria-3-pro-preview",
+        "parent": null,
+        "context_length": 1048576,
+        "max_output_tokens": 8192,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "lyria-3-pro-preview"
+      },
+      {
+        "id": "gemini/gemini-3.1-flash-tts-preview",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "gemini-3.1-flash-tts-preview",
+        "parent": null,
+        "context_length": 8192,
+        "max_output_tokens": 8192,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "gemini-3.1-flash-tts-preview"
+      },
+      {
+        "id": "gemini/gemini-robotics-er-1.5-preview",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "gemini-robotics-er-1.5-preview",
+        "parent": null,
+        "context_length": 1048576,
+        "max_output_tokens": 8192,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "gemini-robotics-er-1.5-preview"
+      },
+      {
+        "id": "gemini/gemini-robotics-er-1.6-preview",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "gemini-robotics-er-1.6-preview",
+        "parent": null,
+        "context_length": 131072,
+        "max_output_tokens": 8192,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "gemini-robotics-er-1.6-preview"
+      },
+      {
+        "id": "gemini/gemini-2.5-computer-use-preview-10-2025",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "gemini-2.5-computer-use-preview-10-2025",
+        "parent": null,
+        "context_length": 131072,
+        "max_output_tokens": 8192,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "gemini-2.5-computer-use-preview-10-2025"
+      },
+      {
+        "id": "gemini/antigravity-preview-05-2026",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "antigravity-preview-05-2026",
+        "parent": null,
+        "context_length": 131072,
+        "max_output_tokens": 8192,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "antigravity-preview-05-2026"
+      },
+      {
+        "id": "gemini/deep-research-max-preview-04-2026",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "deep-research-max-preview-04-2026",
+        "parent": null,
+        "context_length": 131072,
+        "max_output_tokens": 8192,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "deep-research-max-preview-04-2026"
+      },
+      {
+        "id": "gemini/deep-research-preview-04-2026",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "deep-research-preview-04-2026",
+        "parent": null,
+        "context_length": 131072,
+        "max_output_tokens": 8192,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "deep-research-preview-04-2026"
+      },
+      {
+        "id": "gemini/deep-research-pro-preview-12-2025",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "deep-research-pro-preview-12-2025",
+        "parent": null,
+        "context_length": 131072,
+        "max_output_tokens": 8192,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "deep-research-pro-preview-12-2025"
+      },
+      {
+        "id": "gemini/gemini-embedding-001",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "gemini-embedding-001",
+        "parent": null,
+        "type": "embedding",
+        "context_length": 2048,
+        "max_output_tokens": 8192,
+        "supported_endpoints": [
+          "embeddings"
+        ],
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "gemini-embedding-001"
+      },
+      {
+        "id": "gemini/gemini-embedding-2-preview",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "gemini-embedding-2-preview",
+        "parent": null,
+        "type": "embedding",
+        "context_length": 8192,
+        "max_output_tokens": 8192,
+        "supported_endpoints": [
+          "embeddings"
+        ],
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "gemini-embedding-2-preview"
+      },
+      {
+        "id": "gemini/gemini-embedding-2",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "gemini-embedding-2",
+        "parent": null,
+        "type": "embedding",
+        "context_length": 8192,
+        "max_output_tokens": 8192,
+        "supported_endpoints": [
+          "embeddings"
+        ],
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "gemini-embedding-2"
+      },
+      {
+        "id": "gemini/aqa",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "aqa",
+        "parent": null,
+        "context_length": 7168,
+        "max_output_tokens": 8192,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "aqa"
+      },
+      {
+        "id": "gemini/imagen-4.0-generate-001",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "imagen-4.0-generate-001",
+        "parent": null,
+        "type": "image",
+        "context_length": 480,
+        "max_output_tokens": 8192,
+        "supported_endpoints": [
+          "images"
+        ],
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "imagen-4.0-generate-001"
+      },
+      {
+        "id": "gemini/imagen-4.0-ultra-generate-001",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "imagen-4.0-ultra-generate-001",
+        "parent": null,
+        "type": "image",
+        "context_length": 480,
+        "max_output_tokens": 8192,
+        "supported_endpoints": [
+          "images"
+        ],
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "imagen-4.0-ultra-generate-001"
+      },
+      {
+        "id": "gemini/imagen-4.0-fast-generate-001",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "imagen-4.0-fast-generate-001",
+        "parent": null,
+        "type": "image",
+        "context_length": 480,
+        "max_output_tokens": 8192,
+        "supported_endpoints": [
+          "images"
+        ],
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "imagen-4.0-fast-generate-001"
+      },
+      {
+        "id": "gemini/veo-2.0-generate-001",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "veo-2.0-generate-001",
+        "parent": null,
+        "context_length": 480,
+        "max_output_tokens": 8192,
+        "supported_endpoints": [
+          "video"
+        ],
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "veo-2.0-generate-001"
+      },
+      {
+        "id": "gemini/veo-3.0-generate-001",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "veo-3.0-generate-001",
+        "parent": null,
+        "context_length": 480,
+        "max_output_tokens": 8192,
+        "supported_endpoints": [
+          "video"
+        ],
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "veo-3.0-generate-001"
+      },
+      {
+        "id": "gemini/veo-3.0-fast-generate-001",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "veo-3.0-fast-generate-001",
+        "parent": null,
+        "context_length": 480,
+        "max_output_tokens": 8192,
+        "supported_endpoints": [
+          "video"
+        ],
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "veo-3.0-fast-generate-001"
+      },
+      {
+        "id": "gemini/veo-3.1-generate-preview",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "veo-3.1-generate-preview",
+        "parent": null,
+        "context_length": 480,
+        "max_output_tokens": 8192,
+        "supported_endpoints": [
+          "video"
+        ],
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "veo-3.1-generate-preview"
+      },
+      {
+        "id": "gemini/veo-3.1-fast-generate-preview",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "veo-3.1-fast-generate-preview",
+        "parent": null,
+        "context_length": 480,
+        "max_output_tokens": 8192,
+        "supported_endpoints": [
+          "video"
+        ],
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "veo-3.1-fast-generate-preview"
+      },
+      {
+        "id": "gemini/veo-3.1-lite-generate-preview",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "veo-3.1-lite-generate-preview",
+        "parent": null,
+        "context_length": 480,
+        "max_output_tokens": 8192,
+        "supported_endpoints": [
+          "video"
+        ],
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "veo-3.1-lite-generate-preview"
+      },
+      {
+        "id": "gemini/gemini-2.5-flash-native-audio-latest",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "gemini-2.5-flash-native-audio-latest",
+        "parent": null,
+        "type": "audio",
+        "subtype": "transcription",
+        "context_length": 131072,
+        "max_output_tokens": 65536,
+        "supported_endpoints": [
+          "audio"
+        ],
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": false,
+          "thinking": false
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "max_input_tokens": 1048576,
+        "name": "gemini-2.5-flash-native-audio-latest"
+      },
+      {
+        "id": "gemini/gemini-2.5-flash-native-audio-latest",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "gemini-2.5-flash-native-audio-latest",
+        "parent": null,
+        "type": "audio",
+        "subtype": "speech",
+        "context_length": 131072,
+        "max_output_tokens": 65536,
+        "supported_endpoints": [
+          "audio"
+        ],
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": false,
+          "thinking": false
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "max_input_tokens": 1048576,
+        "name": "gemini-2.5-flash-native-audio-latest"
+      },
+      {
+        "id": "gemini/gemini-2.5-flash-native-audio-preview-09-2025",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "gemini-2.5-flash-native-audio-preview-09-2025",
+        "parent": null,
+        "type": "audio",
+        "subtype": "transcription",
+        "context_length": 131072,
+        "max_output_tokens": 65536,
+        "supported_endpoints": [
+          "audio"
+        ],
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": false,
+          "thinking": false
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "max_input_tokens": 1048576,
+        "name": "gemini-2.5-flash-native-audio-preview-09-2025"
+      },
+      {
+        "id": "gemini/gemini-2.5-flash-native-audio-preview-09-2025",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "gemini-2.5-flash-native-audio-preview-09-2025",
+        "parent": null,
+        "type": "audio",
+        "subtype": "speech",
+        "context_length": 131072,
+        "max_output_tokens": 65536,
+        "supported_endpoints": [
+          "audio"
+        ],
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": false,
+          "thinking": false
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "max_input_tokens": 1048576,
+        "name": "gemini-2.5-flash-native-audio-preview-09-2025"
+      },
+      {
+        "id": "gemini/gemini-2.5-flash-native-audio-preview-12-2025",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "gemini-2.5-flash-native-audio-preview-12-2025",
+        "parent": null,
+        "type": "audio",
+        "subtype": "transcription",
+        "context_length": 131072,
+        "max_output_tokens": 65536,
+        "supported_endpoints": [
+          "audio"
+        ],
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": false,
+          "thinking": false
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "max_input_tokens": 1048576,
+        "name": "gemini-2.5-flash-native-audio-preview-12-2025"
+      },
+      {
+        "id": "gemini/gemini-2.5-flash-native-audio-preview-12-2025",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "gemini-2.5-flash-native-audio-preview-12-2025",
+        "parent": null,
+        "type": "audio",
+        "subtype": "speech",
+        "context_length": 131072,
+        "max_output_tokens": 65536,
+        "supported_endpoints": [
+          "audio"
+        ],
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": false,
+          "thinking": false
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "max_input_tokens": 1048576,
+        "name": "gemini-2.5-flash-native-audio-preview-12-2025"
+      },
+      {
+        "id": "gemini/gemini-3.1-flash-live-preview",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "gemini-3.1-flash-live-preview",
+        "parent": null,
+        "type": "audio",
+        "subtype": "transcription",
+        "context_length": 131072,
+        "max_output_tokens": 8192,
+        "supported_endpoints": [
+          "audio"
+        ],
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "gemini-3.1-flash-live-preview"
+      },
+      {
+        "id": "gemini/gemini-3.1-flash-live-preview",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "gemini-3.1-flash-live-preview",
+        "parent": null,
+        "type": "audio",
+        "subtype": "speech",
+        "context_length": 131072,
+        "max_output_tokens": 8192,
+        "supported_endpoints": [
+          "audio"
+        ],
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "gemini-3.1-flash-live-preview"
+      },
+      {
+        "id": "gemini/gemini-3.5-live-translate-preview",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "gemini-3.5-live-translate-preview",
+        "parent": null,
+        "type": "audio",
+        "subtype": "transcription",
+        "context_length": 16384,
+        "max_output_tokens": 8192,
+        "supported_endpoints": [
+          "audio"
+        ],
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "gemini-3.5-live-translate-preview"
+      },
+      {
+        "id": "gemini/gemini-3.5-live-translate-preview",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "permission": [],
+        "root": "gemini-3.5-live-translate-preview",
+        "parent": null,
+        "type": "audio",
+        "subtype": "speech",
+        "context_length": 16384,
+        "max_output_tokens": 8192,
+        "supported_endpoints": [
+          "audio"
+        ],
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "gemini-3.5-live-translate-preview"
+      },
+      {
+        "id": "groq/meta-llama/llama-prompt-guard-2-22m",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "groq",
+        "permission": [],
+        "root": "meta-llama/llama-prompt-guard-2-22m",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "meta-llama/llama-prompt-guard-2-22m",
+        "context_length": 128000
+      },
+      {
+        "id": "groq/meta-llama/llama-4-scout-17b-16e-instruct",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "groq",
+        "permission": [],
+        "root": "meta-llama/llama-4-scout-17b-16e-instruct",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": false,
+          "thinking": false
+        },
+        "max_output_tokens": 8192,
+        "name": "Llama 4 Scout",
+        "context_length": 128000
+      },
+      {
+        "id": "groq/openai/gpt-oss-20b",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "groq",
+        "permission": [],
+        "root": "openai/gpt-oss-20b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "GPT-OSS 20B",
+        "context_length": 400000
+      },
+      {
+        "id": "groq/meta-llama/llama-prompt-guard-2-86m",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "groq",
+        "permission": [],
+        "root": "meta-llama/llama-prompt-guard-2-86m",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "meta-llama/llama-prompt-guard-2-86m",
+        "context_length": 128000
+      },
+      {
+        "id": "groq/qwen/qwen3.6-27b",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "groq",
+        "permission": [],
+        "root": "qwen/qwen3.6-27b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "qwen/qwen3.6-27b",
+        "context_length": 128000
+      },
+      {
+        "id": "groq/llama-3.3-70b-versatile",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "groq",
+        "permission": [],
+        "root": "llama-3.3-70b-versatile",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": false,
+          "thinking": false
+        },
+        "max_output_tokens": 8192,
+        "name": "Llama 3.3 70B",
+        "context_length": 128000
+      },
+      {
+        "id": "groq/openai/gpt-oss-safeguard-20b",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "groq",
+        "permission": [],
+        "root": "openai/gpt-oss-safeguard-20b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "openai/gpt-oss-safeguard-20b",
+        "context_length": 400000
+      },
+      {
+        "id": "groq/llama-3.1-8b-instant",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "groq",
+        "permission": [],
+        "root": "llama-3.1-8b-instant",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "llama-3.1-8b-instant",
+        "context_length": 128000
+      },
+      {
+        "id": "groq/qwen/qwen3-32b",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "groq",
+        "permission": [],
+        "root": "qwen/qwen3-32b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "Qwen3 32B",
+        "context_length": 128000
+      },
+      {
+        "id": "groq/allam-2-7b",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "groq",
+        "permission": [],
+        "root": "allam-2-7b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "allam-2-7b",
+        "context_length": 128000
+      },
+      {
+        "id": "groq/groq/compound",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "groq",
+        "permission": [],
+        "root": "groq/compound",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "groq/compound",
+        "context_length": 128000
+      },
+      {
+        "id": "groq/whisper-large-v3",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "groq",
+        "permission": [],
+        "root": "whisper-large-v3",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "whisper-large-v3",
+        "context_length": 128000
+      },
+      {
+        "id": "groq/openai/gpt-oss-120b",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "groq",
+        "permission": [],
+        "root": "openai/gpt-oss-120b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "GPT-OSS 120B",
+        "context_length": 400000
+      },
+      {
+        "id": "groq/canopylabs/orpheus-arabic-saudi",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "groq",
+        "permission": [],
+        "root": "canopylabs/orpheus-arabic-saudi",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "canopylabs/orpheus-arabic-saudi",
+        "context_length": 128000
+      },
+      {
+        "id": "groq/canopylabs/orpheus-v1-english",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "groq",
+        "permission": [],
+        "root": "canopylabs/orpheus-v1-english",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "canopylabs/orpheus-v1-english",
+        "context_length": 128000
+      },
+      {
+        "id": "groq/whisper-large-v3-turbo",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "groq",
+        "permission": [],
+        "root": "whisper-large-v3-turbo",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "whisper-large-v3-turbo",
+        "context_length": 128000
+      },
+      {
+        "id": "groq/groq/compound-mini",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "groq",
+        "permission": [],
+        "root": "groq/compound-mini",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "groq/compound-mini",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/mistral-medium-2505",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "mistral-medium-2505",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "mistral-medium-2505",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/mistral-medium-2508",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "mistral-medium-2508",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "mistral-medium-2508",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/open-mistral-nemo",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "open-mistral-nemo",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "open-mistral-nemo",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/open-mistral-nemo-2407",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "open-mistral-nemo-2407",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "open-mistral-nemo-2407",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/mistral-tiny-2407",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "mistral-tiny-2407",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "mistral-tiny-2407",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/mistral-tiny-latest",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "mistral-tiny-latest",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "mistral-tiny-latest",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/codestral-2508",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "codestral-2508",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "codestral-2508",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/codestral-latest",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "codestral-latest",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "Codestral",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/mistral-code-latest",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "mistral-code-latest",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "mistral-code-latest",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/mistral-code-fim-latest",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "mistral-code-fim-latest",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "mistral-code-fim-latest",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/devstral-2512",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "devstral-2512",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "devstral-2512",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/devstral-medium-latest",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "devstral-medium-latest",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "devstral-medium-latest",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/devstral-latest",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "devstral-latest",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "Devstral 2",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/mistral-code-agent-latest",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "mistral-code-agent-latest",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "mistral-code-agent-latest",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/mistral-small-2603",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "mistral-small-2603",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "mistral-small-2603",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/mistral-small-latest",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "mistral-small-latest",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "Mistral Small 4",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/mistral-vibe-cli-fast",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "mistral-vibe-cli-fast",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "mistral-vibe-cli-fast",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/magistral-small-latest",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "magistral-small-latest",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "magistral-small-latest",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/magistral-medium-2509",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "magistral-medium-2509",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "magistral-medium-2509",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/magistral-medium-latest",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "magistral-medium-latest",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "magistral-medium-latest",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/voxtral-small-2507",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "voxtral-small-2507",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "voxtral-small-2507",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/voxtral-small-latest",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "voxtral-small-latest",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "voxtral-small-latest",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/labs-leanstral-2603",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "labs-leanstral-2603",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "labs-leanstral-2603",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/mistral-large-2512",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "mistral-large-2512",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "mistral-large-2512",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/mistral-large-latest",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "mistral-large-latest",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "Mistral Large 3",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/ministral-3b-2512",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "ministral-3b-2512",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "ministral-3b-2512",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/ministral-3b-latest",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "ministral-3b-latest",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "ministral-3b-latest",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/ministral-8b-2512",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "ministral-8b-2512",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "ministral-8b-2512",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/ministral-8b-latest",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "ministral-8b-latest",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "ministral-8b-latest",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/ministral-14b-2512",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "ministral-14b-2512",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "ministral-14b-2512",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/ministral-14b-latest",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "ministral-14b-latest",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "ministral-14b-latest",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/mistral-medium-latest",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "mistral-medium-latest",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "mistral-medium-latest",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/mistral-medium",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "mistral-medium",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "mistral-medium",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/mistral-medium-3-5",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "mistral-medium-3-5",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "Mistral Medium 3.5",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/mistral-medium-3.5",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "mistral-medium-3.5",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "mistral-medium-3.5",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/mistral-medium-3",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "mistral-medium-3",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "mistral-medium-3",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/mistral-medium-2604",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "mistral-medium-2604",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "mistral-medium-2604",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/mistral-vibe-cli-latest",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "mistral-vibe-cli-latest",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "mistral-vibe-cli-latest",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/mistral-vibe-cli-with-tools",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "mistral-vibe-cli-with-tools",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "mistral-vibe-cli-with-tools",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/voxtral-mini-2507",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "voxtral-mini-2507",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "voxtral-mini-2507",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/voxtral-mini-latest",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "voxtral-mini-latest",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "voxtral-mini-latest",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/magistral-small-2509",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "magistral-small-2509",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "magistral-small-2509",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/mistral-small-2506",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "mistral-small-2506",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "mistral-small-2506",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/mistral-embed-2312",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "mistral-embed-2312",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "mistral-embed-2312",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/mistral-embed",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "mistral-embed",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "mistral-embed",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/codestral-embed",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "codestral-embed",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "codestral-embed",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/codestral-embed-2505",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "codestral-embed-2505",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "codestral-embed-2505",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/mistral-moderation-2603",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "mistral-moderation-2603",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "mistral-moderation-2603",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/mistral-moderation-2411",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "mistral-moderation-2411",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "mistral-moderation-2411",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/mistral-moderation-latest",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "mistral-moderation-latest",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "mistral-moderation-latest",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/mistral-ocr-2512",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "mistral-ocr-2512",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "mistral-ocr-2512",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/mistral-ocr-latest",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "mistral-ocr-latest",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "mistral-ocr-latest",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/mistral-ocr-3-0",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "mistral-ocr-3-0",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "mistral-ocr-3-0",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/mistral-ocr-3",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "mistral-ocr-3",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "mistral-ocr-3",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/voxtral-mini-2602",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "voxtral-mini-2602",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "voxtral-mini-2602",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/voxtral-mini-transcribe-realtime-2602",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "voxtral-mini-transcribe-realtime-2602",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "voxtral-mini-transcribe-realtime-2602",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/voxtral-mini-realtime-2602",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "voxtral-mini-realtime-2602",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "voxtral-mini-realtime-2602",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/voxtral-mini-realtime-latest",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "voxtral-mini-realtime-latest",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "voxtral-mini-realtime-latest",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/voxtral-mini-tts-2603",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "voxtral-mini-tts-2603",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "voxtral-mini-tts-2603",
+        "context_length": 128000
+      },
+      {
+        "id": "mistral/voxtral-mini-tts-latest",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "mistral",
+        "permission": [],
+        "root": "voxtral-mini-tts-latest",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "voxtral-mini-tts-latest",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/01-ai/yi-large",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "01-ai/yi-large",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "01-ai/yi-large",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/abacusai/dracarys-llama-3.1-70b-instruct",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "abacusai/dracarys-llama-3.1-70b-instruct",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "abacusai/dracarys-llama-3.1-70b-instruct",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/adept/fuyu-8b",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "adept/fuyu-8b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "adept/fuyu-8b",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/ai21labs/jamba-1.5-large-instruct",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "ai21labs/jamba-1.5-large-instruct",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "ai21labs/jamba-1.5-large-instruct",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/aisingapore/sea-lion-7b-instruct",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "aisingapore/sea-lion-7b-instruct",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "aisingapore/sea-lion-7b-instruct",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/baai/bge-m3",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "baai/bge-m3",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "baai/bge-m3",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/bigcode/starcoder2-15b",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "bigcode/starcoder2-15b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "bigcode/starcoder2-15b",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/bytedance/seed-oss-36b-instruct",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "bytedance/seed-oss-36b-instruct",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "bytedance/seed-oss-36b-instruct",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/databricks/dbrx-instruct",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "databricks/dbrx-instruct",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "databricks/dbrx-instruct",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/deepseek-ai/deepseek-coder-6.7b-instruct",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "deepseek-ai/deepseek-coder-6.7b-instruct",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "deepseek-ai/deepseek-coder-6.7b-instruct",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/deepseek-ai/deepseek-v4-flash",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "deepseek-ai/deepseek-v4-flash",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "deepseek-ai/deepseek-v4-flash",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/deepseek-ai/deepseek-v4-pro",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "deepseek-ai/deepseek-v4-pro",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true,
+          "thinking": true
+        },
+        "max_output_tokens": 8192,
+        "name": "DeepSeek V4 Pro",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/google/codegemma-1.1-7b",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "google/codegemma-1.1-7b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "google/codegemma-1.1-7b",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/google/codegemma-7b",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "google/codegemma-7b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "google/codegemma-7b",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/google/deplot",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "google/deplot",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "google/deplot",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/google/diffusiongemma-26b-a4b-it",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "google/diffusiongemma-26b-a4b-it",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "google/diffusiongemma-26b-a4b-it",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/google/gemma-2-2b-it",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "google/gemma-2-2b-it",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "google/gemma-2-2b-it",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/google/gemma-2b",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "google/gemma-2b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "google/gemma-2b",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/google/gemma-3-12b-it",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "google/gemma-3-12b-it",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "google/gemma-3-12b-it",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/google/gemma-3-4b-it",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "google/gemma-3-4b-it",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "google/gemma-3-4b-it",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/google/gemma-3n-e2b-it",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "google/gemma-3n-e2b-it",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "google/gemma-3n-e2b-it",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/google/gemma-3n-e4b-it",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "google/gemma-3n-e4b-it",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "google/gemma-3n-e4b-it",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/google/gemma-4-31b-it",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "google/gemma-4-31b-it",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "Gemma 4 31B",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/google/recurrentgemma-2b",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "google/recurrentgemma-2b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "google/recurrentgemma-2b",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/ibm/granite-3.0-3b-a800m-instruct",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "ibm/granite-3.0-3b-a800m-instruct",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "ibm/granite-3.0-3b-a800m-instruct",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/ibm/granite-3.0-8b-instruct",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "ibm/granite-3.0-8b-instruct",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "ibm/granite-3.0-8b-instruct",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/ibm/granite-34b-code-instruct",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "ibm/granite-34b-code-instruct",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "ibm/granite-34b-code-instruct",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/ibm/granite-8b-code-instruct",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "ibm/granite-8b-code-instruct",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "ibm/granite-8b-code-instruct",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/meta/codellama-70b",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "meta/codellama-70b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "meta/codellama-70b",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/meta/llama-3.1-70b-instruct",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "meta/llama-3.1-70b-instruct",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "meta/llama-3.1-70b-instruct",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/meta/llama-3.1-8b-instruct",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "meta/llama-3.1-8b-instruct",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "meta/llama-3.1-8b-instruct",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/meta/llama-3.2-11b-vision-instruct",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "meta/llama-3.2-11b-vision-instruct",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "meta/llama-3.2-11b-vision-instruct",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/meta/llama-3.2-1b-instruct",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "meta/llama-3.2-1b-instruct",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "meta/llama-3.2-1b-instruct",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/meta/llama-3.2-3b-instruct",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "meta/llama-3.2-3b-instruct",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "meta/llama-3.2-3b-instruct",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/meta/llama-3.2-90b-vision-instruct",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "meta/llama-3.2-90b-vision-instruct",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "meta/llama-3.2-90b-vision-instruct",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/meta/llama-3.3-70b-instruct",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "meta/llama-3.3-70b-instruct",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "meta/llama-3.3-70b-instruct",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/meta/llama-4-maverick-17b-128e-instruct",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "meta/llama-4-maverick-17b-128e-instruct",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "meta/llama-4-maverick-17b-128e-instruct",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/meta/llama-guard-4-12b",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "meta/llama-guard-4-12b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "meta/llama-guard-4-12b",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/meta/llama2-70b",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "meta/llama2-70b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "meta/llama2-70b",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/microsoft/kosmos-2",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "microsoft/kosmos-2",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "microsoft/kosmos-2",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/microsoft/phi-3-vision-128k-instruct",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "microsoft/phi-3-vision-128k-instruct",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "microsoft/phi-3-vision-128k-instruct",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/microsoft/phi-3.5-moe-instruct",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "microsoft/phi-3.5-moe-instruct",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "microsoft/phi-3.5-moe-instruct",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/microsoft/phi-4-mini-instruct",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "microsoft/phi-4-mini-instruct",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "microsoft/phi-4-mini-instruct",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/microsoft/phi-4-multimodal-instruct",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "microsoft/phi-4-multimodal-instruct",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "microsoft/phi-4-multimodal-instruct",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/minimaxai/minimax-m2.7",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "minimaxai/minimax-m2.7",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true,
+          "thinking": true
+        },
+        "context_length": 204800,
+        "max_output_tokens": 131072,
+        "max_input_tokens": 204800,
+        "name": "MiniMax M2.7"
+      },
+      {
+        "id": "nvidia/minimaxai/minimax-m3",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "minimaxai/minimax-m3",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true,
+          "thinking": true
+        },
+        "context_length": 1048576,
+        "max_output_tokens": 512000,
+        "max_input_tokens": 1048576,
+        "name": "minimaxai/minimax-m3"
+      },
+      {
+        "id": "nvidia/mistralai/codestral-22b-instruct-v0.1",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "mistralai/codestral-22b-instruct-v0.1",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "mistralai/codestral-22b-instruct-v0.1",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/mistralai/ministral-14b-instruct-2512",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "mistralai/ministral-14b-instruct-2512",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "mistralai/ministral-14b-instruct-2512",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/mistralai/mistral-7b-instruct-v0.3",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "mistralai/mistral-7b-instruct-v0.3",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "mistralai/mistral-7b-instruct-v0.3",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/mistralai/mistral-large",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "mistralai/mistral-large",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "mistralai/mistral-large",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/mistralai/mistral-large-2-instruct",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "mistralai/mistral-large-2-instruct",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "mistralai/mistral-large-2-instruct",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/mistralai/mistral-large-3-675b-instruct-2512",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "mistralai/mistral-large-3-675b-instruct-2512",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "Mistral Large 3 675B",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/mistralai/mistral-medium-3.5-128b",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "mistralai/mistral-medium-3.5-128b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "mistralai/mistral-medium-3.5-128b",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/mistralai/mistral-nemotron",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "mistralai/mistral-nemotron",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "mistralai/mistral-nemotron",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/mistralai/mistral-small-4-119b-2603",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "mistralai/mistral-small-4-119b-2603",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "Mistral Small 4 2603",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/mistralai/mixtral-8x22b-v0.1",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "mistralai/mixtral-8x22b-v0.1",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "mistralai/mixtral-8x22b-v0.1",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/mistralai/mixtral-8x7b-instruct-v0.1",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "mistralai/mixtral-8x7b-instruct-v0.1",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "mistralai/mixtral-8x7b-instruct-v0.1",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/moonshotai/kimi-k2.6",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "moonshotai/kimi-k2.6",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "moonshotai/kimi-k2.6",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nv-mistralai/mistral-nemo-12b-instruct",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "nv-mistralai/mistral-nemo-12b-instruct",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nv-mistralai/mistral-nemo-12b-instruct",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nvidia/ai-synthetic-video-detector",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "nvidia/ai-synthetic-video-detector",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nvidia/ai-synthetic-video-detector",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nvidia/cosmos-reason2-8b",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "nvidia/cosmos-reason2-8b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nvidia/cosmos-reason2-8b",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nvidia/embed-qa-4",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "nvidia/embed-qa-4",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nvidia/embed-qa-4",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nvidia/gliner-pii",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "nvidia/gliner-pii",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nvidia/gliner-pii",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nvidia/ising-calibration-1-35b-a3b",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "nvidia/ising-calibration-1-35b-a3b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nvidia/ising-calibration-1-35b-a3b",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nvidia/llama-3.1-nemoguard-8b-content-safety",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "nvidia/llama-3.1-nemoguard-8b-content-safety",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nvidia/llama-3.1-nemoguard-8b-content-safety",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nvidia/llama-3.1-nemoguard-8b-topic-control",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "nvidia/llama-3.1-nemoguard-8b-topic-control",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nvidia/llama-3.1-nemoguard-8b-topic-control",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nvidia/llama-3.1-nemotron-51b-instruct",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "nvidia/llama-3.1-nemotron-51b-instruct",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nvidia/llama-3.1-nemotron-51b-instruct",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nvidia/llama-3.1-nemotron-70b-instruct",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "nvidia/llama-3.1-nemotron-70b-instruct",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nvidia/llama-3.1-nemotron-70b-instruct",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nvidia/llama-3.1-nemotron-nano-8b-v1",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "nvidia/llama-3.1-nemotron-nano-8b-v1",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nvidia/llama-3.1-nemotron-nano-8b-v1",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nvidia/llama-3.1-nemotron-nano-vl-8b-v1",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "nvidia/llama-3.1-nemotron-nano-vl-8b-v1",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nvidia/llama-3.1-nemotron-nano-vl-8b-v1",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nvidia/llama-3.1-nemotron-safety-guard-8b-v3",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "nvidia/llama-3.1-nemotron-safety-guard-8b-v3",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nvidia/llama-3.1-nemotron-safety-guard-8b-v3",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nvidia/llama-3.1-nemotron-ultra-253b-v1",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "nvidia/llama-3.1-nemotron-ultra-253b-v1",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nvidia/llama-3.1-nemotron-ultra-253b-v1",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nvidia/llama-3.2-nemoretriever-1b-vlm-embed-v1",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "nvidia/llama-3.2-nemoretriever-1b-vlm-embed-v1",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nvidia/llama-3.2-nemoretriever-1b-vlm-embed-v1",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nvidia/llama-3.2-nv-embedqa-1b-v1",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "nvidia/llama-3.2-nv-embedqa-1b-v1",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nvidia/llama-3.2-nv-embedqa-1b-v1",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nvidia/llama-3.3-nemotron-super-49b-v1",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "nvidia/llama-3.3-nemotron-super-49b-v1",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nvidia/llama-3.3-nemotron-super-49b-v1",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nvidia/llama-3.3-nemotron-super-49b-v1.5",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "nvidia/llama-3.3-nemotron-super-49b-v1.5",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nvidia/llama-3.3-nemotron-super-49b-v1.5",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nvidia/llama-nemotron-embed-1b-v2",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "nvidia/llama-nemotron-embed-1b-v2",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nvidia/llama-nemotron-embed-1b-v2",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nvidia/llama-nemotron-embed-vl-1b-v2",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "nvidia/llama-nemotron-embed-vl-1b-v2",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nvidia/llama-nemotron-embed-vl-1b-v2",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nvidia/llama3-chatqa-1.5-70b",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "nvidia/llama3-chatqa-1.5-70b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nvidia/llama3-chatqa-1.5-70b",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nvidia/mistral-nemo-minitron-8b-8k-instruct",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "nvidia/mistral-nemo-minitron-8b-8k-instruct",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nvidia/mistral-nemo-minitron-8b-8k-instruct",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nvidia/nemoretriever-parse",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "nvidia/nemoretriever-parse",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nvidia/nemoretriever-parse",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nvidia/nemotron-3-content-safety",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "nvidia/nemotron-3-content-safety",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nvidia/nemotron-3-content-safety",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nvidia/nemotron-3-nano-30b-a3b",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "nvidia/nemotron-3-nano-30b-a3b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nvidia/nemotron-3-nano-30b-a3b",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nvidia/nemotron-3-super-120b-a12b",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "nvidia/nemotron-3-super-120b-a12b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "Nemotron 3 Super 120B A12B",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nvidia/nemotron-3-ultra-550b-a55b",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "nvidia/nemotron-3-ultra-550b-a55b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nvidia/nemotron-3-ultra-550b-a55b",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nvidia/nemotron-3.5-content-safety",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "nvidia/nemotron-3.5-content-safety",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nvidia/nemotron-3.5-content-safety",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nvidia/nemotron-4-340b-instruct",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "nvidia/nemotron-4-340b-instruct",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nvidia/nemotron-4-340b-instruct",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nvidia/nemotron-4-340b-reward",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "nvidia/nemotron-4-340b-reward",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nvidia/nemotron-4-340b-reward",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nvidia/nemotron-content-safety-reasoning-4b",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "nvidia/nemotron-content-safety-reasoning-4b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nvidia/nemotron-content-safety-reasoning-4b",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nvidia/nemotron-mini-4b-instruct",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "nvidia/nemotron-mini-4b-instruct",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nvidia/nemotron-mini-4b-instruct",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nvidia/nemotron-nano-12b-v2-vl",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "nvidia/nemotron-nano-12b-v2-vl",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nvidia/nemotron-nano-12b-v2-vl",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nvidia/nemotron-nano-3-30b-a3b",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "nvidia/nemotron-nano-3-30b-a3b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nvidia/nemotron-nano-3-30b-a3b",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nvidia/nemotron-parse",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "nvidia/nemotron-parse",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nvidia/nemotron-parse",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nvidia/neva-22b",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "nvidia/neva-22b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nvidia/neva-22b",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nvidia/nv-embed-v1",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "nvidia/nv-embed-v1",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nvidia/nv-embed-v1",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nvidia/nv-embedcode-7b-v1",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "nvidia/nv-embedcode-7b-v1",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nvidia/nv-embedcode-7b-v1",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nvidia/nv-embedqa-e5-v5",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "nvidia/nv-embedqa-e5-v5",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nvidia/nv-embedqa-e5-v5",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nvidia/nv-embedqa-mistral-7b-v2",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "nvidia/nv-embedqa-mistral-7b-v2",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nvidia/nv-embedqa-mistral-7b-v2",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nvidia/nvclip",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "nvidia/nvclip",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nvidia/nvclip",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nvidia/nvidia-nemotron-nano-9b-v2",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "nvidia/nvidia-nemotron-nano-9b-v2",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nvidia/nvidia-nemotron-nano-9b-v2",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nvidia/riva-translate-4b-instruct",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "nvidia/riva-translate-4b-instruct",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nvidia/riva-translate-4b-instruct",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nvidia/riva-translate-4b-instruct-v1.1",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "nvidia/riva-translate-4b-instruct-v1.1",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nvidia/riva-translate-4b-instruct-v1.1",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nvidia/vila",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "nvidia/vila",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nvidia/vila",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/openai/gpt-oss-120b",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "openai/gpt-oss-120b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": false,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "GPT OSS 120B",
+        "context_length": 400000
+      },
+      {
+        "id": "nvidia/openai/gpt-oss-20b",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "openai/gpt-oss-20b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": false,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "GPT OSS 20B",
+        "context_length": 400000
+      },
+      {
+        "id": "nvidia/qwen/qwen3-next-80b-a3b-instruct",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "qwen/qwen3-next-80b-a3b-instruct",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "qwen/qwen3-next-80b-a3b-instruct",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/qwen/qwen3.5-122b-a10b",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "qwen/qwen3.5-122b-a10b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "Qwen3.5-122B-A10B",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/qwen/qwen3.5-397b-a17b",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "qwen/qwen3.5-397b-a17b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "Qwen3.5-397B-A17B",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/sarvamai/sarvam-m",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "sarvamai/sarvam-m",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "sarvamai/sarvam-m",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/snowflake/arctic-embed-l",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "snowflake/arctic-embed-l",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "snowflake/arctic-embed-l",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/stepfun-ai/step-3.5-flash",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "stepfun-ai/step-3.5-flash",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "Step 3.5 Flash",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/stepfun-ai/step-3.7-flash",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "stepfun-ai/step-3.7-flash",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "stepfun-ai/step-3.7-flash",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/stockmark/stockmark-2-100b-instruct",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "stockmark/stockmark-2-100b-instruct",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "stockmark/stockmark-2-100b-instruct",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/upstage/solar-10.7b-instruct",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "upstage/solar-10.7b-instruct",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "upstage/solar-10.7b-instruct",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/writer/palmyra-creative-122b",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "writer/palmyra-creative-122b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "writer/palmyra-creative-122b",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/writer/palmyra-fin-70b-32k",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "writer/palmyra-fin-70b-32k",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "writer/palmyra-fin-70b-32k",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/writer/palmyra-med-70b",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "writer/palmyra-med-70b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "writer/palmyra-med-70b",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/writer/palmyra-med-70b-32k",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "writer/palmyra-med-70b-32k",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "writer/palmyra-med-70b-32k",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/z-ai/glm-5.1",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "z-ai/glm-5.1",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "GLM 5.1",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/zyphra/zamba2-7b-instruct",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "permission": [],
+        "root": "zyphra/zamba2-7b-instruct",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "zyphra/zamba2-7b-instruct",
+        "context_length": 128000
+      },
+      {
+        "id": "opencode-zen/deepseek-v4-flash-free",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "opencode-zen",
+        "permission": [],
+        "root": "deepseek-v4-flash-free",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true,
+          "thinking": true
+        },
+        "context_length": 1000000,
+        "max_output_tokens": 384000,
+        "max_input_tokens": 1000000,
+        "name": "DeepSeek V4 Flash Free"
+      },
+      {
+        "id": "opencode-zen/mimo-v2.5-free",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "opencode-zen",
+        "permission": [],
+        "root": "mimo-v2.5-free",
+        "parent": null,
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "context_length": 1048576,
+        "max_output_tokens": 131072,
+        "max_input_tokens": 1048576,
+        "name": "mimo-v2.5-free"
+      },
+      {
+        "id": "opencode-zen/qwen3.6-plus-free",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "opencode-zen",
+        "permission": [],
+        "root": "qwen3.6-plus-free",
+        "parent": null,
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": true,
+          "thinking": true
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "context_length": 200000,
+        "max_output_tokens": 65536,
+        "max_input_tokens": 200000,
+        "name": "Qwen3.6 Plus Free"
+      },
+      {
+        "id": "opencode-zen/minimax-m3-free",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "opencode-zen",
+        "permission": [],
+        "root": "minimax-m3-free",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true,
+          "thinking": true
+        },
+        "context_length": 1048576,
+        "max_output_tokens": 512000,
+        "max_input_tokens": 1048576,
+        "name": "minimax-m3-free"
+      },
+      {
+        "id": "opencode-zen/nemotron-3-ultra-free",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "opencode-zen",
+        "permission": [],
+        "root": "nemotron-3-ultra-free",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nemotron-3-ultra-free",
+        "context_length": 200000
+      },
+      {
+        "id": "opencode-zen/north-mini-code-free",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "opencode-zen",
+        "permission": [],
+        "root": "north-mini-code-free",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "north-mini-code-free",
+        "context_length": 200000
+      },
+      {
+        "id": "openrouter/nex-agi/nex-n2-pro:free",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "openrouter",
+        "permission": [],
+        "root": "nex-agi/nex-n2-pro:free",
+        "parent": null,
+        "context_length": 262144,
+        "max_output_tokens": 8192,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "nex-agi/nex-n2-pro:free"
+      },
+      {
+        "id": "openrouter/nvidia/nemotron-3.5-content-safety:free",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "openrouter",
+        "permission": [],
+        "root": "nvidia/nemotron-3.5-content-safety:free",
+        "parent": null,
+        "context_length": 128000,
+        "max_output_tokens": 8192,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "nvidia/nemotron-3.5-content-safety:free"
+      },
+      {
+        "id": "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "openrouter",
+        "permission": [],
+        "root": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "parent": null,
+        "context_length": 1000000,
+        "max_output_tokens": 8192,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "nvidia/nemotron-3-ultra-550b-a55b:free"
+      },
+      {
+        "id": "openrouter/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "openrouter",
+        "permission": [],
+        "root": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+        "parent": null,
+        "context_length": 256000,
+        "max_output_tokens": 8192,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
+      },
+      {
+        "id": "openrouter/poolside/laguna-xs.2:free",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "openrouter",
+        "permission": [],
+        "root": "poolside/laguna-xs.2:free",
+        "parent": null,
+        "context_length": 262144,
+        "max_output_tokens": 8192,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "poolside/laguna-xs.2:free"
+      },
+      {
+        "id": "openrouter/poolside/laguna-m.1:free",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "openrouter",
+        "permission": [],
+        "root": "poolside/laguna-m.1:free",
+        "parent": null,
+        "context_length": 262144,
+        "max_output_tokens": 8192,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "poolside/laguna-m.1:free"
+      },
+      {
+        "id": "openrouter/google/gemma-4-26b-a4b-it:free",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "openrouter",
+        "permission": [],
+        "root": "google/gemma-4-26b-a4b-it:free",
+        "parent": null,
+        "context_length": 262144,
+        "max_output_tokens": 8192,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "google/gemma-4-26b-a4b-it:free"
+      },
+      {
+        "id": "openrouter/google/gemma-4-31b-it:free",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "openrouter",
+        "permission": [],
+        "root": "google/gemma-4-31b-it:free",
+        "parent": null,
+        "context_length": 262144,
+        "max_output_tokens": 8192,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "google/gemma-4-31b-it:free"
+      },
+      {
+        "id": "openrouter/nvidia/nemotron-3-super-120b-a12b:free",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "openrouter",
+        "permission": [],
+        "root": "nvidia/nemotron-3-super-120b-a12b:free",
+        "parent": null,
+        "context_length": 1000000,
+        "max_output_tokens": 8192,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "nvidia/nemotron-3-super-120b-a12b:free"
+      },
+      {
+        "id": "openrouter/openrouter/free",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "openrouter",
+        "permission": [],
+        "root": "openrouter/free",
+        "parent": null,
+        "context_length": 200000,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "openrouter/free"
+      },
+      {
+        "id": "openrouter/liquid/lfm-2.5-1.2b-thinking:free",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "openrouter",
+        "permission": [],
+        "root": "liquid/lfm-2.5-1.2b-thinking:free",
+        "parent": null,
+        "context_length": 32768,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "liquid/lfm-2.5-1.2b-thinking:free"
+      },
+      {
+        "id": "openrouter/liquid/lfm-2.5-1.2b-instruct:free",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "openrouter",
+        "permission": [],
+        "root": "liquid/lfm-2.5-1.2b-instruct:free",
+        "parent": null,
+        "context_length": 32768,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "liquid/lfm-2.5-1.2b-instruct:free"
+      },
+      {
+        "id": "openrouter/nvidia/nemotron-3-nano-30b-a3b:free",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "openrouter",
+        "permission": [],
+        "root": "nvidia/nemotron-3-nano-30b-a3b:free",
+        "parent": null,
+        "context_length": 256000,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nvidia/nemotron-3-nano-30b-a3b:free"
+      },
+      {
+        "id": "openrouter/nvidia/nemotron-nano-12b-v2-vl:free",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "openrouter",
+        "permission": [],
+        "root": "nvidia/nemotron-nano-12b-v2-vl:free",
+        "parent": null,
+        "context_length": 128000,
+        "max_output_tokens": 8192,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "nvidia/nemotron-nano-12b-v2-vl:free"
+      },
+      {
+        "id": "openrouter/qwen/qwen3-next-80b-a3b-instruct:free",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "openrouter",
+        "permission": [],
+        "root": "qwen/qwen3-next-80b-a3b-instruct:free",
+        "parent": null,
+        "context_length": 262144,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "qwen/qwen3-next-80b-a3b-instruct:free"
+      },
+      {
+        "id": "openrouter/nvidia/nemotron-nano-9b-v2:free",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "openrouter",
+        "permission": [],
+        "root": "nvidia/nemotron-nano-9b-v2:free",
+        "parent": null,
+        "context_length": 128000,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nvidia/nemotron-nano-9b-v2:free"
+      },
+      {
+        "id": "openrouter/openai/gpt-oss-120b:free",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "openrouter",
+        "permission": [],
+        "root": "openai/gpt-oss-120b:free",
+        "parent": null,
+        "context_length": 131072,
+        "max_output_tokens": 8192,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "openai/gpt-oss-120b:free"
+      },
+      {
+        "id": "openrouter/openai/gpt-oss-20b:free",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "openrouter",
+        "permission": [],
+        "root": "openai/gpt-oss-20b:free",
+        "parent": null,
+        "context_length": 131072,
+        "max_output_tokens": 8192,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "openai/gpt-oss-20b:free"
+      },
+      {
+        "id": "openrouter/qwen/qwen3-coder:free",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "openrouter",
+        "permission": [],
+        "root": "qwen/qwen3-coder:free",
+        "parent": null,
+        "context_length": 1048576,
+        "max_output_tokens": 8192,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "name": "qwen/qwen3-coder:free"
+      },
+      {
+        "id": "openrouter/cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "openrouter",
+        "permission": [],
+        "root": "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
+        "parent": null,
+        "context_length": 32768,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "cognitivecomputations/dolphin-mistral-24b-venice-edition:free"
+      },
+      {
+        "id": "openrouter/meta-llama/llama-3.3-70b-instruct:free",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "openrouter",
+        "permission": [],
+        "root": "meta-llama/llama-3.3-70b-instruct:free",
+        "parent": null,
+        "context_length": 131072,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "meta-llama/llama-3.3-70b-instruct:free"
+      },
+      {
+        "id": "openrouter/meta-llama/llama-3.2-3b-instruct:free",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "openrouter",
+        "permission": [],
+        "root": "meta-llama/llama-3.2-3b-instruct:free",
+        "parent": null,
+        "context_length": 131072,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "meta-llama/llama-3.2-3b-instruct:free"
+      },
+      {
+        "id": "openrouter/nousresearch/hermes-3-llama-3.1-405b:free",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "openrouter",
+        "permission": [],
+        "root": "nousresearch/hermes-3-llama-3.1-405b:free",
+        "parent": null,
+        "context_length": 131072,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nousresearch/hermes-3-llama-3.1-405b:free"
+      },
+      {
+        "id": "siliconflow/nex-agi/Nex-N2-Pro",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "siliconflow",
+        "permission": [],
+        "root": "nex-agi/Nex-N2-Pro",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nex-agi/Nex-N2-Pro",
+        "context_length": 128000
+      },
+      {
+        "id": "nvidia/nv-embedqa-e5-v5",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "root": "nv-embedqa-e5-v5",
+        "type": "embedding",
+        "dimensions": 1024,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nv-embedqa-e5-v5"
+      },
+      {
+        "id": "openrouter/openai/text-embedding-3-small",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "openrouter",
+        "root": "text-embedding-3-small",
+        "type": "embedding",
+        "dimensions": 1536,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "text-embedding-3-small"
+      },
+      {
+        "id": "openrouter/openai/text-embedding-3-large",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "openrouter",
+        "root": "text-embedding-3-large",
+        "type": "embedding",
+        "dimensions": 3072,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "text-embedding-3-large"
+      },
+      {
+        "id": "openrouter/openai/text-embedding-ada-002",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "openrouter",
+        "root": "text-embedding-ada-002",
+        "type": "embedding",
+        "dimensions": 1536,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "text-embedding-ada-002"
+      },
+      {
+        "id": "gemini/text-embedding-004",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "gemini",
+        "root": "text-embedding-004",
+        "type": "embedding",
+        "dimensions": 768,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "text-embedding-004"
+      },
+      {
+        "id": "antigravity/gemini-3.1-flash-image",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "antigravity",
+        "type": "image",
+        "supported_sizes": [
+          "1024x1024"
+        ],
+        "input_modalities": [
+          "text"
+        ],
+        "output_modalities": [
+          "image"
+        ],
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": false,
+          "thinking": false
+        },
+        "max_output_tokens": 8192,
+        "name": "Gemini 3.1 Flash Image"
+      },
+      {
+        "id": "openrouter/openai/gpt-5.4-image-2",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "openrouter",
+        "type": "image",
+        "supported_sizes": [
+          "1024x1024",
+          "1024x1792",
+          "1792x1024"
+        ],
+        "input_modalities": [
+          "text"
+        ],
+        "output_modalities": [
+          "image"
+        ],
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "openai/gpt-5.4-image-2"
+      },
+      {
+        "id": "openrouter/openai/gpt-5-image-mini",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "openrouter",
+        "type": "image",
+        "supported_sizes": [
+          "1024x1024",
+          "1024x1792",
+          "1792x1024"
+        ],
+        "input_modalities": [
+          "text"
+        ],
+        "output_modalities": [
+          "image"
+        ],
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "openai/gpt-5-image-mini"
+      },
+      {
+        "id": "openrouter/google/gemini-3.1-flash-image-preview",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "openrouter",
+        "type": "image",
+        "supported_sizes": [
+          "1024x1024",
+          "1024x1792",
+          "1792x1024"
+        ],
+        "input_modalities": [
+          "text"
+        ],
+        "output_modalities": [
+          "image"
+        ],
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "google/gemini-3.1-flash-image-preview"
+      },
+      {
+        "id": "openrouter/google/gemini-3-pro-image-preview",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "openrouter",
+        "type": "image",
+        "supported_sizes": [
+          "1024x1024",
+          "1024x1792",
+          "1792x1024"
+        ],
+        "input_modalities": [
+          "text"
+        ],
+        "output_modalities": [
+          "image"
+        ],
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "google/gemini-3-pro-image-preview"
+      },
+      {
+        "id": "openrouter/black-forest-labs/flux.2-max",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "openrouter",
+        "type": "image",
+        "supported_sizes": [
+          "1024x1024",
+          "1024x1792",
+          "1792x1024"
+        ],
+        "input_modalities": [
+          "text"
+        ],
+        "output_modalities": [
+          "image"
+        ],
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "black-forest-labs/flux.2-max"
+      },
+      {
+        "id": "openrouter/black-forest-labs/flux.2-pro",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "openrouter",
+        "type": "image",
+        "supported_sizes": [
+          "1024x1024",
+          "1024x1792",
+          "1792x1024"
+        ],
+        "input_modalities": [
+          "text"
+        ],
+        "output_modalities": [
+          "image"
+        ],
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "black-forest-labs/flux.2-pro"
+      },
+      {
+        "id": "openrouter/black-forest-labs/flux.2-flex",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "openrouter",
+        "type": "image",
+        "supported_sizes": [
+          "1024x1024",
+          "1024x1792",
+          "1792x1024"
+        ],
+        "input_modalities": [
+          "text"
+        ],
+        "output_modalities": [
+          "image"
+        ],
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "black-forest-labs/flux.2-flex"
+      },
+      {
+        "id": "nvidia/nv-rerankqa-mistral-4b-v3",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "root": "nv-rerankqa-mistral-4b-v3",
+        "type": "rerank",
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nv-rerankqa-mistral-4b-v3"
+      },
+      {
+        "id": "groq/whisper-large-v3",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "groq",
+        "type": "audio",
+        "subtype": "transcription",
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "whisper-large-v3"
+      },
+      {
+        "id": "groq/whisper-large-v3-turbo",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "groq",
+        "type": "audio",
+        "subtype": "transcription",
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "whisper-large-v3-turbo"
+      },
+      {
+        "id": "groq/distil-whisper-large-v3-en",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "groq",
+        "type": "audio",
+        "subtype": "transcription",
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "distil-whisper-large-v3-en"
+      },
+      {
+        "id": "nvidia/parakeet-ctc-1.1b-asr",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "type": "audio",
+        "subtype": "transcription",
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "parakeet-ctc-1.1b-asr"
+      },
+      {
+        "id": "nvidia/openai/whisper-large-v3",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "type": "audio",
+        "subtype": "transcription",
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "openai/whisper-large-v3"
+      },
+      {
+        "id": "nvidia/fastpitch",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "type": "audio",
+        "subtype": "speech",
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "fastpitch"
+      },
+      {
+        "id": "nvidia/tacotron2",
+        "object": "model",
+        "created": 1781768170,
+        "owned_by": "nvidia",
+        "type": "audio",
+        "subtype": "speech",
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "tacotron2"
+      }
+    ]
+  }
+}

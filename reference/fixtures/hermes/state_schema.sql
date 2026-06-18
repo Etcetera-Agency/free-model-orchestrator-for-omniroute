@@ -1,0 +1,40 @@
+-- Subset of NousResearch/hermes-agent hermes_state.py @ tag v2026.6.5.
+-- The `sessions` table is the runtime-observation source used to derive
+-- observed calls_per_run / token averages per role (model). Copied verbatim so
+-- the real column set and types are exercised, not a hand-fabricated schema.
+CREATE TABLE IF NOT EXISTS sessions (
+    id TEXT PRIMARY KEY,
+    source TEXT NOT NULL,
+    user_id TEXT,
+    model TEXT,
+    model_config TEXT,
+    system_prompt TEXT,
+    parent_session_id TEXT,
+    started_at REAL NOT NULL,
+    ended_at REAL,
+    end_reason TEXT,
+    message_count INTEGER DEFAULT 0,
+    tool_call_count INTEGER DEFAULT 0,
+    input_tokens INTEGER DEFAULT 0,
+    output_tokens INTEGER DEFAULT 0,
+    cache_read_tokens INTEGER DEFAULT 0,
+    cache_write_tokens INTEGER DEFAULT 0,
+    reasoning_tokens INTEGER DEFAULT 0,
+    cwd TEXT,
+    billing_provider TEXT,
+    billing_base_url TEXT,
+    billing_mode TEXT,
+    estimated_cost_usd REAL,
+    actual_cost_usd REAL,
+    cost_status TEXT,
+    cost_source TEXT,
+    pricing_version TEXT,
+    title TEXT,
+    api_call_count INTEGER DEFAULT 0,
+    handoff_state TEXT,
+    handoff_platform TEXT,
+    handoff_error TEXT,
+    rewind_count INTEGER NOT NULL DEFAULT 0,
+    archived INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY (parent_session_id) REFERENCES sessions(id)
+);

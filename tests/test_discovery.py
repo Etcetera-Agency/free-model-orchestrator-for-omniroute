@@ -49,6 +49,33 @@ def test_models_dev_fetches_api_json_and_syncs_candidates():
     assert candidates[("p", "m/free")].reasons == ("multiple_signals",)
 
 
+def test_models_dev_fetches_real_top_level_provider_keyed_catalog():
+    from _fixtures import fixture_body
+
+    body = fixture_body("models_dev_api_json")
+    assert "providers" not in body  # real api.json has no wrapper
+    client = FakeHttpClient(FakeResponse(200, body))
+
+    catalog = fetch_models_dev_catalog(client=client)
+    candidates = build_free_candidates(catalog)
+
+    assert set(catalog) == {"providers"}
+    assert catalog["providers"] is body
+    assert ("alibaba-cn", "deepseek-r1-distill-qwen-1-5b") in candidates
+    assert "zero_cost" in candidates[("alibaba-cn", "deepseek-r1-distill-qwen-1-5b")].reasons
+
+
+def test_models_dev_rejects_error_body_without_provider_object():
+    client = FakeHttpClient(FakeResponse(200, {"error": "rate_limited"}))
+
+    try:
+        fetch_models_dev_catalog(client=client)
+    except ExternalMetadataError as exc:
+        assert exc.reason == "invalid_payload"
+    else:
+        raise AssertionError("error body must be rejected as invalid payload")
+
+
 def test_models_dev_fetcher_rejects_network_http_json_and_payload_errors():
     cases = [
         FakeHttpClient(error=TimeoutError("timeout")),

@@ -28,3 +28,6 @@ where = ["src"]
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+markers = [
+  "live: hits real external services (models.dev / Artificial Analysis); skips when unavailable",
+]

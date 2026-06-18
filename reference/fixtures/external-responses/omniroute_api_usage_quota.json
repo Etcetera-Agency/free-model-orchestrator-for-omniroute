@@ -1,0 +1,208 @@
+{
+  "captured_at": "2026-06-18T07:36:26.508Z",
+  "source": "omniroute-shlink-20129",
+  "name": "omniroute_api_usage_quota",
+  "method": "GET",
+  "path": "/api/usage/quota",
+  "status": 200,
+  "headers": {
+    "access-control-allow-headers": "[REDACTED]",
+    "access-control-allow-methods": "[REDACTED]",
+    "connection": "keep-alive",
+    "content-security-policy": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; media-src 'self' data: blob:; connect-src 'self' http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:* https: wss:; worker-src 'self' blob:; manifest-src 'self'",
+    "content-type": "application/json",
+    "date": "Thu, 18 Jun 2026 07:36:26 GMT",
+    "keep-alive": "timeout=5",
+    "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=()",
+    "referrer-policy": "strict-origin-when-cross-origin",
+    "strict-transport-security": "max-age=63072000; includeSubDomains; preload",
+    "transfer-encoding": "chunked",
+    "vary": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "DENY",
+    "x-omniroute-route-class": "MANAGEMENT",
+    "x-request-id": "[UUID]"
+  },
+  "body": {
+    "providers": [
+      {
+        "name": "omni",
+        "provider": "longcat",
+        "connectionId": "[UUID]",
+        "quotaUsed": 0,
+        "quotaTotal": null,
+        "percentRemaining": 100,
+        "resetAt": null,
+        "tokenStatus": "[REDACTED]"
+      },
+      {
+        "name": "[EMAIL]",
+        "provider": "antigravity",
+        "connectionId": "[UUID]",
+        "quotaUsed": 0,
+        "quotaTotal": null,
+        "percentRemaining": 100,
+        "resetAt": null,
+        "tokenStatus": "[REDACTED]"
+      },
+      {
+        "name": "safonov@e",
+        "provider": "openrouter",
+        "connectionId": "[UUID]",
+        "quotaUsed": 0,
+        "quotaTotal": null,
+        "percentRemaining": 100,
+        "resetAt": null,
+        "tokenStatus": "[REDACTED]"
+      },
+      {
+        "name": "omni",
+        "provider": "publicai",
+        "connectionId": "[UUID]",
+        "quotaUsed": 0,
+        "quotaTotal": null,
+        "percentRemaining": 100,
+        "resetAt": null,
+        "tokenStatus": "[REDACTED]"
+      },
+      {
+        "name": "omni sd@g",
+        "provider": "siliconflow",
+        "connectionId": "[UUID]",
+        "quotaUsed": 0,
+        "quotaTotal": null,
+        "percentRemaining": 100,
+        "resetAt": null,
+        "tokenStatus": "[REDACTED]"
+      },
+      {
+        "name": "safonov@e",
+        "provider": "groq",
+        "connectionId": "[UUID]",
+        "quotaUsed": 0,
+        "quotaTotal": null,
+        "percentRemaining": 100,
+        "resetAt": null,
+        "tokenStatus": "[REDACTED]"
+      },
+      {
+        "name": "[EMAIL]",
+        "provider": "mistral",
+        "connectionId": "[UUID]",
+        "quotaUsed": 0,
+        "quotaTotal": null,
+        "percentRemaining": 100,
+        "resetAt": null,
+        "tokenStatus": "[REDACTED]"
+      },
+      {
+        "name": "safonov@e",
+        "provider": "codestral",
+        "connectionId": "[UUID]",
+        "quotaUsed": 0,
+        "quotaTotal": null,
+        "percentRemaining": 100,
+        "resetAt": null,
+        "tokenStatus": "[REDACTED]"
+      },
+      {
+        "name": "omni",
+        "provider": "nvidia",
+        "connectionId": "[UUID]",
+        "quotaUsed": 0,
+        "quotaTotal": null,
+        "percentRemaining": 100,
+        "resetAt": null,
+        "tokenStatus": "[REDACTED]"
+      },
+      {
+        "name": "code",
+        "provider": "gemini",
+        "connectionId": "[UUID]",
+        "quotaUsed": 0,
+        "quotaTotal": null,
+        "percentRemaining": 100,
+        "resetAt": null,
+        "tokenStatus": "[REDACTED]"
+      },
+      {
+        "name": "sd#gm",
+        "provider": "opencode-zen",
+        "connectionId": "[UUID]",
+        "quotaUsed": 0,
+        "quotaTotal": null,
+        "percentRemaining": 100,
+        "resetAt": null,
+        "tokenStatus": "[REDACTED]"
+      },
+      {
+        "name": "MiMoCode Account 1",
+        "provider": "mimocode",
+        "connectionId": "[UUID]",
+        "quotaUsed": 0,
+        "quotaTotal": null,
+        "percentRemaining": 100,
+        "resetAt": null,
+        "tokenStatus": "[REDACTED]"
+      },
+      {
+        "name": "OpenCode Account 1",
+        "provider": "opencode",
+        "connectionId": "[UUID]",
+        "quotaUsed": 0,
+        "quotaTotal": null,
+        "percentRemaining": 100,
+        "resetAt": null,
+        "tokenStatus": "[REDACTED]"
+      },
+      {
+        "name": "[EMAIL]",
+        "provider": "kilocode",
+        "connectionId": "[UUID]",
+        "quotaUsed": 0,
+        "quotaTotal": null,
+        "percentRemaining": 100,
+        "resetAt": null,
+        "tokenStatus": "[REDACTED]"
+      },
+      {
+        "name": "chosen",
+        "provider": "groq",
+        "connectionId": "[UUID]",
+        "quotaUsed": 0,
+        "quotaTotal": null,
+        "percentRemaining": 100,
+        "resetAt": null,
+        "tokenStatus": "[REDACTED]"
+      },
+      {
+        "name": "omni",
+        "provider": "mistral",
+        "connectionId": "[UUID]",
+        "quotaUsed": 0,
+        "quotaTotal": null,
+        "percentRemaining": 100,
+        "resetAt": null,
+        "tokenStatus": "[REDACTED]"
+      },
+      {
+        "name": "omni",
+        "provider": "groq",
+        "connectionId": "[UUID]",
+        "quotaUsed": 0,
+        "quotaTotal": null,
+        "percentRemaining": 100,
+        "resetAt": null,
+        "tokenStatus": "[REDACTED]"
+      }
+    ],
+    "meta": {
+      "generatedAt": "2026-06-18T07:36:26.205Z",
+      "filters": {
+        "provider": null,
+        "connectionId": null
+      },
+      "totalProviders": 17
+    }
+  }
+}

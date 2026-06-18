@@ -1,0 +1,370 @@
+{
+  "captured_at": "2026-06-18T07:36:26.498Z",
+  "source": "omniroute-shlink-20129",
+  "name": "omniroute_api_free_provider_rankings",
+  "method": "GET",
+  "path": "/api/free-provider-rankings",
+  "status": 200,
+  "headers": {
+    "access-control-allow-headers": "[REDACTED]",
+    "access-control-allow-methods": "[REDACTED]",
+    "connection": "keep-alive",
+    "content-security-policy": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; media-src 'self' data: blob:; connect-src 'self' http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:* https: wss:; worker-src 'self' blob:; manifest-src 'self'",
+    "content-type": "application/json",
+    "date": "Thu, 18 Jun 2026 07:36:26 GMT",
+    "keep-alive": "timeout=5",
+    "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=()",
+    "referrer-policy": "strict-origin-when-cross-origin",
+    "strict-transport-security": "max-age=63072000; includeSubDomains; preload",
+    "transfer-encoding": "chunked",
+    "vary": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "DENY",
+    "x-omniroute-route-class": "MANAGEMENT",
+    "x-request-id": "[UUID]"
+  },
+  "body": {
+    "rankings": [
+      {
+        "id": "kiro",
+        "name": "Kiro AI",
+        "icon": "psychology_alt",
+        "color": "#FF6B35",
+        "category": "oauth",
+        "topModel": {
+          "modelId": "claude-fable-5",
+          "modelName": "Claude Fable 5",
+          "score": 0.98,
+          "eloRaw": 1654,
+          "confidence": "medium",
+          "category": "coding"
+        },
+        "averageScore": 0.8581799999999999,
+        "modelCount": 5
+      },
+      {
+        "id": "agy",
+        "name": "Antigravity CLI",
+        "icon": "terminal",
+        "color": "#F59E0B",
+        "textIcon": "AGY",
+        "category": "oauth",
+        "topModel": {
+          "modelId": "claude-opus-4-6-thinking",
+          "modelName": "Claude Opus 4.6 (Thinking)",
+          "score": 0.9413,
+          "eloRaw": 1504,
+          "confidence": "high",
+          "category": "debugging"
+        },
+        "averageScore": 0.71708,
+        "modelCount": 5
+      },
+      {
+        "id": "bazaarlink",
+        "name": "BazaarLink",
+        "icon": "storefront",
+        "color": "#6366F1",
+        "textIcon": "BZ",
+        "category": "apikey",
+        "topModel": {
+          "modelId": "claude-opus-4.7",
+          "modelName": "Claude Opus 4.7",
+          "score": 0.9413,
+          "eloRaw": 1504,
+          "confidence": "high",
+          "category": "debugging"
+        },
+        "averageScore": 0.5983666666666668,
+        "modelCount": 15
+      },
+      {
+        "id": "gitlawb-gmi",
+        "name": "Gitlawb Opengateway (GMI Cloud)",
+        "icon": "hub",
+        "color": "#10B981",
+        "textIcon": "GMI",
+        "category": "apikey",
+        "topModel": {
+          "modelId": "anthropic/claude-opus-4.7",
+          "modelName": "Claude Opus 4.7",
+          "score": 0.9413,
+          "eloRaw": 1504,
+          "confidence": "high",
+          "category": "debugging"
+        },
+        "averageScore": 0.84465,
+        "modelCount": 6
+      },
+      {
+        "id": "bluesminds",
+        "name": "BluesMinds",
+        "icon": "psychology",
+        "color": "#3B82F6",
+        "textIcon": "BM",
+        "category": "apikey",
+        "topModel": {
+          "modelId": "claude-opus-4-5",
+          "modelName": "Claude Opus 4.5 (VIP)",
+          "score": 0.9413,
+          "eloRaw": 1504,
+          "confidence": "high",
+          "category": "debugging"
+        },
+        "averageScore": 0.67695,
+        "modelCount": 2
+      },
+      {
+        "id": "zenmux",
+        "name": "ZenMux",
+        "icon": "neurology",
+        "color": "#7C3AED",
+        "textIcon": "ZM",
+        "category": "apikey",
+        "topModel": {
+          "modelId": "anthropic/claude-opus-4.5",
+          "modelName": "Claude Opus 4.5 (ZenMux)",
+          "score": 0.9413,
+          "eloRaw": 1504,
+          "confidence": "high",
+          "category": "debugging"
+        },
+        "averageScore": 0.7915000000000001,
+        "modelCount": 2
+      },
+      {
+        "id": "agentrouter",
+        "name": "AgentRouter",
+        "icon": "router",
+        "color": "#10B981",
+        "textIcon": "AR",
+        "category": "apikey",
+        "topModel": {
+          "modelId": "claude-opus-4-6",
+          "modelName": "Claude 4.6 Opus",
+          "score": 0.893,
+          "eloRaw": 1499,
+          "confidence": "high",
+          "category": "debugging"
+        },
+        "averageScore": 0.777,
+        "modelCount": 2
+      },
+      {
+        "id": "vertex",
+        "name": "Vertex AI",
+        "icon": "cloud",
+        "color": "#4285F4",
+        "textIcon": "VA",
+        "category": "apikey",
+        "topModel": {
+          "modelId": "claude-opus-4-7",
+          "modelName": "Claude Opus 4.7 (Vertex)",
+          "score": 0.835,
+          "eloRaw": 1493,
+          "confidence": "high",
+          "category": "debugging"
+        },
+        "averageScore": 0.6347571428571429,
+        "modelCount": 7
+      },
+      {
+        "id": "puter",
+        "name": "Puter AI",
+        "icon": "cloud_circle",
+        "color": "#6366F1",
+        "textIcon": "PU",
+        "category": "apikey",
+        "topModel": {
+          "modelId": "claude-opus-4-7",
+          "modelName": "Claude Opus 4.7 (Puter)",
+          "score": 0.835,
+          "eloRaw": 1493,
+          "confidence": "high",
+          "category": "debugging"
+        },
+        "averageScore": 0.6692857142857144,
+        "modelCount": 7
+      },
+      {
+        "id": "gemini-cli",
+        "name": "Gemini CLI",
+        "icon": "terminal",
+        "color": "#4285F4",
+        "category": "oauth",
+        "topModel": {
+          "modelId": "gemini-3.1-pro-preview",
+          "modelName": "Gemini 3.1 Pro Preview",
+          "score": 0.7673,
+          "eloRaw": 1486,
+          "confidence": "high",
+          "category": "debugging"
+        },
+        "averageScore": 0.7254333333333333,
+        "modelCount": 3
+      },
+      {
+        "id": "gemini",
+        "name": "Gemini (Google AI Studio)",
+        "icon": "diamond",
+        "color": "#4285F4",
+        "textIcon": "GE",
+        "category": "apikey",
+        "topModel": {
+          "modelId": "gemini-3.1-pro-preview",
+          "modelName": "Gemini 3.1 Pro Preview",
+          "score": 0.7673,
+          "eloRaw": 1486,
+          "confidence": "high",
+          "category": "debugging"
+        },
+        "averageScore": 0.6932333333333333,
+        "modelCount": 3
+      },
+      {
+        "id": "duckduckgo-web",
+        "name": "DuckDuckGo AI Chat",
+        "icon": "auto_awesome",
+        "color": "#DE5833",
+        "textIcon": "DDG",
+        "category": "noauth",
+        "topModel": {
+          "modelId": "gpt-5-mini",
+          "modelName": "GPT-5 Mini",
+          "score": 0.661,
+          "eloRaw": 1475,
+          "confidence": "high",
+          "category": "debugging"
+        },
+        "averageScore": 0.661,
+        "modelCount": 1
+      },
+      {
+        "id": "ollama-cloud",
+        "name": "Ollama Cloud",
+        "icon": "cloud",
+        "color": "#58A6FF",
+        "textIcon": "OC",
+        "category": "apikey",
+        "topModel": {
+          "modelId": "glm-5.1",
+          "modelName": "GLM 5.1",
+          "score": 0.661,
+          "eloRaw": 1475,
+          "confidence": "high",
+          "category": "debugging"
+        },
+        "averageScore": 0.51262,
+        "modelCount": 5
+      },
+      {
+        "id": "freemodel-dev",
+        "name": "FreeModel.dev",
+        "icon": "auto_awesome",
+        "color": "#8B5CF6",
+        "textIcon": "FM",
+        "category": "apikey",
+        "topModel": {
+          "modelId": "gpt-5.5",
+          "modelName": "GPT-5.5",
+          "score": 0.661,
+          "eloRaw": 1475,
+          "confidence": "high",
+          "category": "debugging"
+        },
+        "averageScore": 0.6440750000000001,
+        "modelCount": 4
+      },
+      {
+        "id": "pollinations",
+        "name": "Pollinations AI",
+        "icon": "local_florist",
+        "color": "#4CAF50",
+        "textIcon": "PO",
+        "category": "apikey",
+        "topModel": {
+          "modelId": "gemini-flash-lite-3.1",
+          "modelName": "Gemini Flash Lite 3.1 (Pollinations)",
+          "score": 0.6417,
+          "eloRaw": 1473,
+          "confidence": "high",
+          "category": "debugging"
+        },
+        "averageScore": 0.6417,
+        "modelCount": 1
+      },
+      {
+        "id": "gitlawb",
+        "name": "Gitlawb Opengateway (MiMo)",
+        "icon": "hub",
+        "color": "#10B981",
+        "textIcon": "GLB",
+        "category": "apikey",
+        "topModel": {
+          "modelId": "mimo-v2.5-pro",
+          "modelName": "MiMo-V2.5-Pro",
+          "score": 0.574,
+          "eloRaw": 1466,
+          "confidence": "high",
+          "category": "debugging"
+        },
+        "averageScore": 0.458,
+        "modelCount": 3
+      },
+      {
+        "id": "opencode",
+        "name": "OpenCode Free",
+        "icon": "terminal",
+        "color": "#E87040",
+        "textIcon": "OC",
+        "category": "noauth",
+        "topModel": {
+          "modelId": "minimax-m3-free",
+          "modelName": "MiniMax M3 Free",
+          "score": 0.5088,
+          "eloRaw": 1511,
+          "confidence": "medium",
+          "category": "coding"
+        },
+        "averageScore": 0.49095,
+        "modelCount": 2
+      },
+      {
+        "id": "deepseek",
+        "name": "DeepSeek",
+        "icon": "bolt",
+        "color": "#4D6BFE",
+        "textIcon": "DS",
+        "category": "apikey",
+        "topModel": {
+          "modelId": "deepseek-v4-pro",
+          "modelName": "DeepSeek V4 Pro",
+          "score": 0.4773,
+          "eloRaw": 1456,
+          "confidence": "high",
+          "category": "debugging"
+        },
+        "averageScore": 0.4773,
+        "modelCount": 1
+      },
+      {
+        "id": "fireworks",
+        "name": "Fireworks AI",
+        "icon": "local_fire_department",
+        "color": "#7B2EF2",
+        "textIcon": "FW",
+        "category": "apikey",
+        "topModel": {
+          "modelId": "deepseek-v4-pro",
+          "modelName": "DeepSeek V4 Pro",
+          "score": 0.4773,
+          "eloRaw": 1456,
+          "confidence": "high",
+          "category": "debugging"
+        },
+        "averageScore": 0.4773,
+        "modelCount": 1
+      }
+    ]
+  }
+}

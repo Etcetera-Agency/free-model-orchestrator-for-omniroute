@@ -21,9 +21,29 @@ def fetch_models_dev_catalog(*, client=None, url: str = MODELS_DEV_API_URL, time
         payload = response.json()
     except Exception as exc:
         raise ExternalMetadataError("models_dev", "invalid_json") from exc
-    if not isinstance(payload, dict) or not isinstance(payload.get("providers"), dict):
+    return _normalize_catalog(payload)
+
+
+def _normalize_catalog(payload: Any) -> dict[str, Any]:
+    if not isinstance(payload, dict):
         raise ExternalMetadataError("models_dev", "invalid_payload")
-    return payload
+    # An explicitly injected payload keeps the canonical `{"providers": {...}}`
+    # wrapper; the live `https://models.dev/api.json` body is keyed by provider
+    # id at the top level with no wrapper. Accept both, reject anything that is
+    # not a provider-keyed object (e.g. an error body like `{"error": ...}`).
+    if isinstance(payload.get("providers"), dict):
+        providers = payload["providers"]
+    elif "providers" in payload:
+        raise ExternalMetadataError("models_dev", "invalid_payload")
+    else:
+        providers = payload
+    if not _is_provider_map(providers):
+        raise ExternalMetadataError("models_dev", "invalid_payload")
+    return {"providers": providers}
+
+
+def _is_provider_map(providers: Any) -> bool:
+    return isinstance(providers, dict) and any(isinstance(provider, dict) for provider in providers.values())
 
 
 def sync_models_dev_candidates(*, client=None, url: str = MODELS_DEV_API_URL, timeout: float = 30.0) -> dict[tuple[str, str], FreeCandidate]:

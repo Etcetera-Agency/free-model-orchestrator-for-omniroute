@@ -1,0 +1,27 @@
+{
+  "captured_at": "2026-06-18T07:36:39.639Z",
+  "source": "https://artificialanalysis.ai/api/v2/language/models",
+  "method": "GET",
+  "status": 403,
+  "headers": {
+    "age": "0",
+    "cache-control": "public, max-age=0, must-revalidate",
+    "content-encoding": "br",
+    "content-type": "application/json",
+    "date": "Thu, 18 Jun 2026 07:36:39 GMT",
+    "server": "Vercel",
+    "strict-transport-security": "max-age=63072000",
+    "transfer-encoding": "chunked",
+    "vary": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch",
+    "x-aa-tier": "free",
+    "x-matched-path": "/api/v2/language/models",
+    "x-ratelimit-limit": "100",
+    "x-ratelimit-remaining": "99",
+    "x-ratelimit-reset": "1781854600",
+    "x-vercel-cache": "MISS",
+    "x-vercel-id": "fra1::sfo1::rb868-1781768198951-bb851dea0715"
+  },
+  "body": {
+    "error": "Language models list requires a Pro subscription"
+  }
+}
