@@ -1,5 +1,24 @@
+import hashlib
+import json
 from dataclasses import dataclass
 from typing import Any
+
+import psycopg
+
+from fmo.omniroute import OmniRouteRequestError
+
+FREE_MODEL_FIELDS = {
+    "provider",
+    "modelId",
+    "displayName",
+    "monthlyTokens",
+    "creditTokens",
+    "freeType",
+    "poolKey",
+    "tos",
+    "authType",
+}
+REQUIRED_FREE_MODEL_FIELDS = {"provider", "modelId", "freeType"}
 
 
 @dataclass(frozen=True)
@@ -15,6 +34,23 @@ class RegistryModel:
 class FreeRegistry:
     models: dict[tuple[str, str | None], RegistryModel]
     pool_budgets: dict[str, float]
+
+
+@dataclass(frozen=True)
+class RegistryFetchError(Exception):
+    source: str
+    reason: str
+    status_code: int | None = None
+
+
+@dataclass(frozen=True)
+class FreeRegistrySyncOutcome:
+    registry: FreeRegistry
+    free_models_payload: dict[str, Any]
+    rankings_payload: dict[str, Any]
+    model_count: int
+    drift: list[tuple[str, str, str]]
+    errors: list[str]
 
 
 def sync_free_registry(payload: dict[str, Any], *, rankings_payload: dict[str, Any] | None = None) -> FreeRegistry:
@@ -36,3 +72,122 @@ def sync_free_registry(payload: dict[str, Any], *, rankings_payload: dict[str, A
             pool_key=pool_key,
         )
     return FreeRegistry(models=models, pool_budgets=pool_budgets)
+
+
+def sync_live_free_registry(client: Any) -> FreeRegistrySyncOutcome:
+    free_models_payload = _client_get(client, "/api/free-models")
+    rankings_payload = _client_get(client, "/api/free-provider-rankings")
+    drift = validate_free_registry_payload(free_models_payload)
+    registry = sync_free_registry(free_models_payload, rankings_payload=rankings_payload)
+    return FreeRegistrySyncOutcome(
+        registry=registry,
+        free_models_payload=free_models_payload,
+        rankings_payload=rankings_payload,
+        model_count=len(free_models_payload.get("models", [])),
+        drift=drift,
+        errors=[],
+    )
+
+
+def validate_free_registry_payload(payload: dict[str, Any]) -> list[tuple[str, str, str]]:
+    models = payload.get("models") if isinstance(payload, dict) else None
+    if not isinstance(models, list):
+        return [("models", "missing_field", "models")]
+
+    drift = []
+    for index, item in enumerate(models):
+        path = f"models[{index}]"
+        if not isinstance(item, dict):
+            drift.append((path, "invalid_entry", type(item).__name__))
+            continue
+        for field in sorted(REQUIRED_FREE_MODEL_FIELDS - item.keys()):
+            drift.append((path, "missing_field", field))
+        for field in sorted(item.keys() - FREE_MODEL_FIELDS):
+            drift.append((path, "unknown_field", field))
+    return drift
+
+
+def persist_free_registry_outcome(database_url: str, outcome: FreeRegistrySyncOutcome) -> str:
+    free_models_hash = _stable_hash(outcome.free_models_payload)
+    rankings_hash = _stable_hash(outcome.rankings_payload)
+    raw_json = {
+        "free_models": outcome.free_models_payload,
+        "rankings": outcome.rankings_payload,
+        "sync_outcome": {
+            "model_count": outcome.model_count,
+            "drift": [list(item) for item in outcome.drift],
+            "errors": outcome.errors,
+        },
+    }
+    with psycopg.connect(database_url) as connection:
+        snapshot_id = connection.execute(
+            """
+            INSERT INTO free_provider_registry_snapshots (
+                free_models_hash,
+                rankings_hashes,
+                raw_json
+            )
+            VALUES (%s, %s, %s)
+            RETURNING id
+            """,
+            (free_models_hash, json.dumps({"free_provider_rankings": rankings_hash}), json.dumps(raw_json)),
+        ).fetchone()[0]
+        for item in outcome.free_models_payload.get("models", []):
+            if item.get("authType") == "web_cookie":
+                continue
+            connection.execute(
+                """
+                INSERT INTO free_model_definitions (
+                    provider_id,
+                    provider_model_id,
+                    display_name,
+                    free_type,
+                    monthly_tokens,
+                    credit_tokens,
+                    omniroute_pool_key,
+                    tos_verdict,
+                    source_snapshot_id
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (provider_id, provider_model_id)
+                DO UPDATE SET
+                    display_name = EXCLUDED.display_name,
+                    free_type = EXCLUDED.free_type,
+                    monthly_tokens = EXCLUDED.monthly_tokens,
+                    credit_tokens = EXCLUDED.credit_tokens,
+                    omniroute_pool_key = EXCLUDED.omniroute_pool_key,
+                    tos_verdict = EXCLUDED.tos_verdict,
+                    source_snapshot_id = EXCLUDED.source_snapshot_id,
+                    last_seen_at = now()
+                """,
+                (
+                    item["provider"],
+                    item["modelId"],
+                    item.get("displayName"),
+                    item["freeType"],
+                    item.get("monthlyTokens") or 0,
+                    item.get("creditTokens") or 0,
+                    item.get("poolKey"),
+                    item.get("tos"),
+                    snapshot_id,
+                ),
+            )
+        connection.commit()
+    return str(snapshot_id)
+
+
+def _client_get(client: Any, path: str) -> dict[str, Any]:
+    try:
+        payload = client.get(path)
+    except OmniRouteRequestError as exc:
+        raise RegistryFetchError("omniroute_free_registry", "http_error", exc.status_code) from exc
+    except Exception as exc:
+        raise RegistryFetchError("omniroute_free_registry", "network_error") from exc
+    if not isinstance(payload, dict):
+        raise RegistryFetchError("omniroute_free_registry", "invalid_payload")
+    return payload
+
+
+def _stable_hash(value: Any) -> str:
+    payload = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
