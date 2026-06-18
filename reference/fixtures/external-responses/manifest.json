@@ -22,6 +22,7 @@
     "omniroute_api_usage_analytics.json",
     "omniroute_api_usage_quota.json",
     "omniroute_api_v1_provider_models_openai.json",
+    "omniroute_web_cookie_sessions.json",
     "omniroute_v1_models.json",
     "omniroute_v1_search_providers.json"
   ]
