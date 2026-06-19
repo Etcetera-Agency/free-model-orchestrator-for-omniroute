@@ -11,6 +11,7 @@ from fmo.db import MigrationRunner
 from fmo.matcher import MatchMethod, effective_context, match_model
 from fmo.models_dev import MODELS_DEV_API_URL, ExternalMetadataError, fetch_models_dev_catalog, sync_models_dev_candidates
 from fmo.registry import sync_free_registry
+from fmo.persistence import Database, Repository
 from fmo.scanner import CatalogScanner, CatalogSnapshot, diff_catalogs, should_mark_removed
 
 
@@ -189,7 +190,7 @@ def test_candidate_multiple_signals_are_collapsed():
 @pytest.mark.spec("provider-scanner::Fewer than two snapshots")
 def test_scanner_snapshots_by_hash_and_skips_unchanged_diff(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
-    scanner = CatalogScanner(postgres_url)
+    scanner = CatalogScanner(Repository(Database(postgres_url)))
     provider_id, account_id = scanner.upsert_provider_account(
         omniroute_instance_id="local",
         provider_slug="provider-a",
@@ -234,7 +235,7 @@ def test_diff_emits_events_and_false_removal_guard():
 @pytest.mark.spec("provider-scanner::Not both snapshots successful")
 def test_scanner_failed_snapshot_is_not_previous_for_unchanged_detection(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
-    scanner = CatalogScanner(postgres_url)
+    scanner = CatalogScanner(Repository(Database(postgres_url)))
     provider_id, _account_id = scanner.upsert_provider_account(
         omniroute_instance_id="local",
         provider_slug="provider-a",

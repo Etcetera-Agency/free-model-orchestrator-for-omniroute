@@ -1,11 +1,8 @@
-import hashlib
-import json
 from dataclasses import dataclass
 from typing import Any
 
-import psycopg
-
 from fmo.omniroute import OmniRouteRequestError
+from fmo.persistence import Repository
 
 FREE_MODEL_FIELDS = {
     "provider",
@@ -107,73 +104,10 @@ def validate_free_registry_payload(payload: dict[str, Any]) -> list[tuple[str, s
     return drift
 
 
-def persist_free_registry_outcome(database_url: str, outcome: FreeRegistrySyncOutcome) -> str:
-    free_models_hash = _stable_hash(outcome.free_models_payload)
-    rankings_hash = _stable_hash(outcome.rankings_payload)
-    raw_json = {
-        "free_models": outcome.free_models_payload,
-        "rankings": outcome.rankings_payload,
-        "sync_outcome": {
-            "model_count": outcome.model_count,
-            "drift": [list(item) for item in outcome.drift],
-            "errors": outcome.errors,
-        },
-    }
-    with psycopg.connect(database_url) as connection:
-        snapshot_id = connection.execute(
-            """
-            INSERT INTO free_provider_registry_snapshots (
-                free_models_hash,
-                rankings_hashes,
-                raw_json
-            )
-            VALUES (%s, %s, %s)
-            RETURNING id
-            """,
-            (free_models_hash, json.dumps({"free_provider_rankings": rankings_hash}), json.dumps(raw_json)),
-        ).fetchone()[0]
-        for item in outcome.free_models_payload.get("models", []):
-            if item.get("authType") == "web_cookie":
-                continue
-            connection.execute(
-                """
-                INSERT INTO free_model_definitions (
-                    provider_id,
-                    provider_model_id,
-                    display_name,
-                    free_type,
-                    monthly_tokens,
-                    credit_tokens,
-                    omniroute_pool_key,
-                    tos_verdict,
-                    source_snapshot_id
-                )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (provider_id, provider_model_id)
-                DO UPDATE SET
-                    display_name = EXCLUDED.display_name,
-                    free_type = EXCLUDED.free_type,
-                    monthly_tokens = EXCLUDED.monthly_tokens,
-                    credit_tokens = EXCLUDED.credit_tokens,
-                    omniroute_pool_key = EXCLUDED.omniroute_pool_key,
-                    tos_verdict = EXCLUDED.tos_verdict,
-                    source_snapshot_id = EXCLUDED.source_snapshot_id,
-                    last_seen_at = now()
-                """,
-                (
-                    item["provider"],
-                    item["modelId"],
-                    item.get("displayName"),
-                    item["freeType"],
-                    item.get("monthlyTokens") or 0,
-                    item.get("creditTokens") or 0,
-                    item.get("poolKey"),
-                    item.get("tos"),
-                    snapshot_id,
-                ),
-            )
-        connection.commit()
-    return str(snapshot_id)
+def persist_free_registry_outcome(repository: Repository, outcome: FreeRegistrySyncOutcome) -> str:
+    with repository.database.transaction() as transaction:
+        snapshot = repository.free_registry.store_outcome(transaction, outcome=outcome)
+    return str(snapshot["id"])
 
 
 def _client_get(client: Any, path: str) -> dict[str, Any]:
@@ -186,8 +120,3 @@ def _client_get(client: Any, path: str) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise RegistryFetchError("omniroute_free_registry", "invalid_payload")
     return payload
-
-
-def _stable_hash(value: Any) -> str:
-    payload = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()

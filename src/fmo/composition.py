@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from fmo.config import StartupConfig
@@ -11,6 +11,8 @@ from fmo.metadata_sync import sync_external_metadata
 from fmo.omniroute import OmniRouteClient
 from fmo.persistence import Database, Repository
 from fmo.pipeline import CANONICAL_STAGE_NAMES, PipelineContext, PipelineRunner, PipelineRunResult, Stage, StageResult
+from fmo.registry import RegistryFetchError, persist_free_registry_outcome, sync_live_free_registry
+from fmo.scanner import CatalogFetchError, CatalogScanner, scan_live_omniroute_catalogs
 from fmo.scheduler import Scheduler
 
 
@@ -65,41 +67,67 @@ class ComposedRuntime:
 
 
 MetadataSync = Callable[..., object]
+RegistrySync = Callable[[Any], object]
+CatalogScan = Callable[[CatalogScanner, Any, str], object]
+DomainStage = Callable[[str, "StageDependencies", PipelineContext], StageResult]
+
+
+@dataclass(frozen=True)
+class StageDependencies:
+    repository: Repository | None
+    omniroute_client: OmniRouteClient | None
+    config: StartupConfig | None = None
+
+
+@dataclass(frozen=True)
+class StageAdapters:
+    registry_sync: RegistrySync = sync_live_free_registry
+    catalog_scan: CatalogScan = field(default_factory=lambda: _scan_catalogs)
+    domain_stage: DomainStage = field(default_factory=lambda: _domain_stage_adapter)
 
 
 def compose_runtime(
     config: StartupConfig,
     *,
     metadata_sync: MetadataSync | None = None,
+    adapters: StageAdapters | None = None,
 ) -> ComposedRuntime:
     if config.database_url is None:
         raise ValueError("database_url_required")
     repository = Repository(Database(config.database_url))
     client = OmniRouteClient(base_url=config.omniroute_url)
+    dependencies = StageDependencies(repository=repository, omniroute_client=client, config=config)
     return ComposedRuntime(
         repository=repository,
         omniroute_client=client,
-        stages=build_canonical_stages(metadata_sync=metadata_sync),
+        stages=build_canonical_stages(dependencies=dependencies, metadata_sync=metadata_sync, adapters=adapters),
         cron=config.hermes_inventory_cron,
     )
 
 
-def build_canonical_stages(*, metadata_sync: MetadataSync | None = None) -> list[Stage]:
+def build_canonical_stages(
+    *,
+    dependencies: StageDependencies | None = None,
+    metadata_sync: MetadataSync | None = None,
+    adapters: StageAdapters | None = None,
+) -> list[Stage]:
     sync = metadata_sync or sync_external_metadata
+    deps = dependencies or StageDependencies(repository=None, omniroute_client=None)
+    stage_adapters = adapters or StageAdapters()
     stage_by_name = {
         "external-metadata-sync": Stage("external-metadata-sync", _metadata_stage(sync)),
-        "free-candidate-discovery": Stage("free-candidate-discovery", _successful_stage("free-candidate-discovery")),
-        "model-matching": Stage("model-matching", _successful_stage("model-matching")),
-        "quota-research": Stage("quota-research", _successful_stage("quota-research")),
-        "access-classification": Stage("access-classification", _successful_stage("access-classification")),
-        "probing": Stage("probing", _successful_stage("probing")),
-        "telemetry-sync": Stage("telemetry-sync", _successful_stage("telemetry-sync")),
-        "quota-sync": Stage("quota-sync", _successful_stage("quota-sync")),
-        "role-scoring": Stage("role-scoring", _successful_stage("role-scoring")),
-        "allocation": Stage("allocation", _successful_stage("allocation")),
-        "diff": Stage("diff", _successful_stage("diff")),
-        "apply": Stage("apply", _successful_stage("apply")),
-        "audit": Stage("audit", _successful_stage("audit")),
+        "free-candidate-discovery": Stage("free-candidate-discovery", _free_candidate_stage(deps, stage_adapters)),
+        "model-matching": Stage("model-matching", _adapter_stage("model-matching", deps, stage_adapters)),
+        "quota-research": Stage("quota-research", _adapter_stage("quota-research", deps, stage_adapters)),
+        "access-classification": Stage("access-classification", _adapter_stage("access-classification", deps, stage_adapters)),
+        "probing": Stage("probing", _adapter_stage("probing", deps, stage_adapters)),
+        "telemetry-sync": Stage("telemetry-sync", _adapter_stage("telemetry-sync", deps, stage_adapters)),
+        "quota-sync": Stage("quota-sync", _adapter_stage("quota-sync", deps, stage_adapters)),
+        "role-scoring": Stage("role-scoring", _adapter_stage("role-scoring", deps, stage_adapters)),
+        "allocation": Stage("allocation", _adapter_stage("allocation", deps, stage_adapters)),
+        "diff": Stage("diff", _adapter_stage("diff", deps, stage_adapters)),
+        "apply": Stage("apply", _adapter_stage("apply", deps, stage_adapters)),
+        "audit": Stage("audit", _adapter_stage("audit", deps, stage_adapters)),
     }
     return [stage_by_name[name] for name in CANONICAL_STAGE_NAMES]
 
@@ -133,11 +161,55 @@ def _metadata_stage(sync: MetadataSync) -> Callable[[PipelineContext], StageResu
     return run
 
 
-def _successful_stage(name: str) -> Callable[[PipelineContext], StageResult]:
-    def run(_context: PipelineContext) -> StageResult:
-        return StageResult(status="success", idempotency_key=f"{name}:default")
+def _free_candidate_stage(dependencies: StageDependencies, adapters: StageAdapters) -> Callable[[PipelineContext], StageResult]:
+    def run(context: PipelineContext) -> StageResult:
+        command = str(context.config.get("command") or "full")
+        try:
+            if command in {"sync-free-registry", "full"}:
+                outcome = adapters.registry_sync(dependencies.omniroute_client)
+                persist_free_registry_outcome(context.repository, outcome)
+            if command in {"scan-providers", "discover-accounts", "full"}:
+                scanner = CatalogScanner(context.repository)
+                adapters.catalog_scan(scanner, dependencies.omniroute_client, _omniroute_instance_id(dependencies))
+        except RegistryFetchError as exc:
+            return StageResult(status="external_dependency_failed", reason=exc.reason)
+        except CatalogFetchError as exc:
+            return StageResult(status="external_dependency_failed", reason=exc.reason)
+        except Exception as exc:
+            return StageResult(status="external_dependency_failed", reason=str(exc))
+        return StageResult(
+            status="success",
+            changed=command in {"sync-free-registry", "scan-providers", "discover-accounts", "full"},
+            idempotency_key=f"free-candidate-discovery:{command}",
+            details={"adapter": "free-candidate-discovery", "command": command},
+        )
 
     return run
+
+
+def _adapter_stage(
+    name: str,
+    dependencies: StageDependencies,
+    adapters: StageAdapters,
+) -> Callable[[PipelineContext], StageResult]:
+    def run(context: PipelineContext) -> StageResult:
+        return adapters.domain_stage(name, dependencies, context)
+
+    return run
+
+
+def _domain_stage_adapter(name: str, _dependencies: StageDependencies, _context: PipelineContext) -> StageResult:
+    return StageResult(status="success", idempotency_key=f"{name}:domain-adapter", details={"adapter": name})
+
+
+def _scan_catalogs(scanner: CatalogScanner, client: Any, omniroute_instance_id: str) -> object:
+    return scan_live_omniroute_catalogs(scanner, client, omniroute_instance_id=omniroute_instance_id)
+
+
+def _omniroute_instance_id(dependencies: StageDependencies) -> str:
+    if dependencies.config is None:
+        return "default"
+    return dependencies.config.omniroute_url
 
 
 def _latest_role_diagnostic(transaction: Any, role_id: str) -> dict[str, Any] | None:
@@ -172,7 +244,7 @@ def _run_type(command: str) -> str:
 
 
 _COMMAND_STAGE_NAMES = {
-    "sync-free-registry": "external-metadata-sync",
+    "sync-free-registry": "free-candidate-discovery",
     "discover-accounts": "free-candidate-discovery",
     "scan-providers": "free-candidate-discovery",
     "research-quotas": "quota-research",

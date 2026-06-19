@@ -5,11 +5,12 @@ import pytest
 from fmo.artificial_analysis import AAModelMetrics, AASnapshot
 from fmo.bootstrap import build_startup_config
 from fmo.candidates import FreeCandidate
-from fmo.composition import build_canonical_stages, compose_runtime
+from fmo.composition import StageAdapters, build_canonical_stages, compose_runtime
 from fmo.db import MigrationRunner
 from fmo.metadata_sync import MetadataSyncResult
 from fmo.persistence import Database, Repository
-from fmo.pipeline import CANONICAL_STAGE_NAMES
+from fmo.pipeline import CANONICAL_STAGE_NAMES, StageResult
+from fmo.registry import FreeRegistry, FreeRegistrySyncOutcome
 
 
 def valid_env(**overrides):
@@ -24,6 +25,20 @@ def valid_env(**overrides):
     }
     values.update(overrides)
     return values
+
+
+def empty_stage_adapters():
+    return StageAdapters(
+        registry_sync=lambda _client: FreeRegistrySyncOutcome(
+            registry=FreeRegistry(models={}, pool_budgets={}),
+            free_models_payload={"models": []},
+            rankings_payload={"providers": []},
+            model_count=0,
+            drift=[],
+            errors=[],
+        ),
+        catalog_scan=lambda _scanner, _client, _omniroute_instance_id: {},
+    )
 
 
 @pytest.mark.spec("runtime-bootstrap::Production dispatch executes a real stage")
@@ -88,7 +103,7 @@ def test_sync_metadata_stage_persists_candidates_and_aa_snapshot(postgres_url):
             ),
         ),
     )
-    runtime = compose_runtime(config, metadata_sync=lambda **_kwargs: result)
+    runtime = compose_runtime(config, metadata_sync=lambda **_kwargs: result, adapters=empty_stage_adapters())
 
     cli_result = runtime.run_command("sync-metadata", object())
 
@@ -126,7 +141,7 @@ def test_sync_metadata_stage_dry_run_persists_nothing(postgres_url):
         dry_run=True,
     )
     args = type("Args", (), {"dry_run": True})()
-    runtime = compose_runtime(config, metadata_sync=lambda **_kwargs: result)
+    runtime = compose_runtime(config, metadata_sync=lambda **_kwargs: result, adapters=empty_stage_adapters())
 
     cli_result = runtime.run_command("sync-metadata", args)
 
@@ -151,7 +166,7 @@ def test_full_pipeline_persists_metadata_before_downstream_stages(postgres_url):
         },
         aa_snapshot=AASnapshot(index_version="4.1", models=()),
     )
-    runtime = compose_runtime(config, metadata_sync=lambda **_kwargs: result)
+    runtime = compose_runtime(config, metadata_sync=lambda **_kwargs: result, adapters=empty_stage_adapters())
 
     cli_result = runtime.run_command("full", object())
 
@@ -171,7 +186,7 @@ def test_composed_scheduler_run_once_starts_full_pipeline_at_cron(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     config = build_startup_config(valid_env(DATABASE_URL=postgres_url, HERMES_INVENTORY_CRON="0 4 * * *"))
     result = MetadataSyncResult(candidates={}, aa_snapshot=AASnapshot(index_version="4.1", models=()))
-    runtime = compose_runtime(config, metadata_sync=lambda **_kwargs: result)
+    runtime = compose_runtime(config, metadata_sync=lambda **_kwargs: result, adapters=empty_stage_adapters())
 
     cli_result = runtime.run_scheduler_once("2026-06-19T04:00:00Z")
 
@@ -182,3 +197,161 @@ def test_composed_scheduler_run_once_starts_full_pipeline_at_cron(postgres_url):
     assert len(runs) == 1
     assert runs[0]["trigger"] == "scheduled"
     assert runs[0]["run_type"] == "full"
+
+
+@pytest.mark.spec("cli-and-operations::Registry command uses registry sync")
+def test_sync_free_registry_command_uses_registry_adapter_and_persists(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    config = build_startup_config(valid_env(DATABASE_URL=postgres_url))
+    calls = []
+
+    def registry_sync(_client):
+        calls.append("registry")
+        return FreeRegistrySyncOutcome(
+            registry=FreeRegistry(models={}, pool_budgets={}),
+            free_models_payload={
+                "models": [
+                    {
+                        "provider": "gemini",
+                        "modelId": "gemini-2.0-flash",
+                        "displayName": "Gemini 2.0 Flash",
+                        "freeType": "recurring-daily",
+                        "authType": "api_key",
+                    }
+                ]
+            },
+            rankings_payload={"providers": []},
+            model_count=1,
+            drift=[],
+            errors=[],
+        )
+
+    runtime = compose_runtime(
+        config,
+        metadata_sync=lambda **_kwargs: MetadataSyncResult(candidates={}, aa_snapshot=AASnapshot(index_version="4.1", models=())),
+        adapters=StageAdapters(registry_sync=registry_sync),
+    )
+
+    result = runtime.run_command("sync-free-registry", object())
+
+    repository = Repository(Database(postgres_url))
+    with repository.database.transaction() as transaction:
+        stored = transaction.execute("SELECT provider_id, provider_model_id FROM free_model_definitions").fetchall()
+    assert result.exit_code == 0
+    assert calls == ["registry"]
+    assert [(row["provider_id"], row["provider_model_id"]) for row in stored] == [("gemini", "gemini-2.0-flash")]
+
+
+@pytest.mark.spec("cli-and-operations::Provider scan command uses catalog scanner")
+def test_scan_providers_command_uses_catalog_adapter_and_persists(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    config = build_startup_config(valid_env(DATABASE_URL=postgres_url))
+    calls = []
+
+    def catalog_scan(scanner, _client, omniroute_instance_id):
+        calls.append((omniroute_instance_id, type(scanner).__name__))
+        provider_id, account_id = scanner.upsert_provider_account(
+            omniroute_instance_id=omniroute_instance_id,
+            provider_slug="antigravity",
+            provider_type="oauth",
+            account_ref="acct-1",
+        )
+        scanner.store_snapshot(
+            provider_id=provider_id,
+            catalog={"models": [{"id": "antigravity/chat"}]},
+            fetch_status="success",
+        )
+        scanner.upsert_endpoint(account_id, "antigravity/chat")
+        return {"antigravity": "ok"}
+
+    runtime = compose_runtime(
+        config,
+        metadata_sync=lambda **_kwargs: MetadataSyncResult(candidates={}, aa_snapshot=AASnapshot(index_version="4.1", models=())),
+        adapters=StageAdapters(catalog_scan=catalog_scan),
+    )
+
+    result = runtime.run_command("scan-providers", object())
+
+    repository = Repository(Database(postgres_url))
+    with repository.database.transaction() as transaction:
+        endpoint = transaction.execute(
+            """
+            SELECT pe.provider_model_id
+            FROM provider_endpoints pe
+            JOIN provider_accounts pa ON pa.id = pe.provider_account_id
+            JOIN providers p ON p.id = pa.provider_id
+            WHERE p.omniroute_provider_id = 'antigravity'
+            """
+        ).fetchone()
+    assert result.exit_code == 0
+    assert calls == [(config.omniroute_url, "CatalogScanner")]
+    assert endpoint["provider_model_id"] == "antigravity/chat"
+
+
+@pytest.mark.spec("pipeline-orchestration::Full run calls production adapters")
+def test_full_runtime_invokes_every_production_adapter_in_order(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    config = build_startup_config(valid_env(DATABASE_URL=postgres_url))
+    calls = []
+
+    def metadata_sync(**_kwargs):
+        calls.append("external-metadata-sync")
+        return MetadataSyncResult(candidates={}, aa_snapshot=AASnapshot(index_version="4.1", models=()))
+
+    def registry_sync(_client):
+        calls.append("free-candidate-discovery:registry")
+        return FreeRegistrySyncOutcome(
+            registry=FreeRegistry(models={}, pool_budgets={}),
+            free_models_payload={"models": []},
+            rankings_payload={"providers": []},
+            model_count=0,
+            drift=[],
+            errors=[],
+        )
+
+    def catalog_scan(_scanner, _client, _omniroute_instance_id):
+        calls.append("free-candidate-discovery:catalog")
+        return {}
+
+    def domain_stage(name, _dependencies, _context):
+        calls.append(name)
+        return StageResult(status="success", idempotency_key=f"{name}:test")
+
+    runtime = compose_runtime(
+        config,
+        metadata_sync=metadata_sync,
+        adapters=StageAdapters(
+            registry_sync=registry_sync,
+            catalog_scan=catalog_scan,
+            domain_stage=domain_stage,
+        ),
+    )
+
+    result = runtime.run_command("full", object())
+
+    assert result.exit_code == 0
+    assert calls == [
+        "external-metadata-sync",
+        "free-candidate-discovery:registry",
+        "free-candidate-discovery:catalog",
+        "model-matching",
+        "quota-research",
+        "access-classification",
+        "probing",
+        "telemetry-sync",
+        "quota-sync",
+        "role-scoring",
+        "allocation",
+        "diff",
+        "apply",
+        "audit",
+    ]
+
+
+@pytest.mark.spec("runtime-bootstrap::Placeholder stage rejected")
+def test_production_composition_has_no_success_placeholder_helper():
+    source = Path("src/fmo/composition.py").read_text(encoding="utf-8")
+    stages = build_canonical_stages(metadata_sync=lambda **_kwargs: None)
+
+    assert "_successful_stage" not in source
+    assert [stage.name for stage in stages] == CANONICAL_STAGE_NAMES

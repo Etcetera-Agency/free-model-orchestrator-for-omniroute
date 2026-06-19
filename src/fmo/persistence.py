@@ -40,8 +40,10 @@ class Repository:
         object.__setattr__(self, "runs", RunRepository())
         object.__setattr__(self, "providers", ProviderRepository())
         object.__setattr__(self, "provider_accounts", ProviderAccountRepository())
+        object.__setattr__(self, "provider_catalogs", ProviderCatalogRepository())
         object.__setattr__(self, "canonical_models", CanonicalModelRepository())
         object.__setattr__(self, "provider_endpoints", ProviderEndpointRepository())
+        object.__setattr__(self, "free_registry", FreeRegistryRepository())
         object.__setattr__(self, "snapshots", SnapshotRepository())
         object.__setattr__(self, "quota_rules", QuotaRuleRepository())
         object.__setattr__(self, "probes", ProbeRepository())
@@ -292,6 +294,174 @@ class ProviderAccountRepository:
                 "external_account_ref": external_account_ref,
                 "metadata": _jsonb(metadata or {}),
                 "enabled": enabled,
+            },
+        )
+
+    def list_for_provider(
+        self,
+        connection: psycopg.Connection[Record],
+        *,
+        omniroute_instance_id: str,
+        omniroute_provider_id: str,
+    ) -> list[Record]:
+        return _many(
+            connection,
+            """
+            SELECT pa.*
+            FROM provider_accounts pa
+            JOIN providers p ON p.id = pa.provider_id
+            WHERE p.omniroute_instance_id = %(omniroute_instance_id)s
+              AND p.omniroute_provider_id = %(omniroute_provider_id)s
+            ORDER BY pa.first_seen_at, pa.id
+            """,
+            {
+                "omniroute_instance_id": omniroute_instance_id,
+                "omniroute_provider_id": omniroute_provider_id,
+            },
+        )
+
+
+class ProviderCatalogRepository:
+    def store_snapshot(
+        self,
+        connection: psycopg.Connection[Record],
+        *,
+        provider_id: Any,
+        catalog: dict[str, Any],
+        fetch_status: str,
+    ) -> Record:
+        catalog_hash = _content_hash(_canonical_json(catalog))
+        previous = _optional(
+            connection,
+            """
+            SELECT catalog_hash
+            FROM provider_catalog_snapshots
+            WHERE provider_id = %(provider_id)s AND fetch_status = 'success'
+            ORDER BY fetched_at DESC
+            LIMIT 1
+            """,
+            {"provider_id": provider_id},
+        )
+        snapshot = _optional(
+            connection,
+            """
+            INSERT INTO provider_catalog_snapshots (
+              provider_id, catalog_hash, raw_payload, model_count, fetch_status
+            )
+            VALUES (
+              %(provider_id)s, %(catalog_hash)s, %(raw_payload)s,
+              %(model_count)s, %(fetch_status)s
+            )
+            ON CONFLICT (provider_id, catalog_hash) DO NOTHING
+            RETURNING *
+            """,
+            {
+                "provider_id": provider_id,
+                "catalog_hash": catalog_hash,
+                "raw_payload": _jsonb(catalog),
+                "model_count": len(catalog.get("models", [])),
+                "fetch_status": fetch_status,
+            },
+        )
+        if snapshot is None:
+            snapshot = _one(
+                connection,
+                """
+                SELECT *
+                FROM provider_catalog_snapshots
+                WHERE provider_id = %(provider_id)s AND catalog_hash = %(catalog_hash)s
+                """,
+                {"provider_id": provider_id, "catalog_hash": catalog_hash},
+            )
+        snapshot["is_unchanged"] = bool(previous and previous["catalog_hash"] == catalog_hash)
+        return snapshot
+
+
+class FreeRegistryRepository:
+    def store_outcome(
+        self,
+        connection: psycopg.Connection[Record],
+        *,
+        outcome: Any,
+        run_id: Any | None = None,
+    ) -> Record:
+        free_models_hash = _content_hash(_canonical_json(outcome.free_models_payload))
+        rankings_hash = _content_hash(_canonical_json(outcome.rankings_payload))
+        raw_json = {
+            "free_models": outcome.free_models_payload,
+            "rankings": outcome.rankings_payload,
+            "sync_outcome": {
+                "model_count": outcome.model_count,
+                "drift": [list(item) for item in outcome.drift],
+                "errors": outcome.errors,
+            },
+        }
+        snapshot = _one(
+            connection,
+            """
+            INSERT INTO free_provider_registry_snapshots (
+              run_id, free_models_hash, rankings_hashes, raw_json
+            )
+            VALUES (
+              %(run_id)s, %(free_models_hash)s, %(rankings_hashes)s, %(raw_json)s
+            )
+            RETURNING *
+            """,
+            {
+                "run_id": run_id,
+                "free_models_hash": free_models_hash,
+                "rankings_hashes": _jsonb({"free_provider_rankings": rankings_hash}),
+                "raw_json": _jsonb(raw_json),
+            },
+        )
+        for item in outcome.free_models_payload.get("models", []):
+            self.upsert_model_definition(connection, item, snapshot_id=snapshot["id"])
+        return snapshot
+
+    def upsert_model_definition(
+        self,
+        connection: psycopg.Connection[Record],
+        item: dict[str, Any],
+        *,
+        snapshot_id: Any,
+    ) -> Record | None:
+        if item.get("authType") == "web_cookie":
+            return None
+        return _one(
+            connection,
+            """
+            INSERT INTO free_model_definitions (
+              provider_id, provider_model_id, display_name, free_type,
+              monthly_tokens, credit_tokens, omniroute_pool_key, tos_verdict,
+              source_snapshot_id
+            )
+            VALUES (
+              %(provider_id)s, %(provider_model_id)s, %(display_name)s,
+              %(free_type)s, %(monthly_tokens)s, %(credit_tokens)s,
+              %(omniroute_pool_key)s, %(tos_verdict)s, %(source_snapshot_id)s
+            )
+            ON CONFLICT (provider_id, provider_model_id)
+            DO UPDATE SET
+              display_name = EXCLUDED.display_name,
+              free_type = EXCLUDED.free_type,
+              monthly_tokens = EXCLUDED.monthly_tokens,
+              credit_tokens = EXCLUDED.credit_tokens,
+              omniroute_pool_key = EXCLUDED.omniroute_pool_key,
+              tos_verdict = EXCLUDED.tos_verdict,
+              source_snapshot_id = EXCLUDED.source_snapshot_id,
+              last_seen_at = now()
+            RETURNING *
+            """,
+            {
+                "provider_id": item["provider"],
+                "provider_model_id": item["modelId"],
+                "display_name": item.get("displayName"),
+                "free_type": item["freeType"],
+                "monthly_tokens": item.get("monthlyTokens") or 0,
+                "credit_tokens": item.get("creditTokens") or 0,
+                "omniroute_pool_key": item.get("poolKey"),
+                "tos_verdict": item.get("tos"),
+                "source_snapshot_id": snapshot_id,
             },
         )
 

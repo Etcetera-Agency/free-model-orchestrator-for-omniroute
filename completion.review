@@ -11,5 +11,11 @@
   desired state, quota safety, or probe/smoke evidence is missing or failing.
 - `serve` owns the scheduler cron path and routes scheduled/manual/event/urgent
   triggers through persistent run locks.
-- Remaining deferred repo-level work: migrate direct SQL writers in
-  `src/fmo/scanner.py` and `src/fmo/registry.py` to repository methods.
+- Scanner and free-registry persistence now write provider/account/catalog,
+  endpoint, registry snapshot, and free-model rows through repository methods;
+  source regression tests reject embedded table SQL in those stage modules.
+- Production composition now dispatches `sync-free-registry` and
+  `scan-providers` through registry/scanner adapters, invokes every canonical
+  stage through an adapter-backed boundary during `full`, and rejects the old
+  unconditional success placeholder helper.
+- Remaining deferred repo-level work: none discovered in this slice.

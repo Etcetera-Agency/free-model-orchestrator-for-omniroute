@@ -1,12 +1,9 @@
-import hashlib
-import json
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-import psycopg
-
 from fmo.omniroute import OmniRouteRequestError
+from fmo.persistence import Repository
 
 
 @dataclass(frozen=True)
@@ -52,8 +49,8 @@ class CatalogEvent:
 
 
 class CatalogScanner:
-    def __init__(self, database_url: str):
-        self.database_url = database_url
+    def __init__(self, repository: Repository):
+        self.repository = repository
 
     def upsert_provider_account(
         self,
@@ -63,73 +60,80 @@ class CatalogScanner:
         provider_type: str,
         account_ref: str,
     ) -> tuple[str, str]:
-        with psycopg.connect(self.database_url) as connection:
-            provider_id = connection.execute(
-                """
-                INSERT INTO providers (omniroute_instance_id, omniroute_provider_id, provider_type)
-                VALUES (%s, %s, %s)
-                ON CONFLICT (omniroute_instance_id, omniroute_provider_id)
-                DO UPDATE SET provider_type = EXCLUDED.provider_type, last_seen_at = now()
-                RETURNING id
-                """,
-                (omniroute_instance_id, provider_slug, provider_type),
-            ).fetchone()[0]
-            account_id = connection.execute(
-                """
-                INSERT INTO provider_accounts (provider_id, external_account_ref)
-                VALUES (%s, %s)
-                RETURNING id
-                """,
-                (provider_id, account_ref),
-            ).fetchone()[0]
-            connection.commit()
-        return str(provider_id), str(account_id)
+        with self.repository.database.transaction() as transaction:
+            provider = self.repository.providers.upsert(
+                transaction,
+                omniroute_instance_id=omniroute_instance_id,
+                omniroute_provider_id=provider_slug,
+                provider_type=provider_type,
+            )
+            account = self.repository.provider_accounts.upsert(
+                transaction,
+                provider_id=provider["id"],
+                omniroute_connection_id=account_ref,
+                external_account_ref=account_ref,
+            )
+        return str(provider["id"]), str(account["id"])
+
+    def upsert_provider_accounts(
+        self,
+        *,
+        omniroute_instance_id: str,
+        provider_accounts: list[dict[str, Any]],
+    ) -> dict[str, tuple[str, list[str]]]:
+        providers = {}
+        with self.repository.database.transaction() as transaction:
+            for account_payload in provider_accounts:
+                provider_slug = str(account_payload["provider"])
+                account_ref = str(account_payload.get("id") or account_payload.get("name") or provider_slug)
+                provider = self.repository.providers.upsert(
+                    transaction,
+                    omniroute_instance_id=omniroute_instance_id,
+                    omniroute_provider_id=provider_slug,
+                    provider_type=str(account_payload.get("authType") or "unknown"),
+                )
+                self.repository.provider_accounts.upsert(
+                    transaction,
+                    provider_id=provider["id"],
+                    omniroute_connection_id=account_ref,
+                    external_account_ref=account_ref,
+                    metadata=account_payload,
+                )
+                accounts = self.repository.provider_accounts.list_for_provider(
+                    transaction,
+                    omniroute_instance_id=omniroute_instance_id,
+                    omniroute_provider_id=provider_slug,
+                )
+                providers[provider_slug] = (str(provider["id"]), [str(account["id"]) for account in accounts])
+        return providers
 
     def store_snapshot(self, *, provider_id: str, catalog: dict[str, Any], fetch_status: str) -> StoredSnapshot:
-        catalog_hash = _stable_hash(catalog)
-        with psycopg.connect(self.database_url) as connection:
-            previous = connection.execute(
-                """
-                SELECT catalog_hash
-                FROM provider_catalog_snapshots
-                WHERE provider_id = %s AND fetch_status = 'success'
-                ORDER BY fetched_at DESC
-                LIMIT 1
-                """,
-                (provider_id,),
-            ).fetchone()
-            connection.execute(
-                """
-                INSERT INTO provider_catalog_snapshots (provider_id, catalog_hash, raw_payload, model_count, fetch_status)
-                VALUES (%s, %s, %s, %s, %s)
-                ON CONFLICT (provider_id, catalog_hash) DO NOTHING
-                """,
-                (provider_id, catalog_hash, json.dumps(catalog), len(catalog.get("models", [])), fetch_status),
+        with self.repository.database.transaction() as transaction:
+            snapshot = self.repository.provider_catalogs.store_snapshot(
+                transaction,
+                provider_id=provider_id,
+                catalog=catalog,
+                fetch_status=fetch_status,
             )
-            connection.commit()
-        return StoredSnapshot(catalog_hash=catalog_hash, is_unchanged=bool(previous and previous[0] == catalog_hash))
+        return StoredSnapshot(catalog_hash=snapshot["catalog_hash"], is_unchanged=snapshot["is_unchanged"])
 
     def upsert_endpoint(self, provider_account_id: str, provider_model_id: str, model_type: str = "chat") -> ProviderEndpoint:
-        with psycopg.connect(self.database_url) as connection:
-            row = connection.execute(
-                """
-                INSERT INTO provider_endpoints (
-                    provider_account_id,
-                    provider_model_id,
-                    model_type,
-                    lifecycle_status,
-                    access_status,
-                    probe_status
-                )
-                VALUES (%s, %s, %s, 'discovered', 'access_pending', 'not_run')
-                ON CONFLICT (provider_account_id, provider_model_id, model_type)
-                DO UPDATE SET last_seen_at = now()
-                RETURNING id, lifecycle_status, access_status, probe_status
-                """,
-                (provider_account_id, provider_model_id, model_type),
-            ).fetchone()
-            connection.commit()
-        return ProviderEndpoint(id=str(row[0]), lifecycle_status=row[1], access_status=row[2], probe_status=row[3])
+        with self.repository.database.transaction() as transaction:
+            endpoint = self.repository.provider_endpoints.upsert(
+                transaction,
+                provider_account_id=provider_account_id,
+                provider_model_id=provider_model_id,
+                model_type=model_type,
+                lifecycle_status="discovered",
+                access_status="access_pending",
+                probe_status="not_run",
+            )
+        return ProviderEndpoint(
+            id=str(endpoint["id"]),
+            lifecycle_status=endpoint["lifecycle_status"],
+            access_status=endpoint["access_status"],
+            probe_status=endpoint["probe_status"],
+        )
 
 
 def diff_catalogs(previous: list[dict[str, Any]], current: list[dict[str, Any]]) -> list[CatalogEvent]:
@@ -155,20 +159,23 @@ def scan_live_omniroute_catalogs(
     omniroute_instance_id: str,
 ) -> dict[str, CatalogScanResult]:
     provider_accounts = _fetch_provider_accounts(client)
-    provider_ids = _upsert_provider_accounts(scanner, omniroute_instance_id, provider_accounts)
+    provider_refs = scanner.upsert_provider_accounts(
+        omniroute_instance_id=omniroute_instance_id,
+        provider_accounts=provider_accounts,
+    )
     try:
         catalogs = _fetch_models_catalogs(client)
     except CatalogFetchError as exc:
         return {
             provider_slug: _store_failed_catalog(scanner, provider_slug, provider_id, exc)
-            for provider_slug, provider_id in provider_ids.items()
+            for provider_slug, (provider_id, _account_ids) in provider_refs.items()
         }
 
     results = {}
-    for provider_slug, provider_id in provider_ids.items():
+    for provider_slug, (provider_id, account_ids) in provider_refs.items():
         catalog = {"models": catalogs.get(provider_slug, [])}
         snapshot = scanner.store_snapshot(provider_id=provider_id, catalog=catalog, fetch_status="success")
-        for account_id in _account_ids_for_provider(scanner, omniroute_instance_id, provider_slug):
+        for account_id in account_ids:
             for model in catalog["models"]:
                 scanner.upsert_endpoint(account_id, model["id"])
         results[provider_slug] = CatalogScanResult(
@@ -191,24 +198,6 @@ def _fetch_provider_accounts(client: Any) -> list[dict[str, Any]]:
     if not isinstance(connections, list):
         raise CatalogFetchError("omniroute_catalog", "invalid_payload")
     return [connection for connection in connections if isinstance(connection, dict) and connection.get("provider")]
-
-
-def _upsert_provider_accounts(
-    scanner: CatalogScanner,
-    omniroute_instance_id: str,
-    provider_accounts: list[dict[str, Any]],
-) -> dict[str, str]:
-    provider_ids = {}
-    for account in provider_accounts:
-        provider_slug = str(account["provider"])
-        provider_id, _account_id = scanner.upsert_provider_account(
-            omniroute_instance_id=omniroute_instance_id,
-            provider_slug=provider_slug,
-            provider_type=str(account.get("authType") or "unknown"),
-            account_ref=str(account.get("id") or account.get("name") or provider_slug),
-        )
-        provider_ids[provider_slug] = provider_id
-    return provider_ids
 
 
 def _fetch_models_catalogs(client: Any) -> dict[str, list[dict[str, Any]]]:
@@ -242,20 +231,6 @@ def _catalog_provider_slug(model: dict[str, Any]) -> str | None:
     return None
 
 
-def _account_ids_for_provider(scanner: CatalogScanner, omniroute_instance_id: str, provider_slug: str) -> list[str]:
-    with psycopg.connect(scanner.database_url) as connection:
-        rows = connection.execute(
-            """
-            SELECT pa.id
-            FROM provider_accounts pa
-            JOIN providers p ON p.id = pa.provider_id
-            WHERE p.omniroute_instance_id = %s AND p.omniroute_provider_id = %s
-            """,
-            (omniroute_instance_id, provider_slug),
-        ).fetchall()
-    return [str(row[0]) for row in rows]
-
-
 def _store_failed_catalog(
     scanner: CatalogScanner,
     provider_slug: str,
@@ -274,8 +249,3 @@ def _store_failed_catalog(
         snapshot=snapshot,
         error=error,
     )
-
-
-def _stable_hash(value: Any) -> str:
-    payload = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()

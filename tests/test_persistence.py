@@ -4,6 +4,7 @@ import pytest
 
 from fmo.db import MigrationRunner
 from fmo.persistence import Database, Repository
+from fmo.registry import FreeRegistry, FreeRegistrySyncOutcome
 
 
 @pytest.fixture()
@@ -241,3 +242,121 @@ def test_content_hashed_snapshots_are_immutable_and_deduplicated(repository):
     assert second["id"] == first["id"]
     with repository.database.transaction() as transaction:
         assert repository.snapshots.count_by_hash(transaction, first["content_hash"]) == 1
+
+
+@pytest.mark.spec("persistence::Round-trip a provider endpoint")
+@pytest.mark.spec("provider-scanner::Catalog fetched before scan")
+@pytest.mark.spec("provider-scanner::Successful catalog snapshot is stored")
+@pytest.mark.spec("provider-scanner::Unchanged catalog is detected")
+@pytest.mark.spec("persistence::Discovery repository writes remain idempotent")
+def test_provider_catalog_repository_round_trips_and_deduplicates(repository):
+    catalog = {"models": [{"id": "provider-a/chat"}]}
+
+    with repository.database.transaction() as transaction:
+        provider = repository.providers.upsert(
+            transaction,
+            omniroute_instance_id="local",
+            omniroute_provider_id="provider-a",
+            provider_type="oauth",
+        )
+        account = repository.provider_accounts.upsert(
+            transaction,
+            provider_id=provider["id"],
+            omniroute_connection_id="provider-a-account",
+            external_account_ref="provider-a-account",
+        )
+        snapshot = repository.provider_catalogs.store_snapshot(
+            transaction,
+            provider_id=provider["id"],
+            catalog=catalog,
+            fetch_status="success",
+        )
+        repeated = repository.provider_catalogs.store_snapshot(
+            transaction,
+            provider_id=provider["id"],
+            catalog=catalog,
+            fetch_status="success",
+        )
+        endpoint = repository.provider_endpoints.upsert(
+            transaction,
+            provider_account_id=account["id"],
+            provider_model_id="provider-a/chat",
+            lifecycle_status="discovered",
+            access_status="access_pending",
+        )
+
+    assert snapshot["catalog_hash"] == repeated["catalog_hash"]
+    assert repeated["is_unchanged"] is True
+    with repository.database.transaction() as transaction:
+        assert repository.provider_endpoints.get(transaction, endpoint["id"]) == endpoint
+
+
+@pytest.mark.spec("persistence::Duplicate payload is one snapshot")
+@pytest.mark.spec("persistence::Discovery repository writes remain idempotent")
+@pytest.mark.spec("free-provider-registry-sync::Registry fetched before build")
+@pytest.mark.spec("free-provider-registry-sync::Registry outcome is persisted")
+def test_free_registry_repository_round_trips_model_definitions(repository):
+    free_models_payload = {
+        "models": [
+            {
+                "provider": "gemini",
+                "modelId": "gemini-2.0-flash",
+                "displayName": "Gemini 2.0 Flash",
+                "freeType": "recurring-daily",
+                "monthlyTokens": 25000000,
+                "authType": "api_key",
+            },
+            {
+                "provider": "browser-only",
+                "modelId": "cookie-model",
+                "freeType": "cookie",
+                "authType": "web_cookie",
+            },
+        ]
+    }
+    outcome = FreeRegistrySyncOutcome(
+        registry=FreeRegistry(models={}, pool_budgets={}),
+        free_models_payload=free_models_payload,
+        rankings_payload={"providers": []},
+        model_count=2,
+        drift=[],
+        errors=[],
+    )
+
+    with repository.database.transaction() as transaction:
+        snapshot = repository.free_registry.store_outcome(transaction, outcome=outcome)
+        stored = transaction.execute(
+            """
+            SELECT provider_id, provider_model_id, display_name, free_type, monthly_tokens
+            FROM free_model_definitions
+            ORDER BY provider_id, provider_model_id
+            """
+        ).fetchall()
+
+    assert snapshot["raw_json"]["sync_outcome"]["model_count"] == 2
+    assert [(row["provider_id"], row["provider_model_id"]) for row in stored] == [("gemini", "gemini-2.0-flash")]
+    assert stored[0]["display_name"] == "Gemini 2.0 Flash"
+    assert int(stored[0]["monthly_tokens"]) == 25000000
+
+
+@pytest.mark.spec("data-model::Repository is the only writer")
+@pytest.mark.spec("persistence::Discovery writers use repository")
+@pytest.mark.spec("provider-scanner::Scanner does not own SQL writes")
+@pytest.mark.spec("free-provider-registry-sync::Registry writer does not own SQL writes")
+def test_scanner_and_registry_modules_do_not_embed_table_sql():
+    forbidden = (
+        "psycopg",
+        "INSERT INTO providers",
+        "INSERT INTO provider_accounts",
+        "INSERT INTO provider_catalog_snapshots",
+        "INSERT INTO provider_endpoints",
+        "INSERT INTO free_provider_registry_snapshots",
+        "INSERT INTO free_model_definitions",
+        "FROM provider_catalog_snapshots",
+        "FROM free_provider_registry_snapshots",
+        "FROM free_model_definitions",
+    )
+
+    for path in (Path("src/fmo/scanner.py"), Path("src/fmo/registry.py")):
+        source = path.read_text()
+        assert not any(sql in source for sql in forbidden), path

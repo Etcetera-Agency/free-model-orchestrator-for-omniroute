@@ -6,6 +6,7 @@ import pytest
 
 from fmo.db import MigrationRunner
 from fmo.omniroute import OmniRouteClient
+from fmo.persistence import Database, Repository
 from fmo.scanner import CatalogFetchError, CatalogScanner, scan_live_omniroute_catalogs
 
 from _fixtures import fixture_body
@@ -39,7 +40,7 @@ class _CatalogTransport:
 
 def _prepare_scanner(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
-    return CatalogScanner(postgres_url)
+    return CatalogScanner(Repository(Database(postgres_url)))
 
 
 @pytest.mark.spec("provider-scanner::Catalog fetched before scan")

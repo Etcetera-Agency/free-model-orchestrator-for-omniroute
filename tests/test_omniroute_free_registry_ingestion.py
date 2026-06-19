@@ -7,6 +7,7 @@ import pytest
 
 from fmo.db import MigrationRunner
 from fmo.omniroute import OmniRouteClient
+from fmo.persistence import Database, Repository
 from fmo.registry import persist_free_registry_outcome, sync_live_free_registry, validate_free_registry_payload
 
 from _fixtures import fixture_body
@@ -67,9 +68,10 @@ def test_free_registry_sync_persists_snapshot_and_model_definitions(postgres_url
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     transport = _RegistryTransport()
     client = OmniRouteClient(base_url="https://omniroute.test", api_key="manage-key", transport=transport)
+    repository = Repository(Database(postgres_url))
 
     outcome = sync_live_free_registry(client)
-    snapshot_id = persist_free_registry_outcome(postgres_url, outcome)
+    snapshot_id = persist_free_registry_outcome(repository, outcome)
 
     with psycopg.connect(postgres_url) as connection:
         snapshot = connection.execute(
