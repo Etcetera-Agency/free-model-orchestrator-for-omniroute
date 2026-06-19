@@ -51,6 +51,9 @@ def test_committed_transaction_is_visible_to_new_connection(repository):
 
 @pytest.mark.spec("persistence::Round-trip a provider endpoint")
 @pytest.mark.spec("persistence::Round-trip a provider endpoint")
+@pytest.mark.spec("data-model::Role reference type")
+@pytest.mark.spec("data-model::Repository is the only writer")
+@pytest.mark.spec("persistence::Sync writes metadata through the repository")
 def test_domain_repository_round_trips(repository):
     with repository.database.transaction() as transaction:
         provider = repository.providers.upsert(

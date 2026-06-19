@@ -15,6 +15,8 @@ def repository(postgres_url):
 
 
 @pytest.mark.spec("scheduler::Daily lock blocks a concurrent run")
+@pytest.mark.spec("scheduler::Overlapping daily runs")
+@pytest.mark.spec("scheduler::Concurrent start blocked by the lock")
 def test_daily_lock_blocks_concurrent_run(repository):
     locks = RunLockManager(repository)
 
@@ -57,6 +59,8 @@ def test_provider_and_combo_locks_are_independent(repository):
 
 
 @pytest.mark.spec("scheduler::Scheduler fires at cron time")
+@pytest.mark.spec("scheduler::Scheduled daily run")
+@pytest.mark.spec("scheduler::Service fires the daily run")
 def test_scheduler_fires_full_pipeline_at_configured_cron(repository):
     calls = []
 
@@ -81,6 +85,8 @@ def test_scheduler_fires_full_pipeline_at_configured_cron(repository):
 
 @pytest.mark.spec("scheduler::Manual trigger starts a run")
 @pytest.mark.spec("scheduler::Apply pipeline runs")
+@pytest.mark.spec("scheduler::Urgent run after paid charge")
+@pytest.mark.spec("scheduler::Urgent trigger runs out of schedule")
 def test_manual_and_urgent_triggers_start_pipeline_without_combo_test(repository):
     calls = []
 

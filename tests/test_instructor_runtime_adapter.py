@@ -24,6 +24,7 @@ def _transport():
 
 
 @pytest.mark.spec("llm-runtime::All sites use the adapter")
+@pytest.mark.spec("llm-runtime::Add or change runtime defaults")
 def test_all_structured_llm_sites_use_shared_adapter_and_validate_pydantic_outputs():
     transport = _transport()
 

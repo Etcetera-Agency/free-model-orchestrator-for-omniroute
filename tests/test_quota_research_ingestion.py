@@ -35,6 +35,7 @@ class _SearchTransport:
 
 
 @pytest.mark.spec("quota-research::Live search performed")
+@pytest.mark.spec("quota-research::Endpoint absent from OmniRoute registry")
 def test_live_quota_research_calls_omniroute_search_and_extracts_summary_rule():
     transport = _SearchTransport()
     client = OmniRouteClient(base_url="https://omniroute.test", api_key="search-key", transport=transport)

@@ -153,6 +153,7 @@ def test_unknown_omniroute_version_read_only_forbids_apply():
 
 
 @pytest.mark.spec("runtime-bootstrap::Invalid environment fails before running")
+@pytest.mark.spec("environment-and-connections::Secret in repo config")
 def test_startup_validation_fails_before_model_endpoint_call(monkeypatch):
     calls = []
 
@@ -324,6 +325,7 @@ def test_stable_hash_makes_unchanged_inputs_skip_changes():
 
 
 @pytest.mark.spec("environment-and-connections::Building an LLM prompt")
+@pytest.mark.spec("llm-runtime::Edit one prompt")
 def test_llm_prompt_loads_external_file_and_redacts_secrets(tmp_path):
     prompt_file = tmp_path / "prompt.md"
     prompt_file.write_text("Use endpoint {{ endpoint_id }} with {{ OMNIROUTE_API_KEY }}", encoding="utf-8")

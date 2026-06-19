@@ -58,6 +58,7 @@ def test_rollback_uses_runner_outcome():
 
 
 @pytest.mark.spec("cli-and-operations::Dry-run validation")
+@pytest.mark.spec("persistence::Dry-run persists nothing")
 def test_dry_run_stays_local_and_does_not_call_combo_test():
     runner = FakeRunner()
 
@@ -70,6 +71,7 @@ def test_dry_run_stays_local_and_does_not_call_combo_test():
 
 
 @pytest.mark.spec("cli-and-operations::Explain an endpoint")
+@pytest.mark.spec("runtime-bootstrap::Diagnostics read persisted state by default")
 def test_explain_endpoint_and_role_read_diagnostics():
     calls = []
 

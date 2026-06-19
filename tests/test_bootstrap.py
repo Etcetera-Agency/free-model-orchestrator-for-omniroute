@@ -88,6 +88,7 @@ def test_health_check_runs_before_dispatch():
 
 
 @pytest.mark.spec("runtime-bootstrap::Entrypoint uses real arguments")
+@pytest.mark.spec("runtime-bootstrap::Production dispatch executes a real stage")
 def test_main_uses_real_argv_and_validation_state(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     calls = []

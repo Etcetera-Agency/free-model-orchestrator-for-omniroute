@@ -119,6 +119,8 @@ def test_stability_tolerates_missing_score_for_previous_endpoint():
 @pytest.mark.spec("combo-applier::State changed under us")
 @pytest.mark.spec("combo-applier::Smoke test fails")
 @pytest.mark.spec("combo-applier::Manual edit detected")
+@pytest.mark.spec("combo-applier::Failing guard input blocks apply")
+@pytest.mark.spec("combo-applier::Healthy guard inputs allow apply")
 def test_applier_manages_only_fmo_transaction_smoke_rollback_and_drift():
     applier = ComboApplier(current={"fmo-role": ["old"], "foreign": ["x"]})
     assert applier.managed_names() == ["fmo-role"]

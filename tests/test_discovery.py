@@ -103,6 +103,8 @@ def test_models_dev_fetcher_rejects_network_http_json_and_payload_errors():
 @pytest.mark.spec("free-candidate-discovery::Zero-cost provider offering")
 @pytest.mark.spec("free-candidate-discovery::Free token in model id")
 @pytest.mark.spec("free-candidate-discovery::Missing cost is not free")
+@pytest.mark.spec("free-candidate-discovery::Name match stays unconfirmed")
+@pytest.mark.spec("provider-scanner::Non-candidate model")
 def test_candidate_filter_uses_zero_cost_and_standalone_free_only():
     catalog = {
         "providers": {
@@ -124,6 +126,7 @@ def test_candidate_filter_uses_zero_cost_and_standalone_free_only():
 
 
 @pytest.mark.spec("free-candidate-discovery::Same model differs by provider")
+@pytest.mark.spec("system-architecture::Same model on two providers")
 def test_candidate_cost_is_read_per_provider():
     catalog = {
         "providers": {
@@ -300,6 +303,7 @@ def test_usable_capacity_ignores_non_confirmed_and_duplicate_connection_ids():
 
 
 @pytest.mark.spec("free-provider-registry-sync::Shared pool across models")
+@pytest.mark.spec("free-provider-registry-sync::No-auth provider has no connection")
 @pytest.mark.spec("free-provider-registry-sync::Web-cookie provider in registry")
 @pytest.mark.spec("free-provider-registry-sync::Unscored provider")
 def test_free_registry_deduplicates_pool_key_and_excludes_web_cookie():

@@ -2,21 +2,3 @@
 # Remove a line once a test carries @pytest.mark.spec("<that id>").
 # This file must shrink over time; the coverage gate forbids leaving a
 # scenario both here and already covered.
-data-model::Repository is the only writer
-data-model::Role reference type
-environment-and-connections::Secret in repo config
-free-candidate-discovery::Name match stays unconfirmed
-free-provider-registry-sync::No-auth provider has no connection
-llm-runtime::Add or change runtime defaults
-llm-runtime::Edit one prompt
-persistence::Stages do not embed schema SQL
-provider-scanner::Non-candidate model
-quota-research::Endpoint absent from OmniRoute registry
-scheduler::External metadata before discovery and scoring
-scheduler::Metadata sync failure is conservative
-scheduler::Overlapping daily runs
-scheduler::Scheduled daily run
-scheduler::Urgent run after paid charge
-system-architecture::Intraday failure not rebuilt
-system-architecture::Same model on two providers
-telemetry-sync::Daily sync before scoring

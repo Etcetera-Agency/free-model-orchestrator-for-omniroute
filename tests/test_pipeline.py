@@ -35,6 +35,9 @@ def test_starting_run_persists_run_record(repository):
 
 @pytest.mark.spec("pipeline-orchestration::Run is identified")
 @pytest.mark.spec("pipeline-orchestration::Stages run in order")
+@pytest.mark.spec("scheduler::External metadata before discovery and scoring")
+@pytest.mark.spec("telemetry-sync::Daily sync before scoring")
+@pytest.mark.spec("persistence::Stages do not embed schema SQL")
 def test_stages_execute_in_order_and_record_status(repository):
     calls = []
 
@@ -193,6 +196,7 @@ def test_unsafe_apply_outcome_maps_to_code_5(repository):
 
 
 @pytest.mark.spec("pipeline-orchestration::External dependency failure outcome")
+@pytest.mark.spec("scheduler::Metadata sync failure is conservative")
 def test_external_dependency_failure_maps_to_code_4(repository):
     runner = PipelineRunner(
         repository,
