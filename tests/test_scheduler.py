@@ -1,5 +1,9 @@
+import threading
+import time
 from pathlib import Path
 
+import psycopg
+from psycopg.rows import dict_row
 import pytest
 
 from fmo.db import MigrationRunner
@@ -12,6 +16,30 @@ from fmo.scheduler import RunLockManager, Scheduler
 def repository(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     return Repository(Database(postgres_url))
+
+
+def _active_lock_index_definition(connection) -> str | None:
+    row = connection.execute(
+        """
+        SELECT indexdef
+        FROM pg_indexes
+        WHERE schemaname = 'public'
+          AND tablename = 'sync_runs'
+          AND indexname = 'sync_runs_active_lock_name_idx'
+        """
+    ).fetchone()
+    return row[0] if row else None
+
+
+def _assert_active_lock_index(connection) -> None:
+    index_definition = _active_lock_index_definition(connection)
+
+    assert index_definition is not None
+    assert "UNIQUE" in index_definition
+    assert "WHERE" in index_definition
+    assert "run_type = 'lock'::text" in index_definition
+    assert "status = 'held'::text" in index_definition
+    assert "finished_at IS NULL" in index_definition
 
 
 @pytest.mark.spec("scheduler::Daily lock blocks a concurrent run")
@@ -29,6 +57,77 @@ def test_daily_lock_blocks_concurrent_run(repository):
     assert first.acquired is True
     assert second.acquired is False
     assert third.acquired is True
+
+
+@pytest.mark.spec("scheduler::Concurrent repository acquisition has one winner")
+def test_repository_lock_acquire_is_atomic_across_connections(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    results = []
+
+    with psycopg.connect(postgres_url, row_factory=dict_row) as first_connection:
+        first_token = repository.locks.acquire(first_connection, "daily")
+
+        def acquire_second_lock():
+            with psycopg.connect(postgres_url, row_factory=dict_row) as second_connection:
+                second_token = repository.locks.acquire(second_connection, "daily")
+                second_connection.commit()
+            results.append(second_token)
+
+        second = threading.Thread(target=acquire_second_lock)
+        second.start()
+        time.sleep(0.2)
+        first_connection.commit()
+        second.join(timeout=5)
+
+    assert second.is_alive() is False
+    assert len(results) == 1
+    assert [first_token, results[0]].count(None) == 1
+
+    with psycopg.connect(postgres_url) as connection:
+        active_lock_count = connection.execute(
+            """
+            SELECT count(*)
+            FROM sync_runs
+            WHERE run_type = 'lock'
+              AND trigger = 'daily'
+              AND status = 'held'
+              AND finished_at IS NULL
+            """
+        ).fetchone()[0]
+
+    assert active_lock_count == 1
+
+
+def test_fresh_schema_has_active_lock_unique_index(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+
+    with psycopg.connect(postgres_url) as connection:
+        _assert_active_lock_index(connection)
+
+
+def test_lock_index_migration_adds_active_lock_unique_index(postgres_url):
+    migration = Path("reference/db/migrations/0008_v3.20_atomic_run_locks.sql")
+
+    with psycopg.connect(postgres_url, autocommit=True) as connection:
+        connection.execute(
+            """
+            CREATE TABLE sync_runs (
+              id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+              run_type text NOT NULL,
+              trigger text NOT NULL,
+              status text NOT NULL,
+              code_version text NOT NULL,
+              config_hash text NOT NULL,
+              omniroute_version text,
+              started_at timestamptz NOT NULL DEFAULT now(),
+              finished_at timestamptz,
+              error_json jsonb
+            )
+            """
+        )
+        connection.execute(migration.read_text(encoding="utf-8"))
+        _assert_active_lock_index(connection)
 
 
 @pytest.mark.spec("scheduler::Lock released on failure")

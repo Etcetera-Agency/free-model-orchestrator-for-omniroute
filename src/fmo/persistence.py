@@ -150,29 +150,22 @@ class RunRepository:
 
 class LockRepository:
     def acquire(self, connection: psycopg.Connection[Record], name: str) -> str | None:
-        existing = _optional(
-            connection,
-            """
-            SELECT id FROM sync_runs
-            WHERE run_type = 'lock'
-              AND trigger = %(name)s
-              AND status = 'held'
-              AND finished_at IS NULL
-            LIMIT 1
-            """,
-            {"name": name},
-        )
-        if existing:
-            return None
-        row = _one(
+        row = _optional(
             connection,
             """
             INSERT INTO sync_runs (run_type, trigger, status, code_version, config_hash)
             VALUES ('lock', %(name)s, 'held', 'lock', %(name)s)
+            ON CONFLICT (trigger)
+            WHERE run_type = 'lock'
+              AND status = 'held'
+              AND finished_at IS NULL
+            DO NOTHING
             RETURNING id
             """,
             {"name": name},
         )
+        if row is None:
+            return None
         return str(row["id"])
 
     def release(self, connection: psycopg.Connection[Record], token: str) -> None:
@@ -181,7 +174,10 @@ class LockRepository:
             UPDATE sync_runs
             SET status = 'released',
                 finished_at = now()
-            WHERE id = %(id)s AND run_type = 'lock'
+            WHERE id = %(id)s
+              AND run_type = 'lock'
+              AND status = 'held'
+              AND finished_at IS NULL
             """,
             {"id": token},
         )

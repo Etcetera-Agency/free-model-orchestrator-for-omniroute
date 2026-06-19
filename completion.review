@@ -18,4 +18,9 @@
   `scan-providers` through registry/scanner adapters, invokes every canonical
   stage through an adapter-backed boundary during `full`, and rejects the old
   unconditional success placeholder helper.
+- Run-lock acquisition is now database-atomic through a partial unique index on
+  active held lock rows; repository tests cover two independent connections,
+  fresh schema installs, and migration installs.
+- Code Simplifier review cleaned the new scheduler tests by sharing the partial
+  index assertion and making concurrent-thread completion explicit.
 - Remaining deferred repo-level work: none discovered in this slice.
