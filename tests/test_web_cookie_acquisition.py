@@ -51,6 +51,7 @@ def test_acquisition_loads_only_explicit_eligible_web_cookie_session_sources():
     assert acquisitions[-1].failure_mode == "unsupported_auth"
 
 
+@pytest.mark.spec("web-cookie-candidates::Configured session acquired and probed")
 def test_acquisition_respects_eligible_source_allowlist():
     body = _web_cookie_fixture()
     acquisitions = acquire_web_cookie_sessions(

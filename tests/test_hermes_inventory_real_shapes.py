@@ -138,6 +138,7 @@ def test_build_hermes_inventory_records_all_four_consumer_types_with_observed_de
     assert coding.calls_per_run == 5.0
 
 
+@pytest.mark.spec("hermes-inventory::Mixed consumers recorded")
 def test_read_hermes_home_reads_real_directory_layout(tmp_path):
     home = tmp_path / "hermes"
     (home / "cron").mkdir(parents=True)
@@ -186,6 +187,7 @@ def test_command_adapter_returns_real_source_shapes_and_structured_errors(tmp_pa
     assert exc.value.reason == "nonzero_exit"
 
 
+@pytest.mark.spec("hermes-inventory::Command adapter returns real shapes")
 def test_http_adapter_returns_real_source_shapes_and_structured_errors():
     payload = {
         "cron_jobs": load_hermes_fixture("cron_jobs.json"),

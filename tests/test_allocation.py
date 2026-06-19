@@ -102,6 +102,7 @@ def test_heavy_role_priority_combo_skips_second_primary_in_same_pool():
     assert combo.endpoints == ["e1", "e3"]
 
 
+@pytest.mark.spec("role-scorer::Unchanged inputs")
 def test_stability_keeps_order_for_subthreshold_drift():
     current = ["e1", "e2"]
     assert keep_stable_order(current, {"e1": 1.0, "e2": 1.01}, threshold=0.05) == current

@@ -55,6 +55,7 @@ def client():
     return OmniRouteClient(base_url="https://omniroute.test", api_key="manage-key", transport=_FixtureTransport())
 
 
+@pytest.mark.spec("free-provider-registry-sync::Registry fetched before build")
 def test_free_models_fixture_builds_registry(client):
     payload = client.get("/api/free-models")
 
@@ -69,6 +70,7 @@ def test_free_models_fixture_builds_registry(client):
     assert registry.pool_budgets["gemini:gemini-2.0-flash"] == 25000000
 
 
+@pytest.mark.spec("account-discovery::Rate limits unavailable")
 def test_providers_fixture_groups_quota_pools_conservatively(client):
     connections = client.get("/api/providers")["connections"]
 
@@ -83,6 +85,7 @@ def test_providers_fixture_groups_quota_pools_conservatively(client):
     assert pool.independence_status == "assumed_shared"
 
 
+@pytest.mark.spec("account-discovery::Rate-limit fetch unavailable")
 def test_rate_limits_and_rankings_fixtures_have_expected_shape(client):
     rate_limits = client.get("/api/rate-limits")
     rankings = client.get("/api/free-provider-rankings")

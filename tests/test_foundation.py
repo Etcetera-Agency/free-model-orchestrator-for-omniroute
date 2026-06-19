@@ -79,6 +79,7 @@ def test_omniroute_client_auth_request_id_and_retry_after():
     assert first["headers"]["X-Request-Id"]
 
 
+@pytest.mark.spec("omniroute-client::429 with Retry-After")
 def test_omniroute_client_does_not_retry_post_apply():
     transport = FakeTransport([FakeResponse(429, {"error": "slow"}, {"Retry-After": "1"})])
     client = OmniRouteClient(base_url="https://omniroute.test", transport=transport)
@@ -151,6 +152,7 @@ def test_unknown_omniroute_version_read_only_forbids_apply():
     assert unknown.can_apply is False
 
 
+@pytest.mark.spec("runtime-bootstrap::Invalid environment fails before running")
 def test_startup_validation_fails_before_model_endpoint_call(monkeypatch):
     calls = []
 
@@ -273,6 +275,7 @@ def test_forbidden_endpoint_transitions_rejected(state, target):
         transition_endpoint(state, target)
 
 
+@pytest.mark.spec("system-architecture::Missing snapshot blocks apply")
 def test_planned_combo_cannot_apply_without_snapshot():
     with pytest.raises(ValueError):
         transition_combo(ComboState.PLANNED, ComboState.APPLIED)

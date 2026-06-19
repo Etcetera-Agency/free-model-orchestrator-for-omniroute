@@ -41,6 +41,7 @@ def test_lock_context_releases_after_failure(repository):
     assert locks.acquire("combo-apply").acquired is True
 
 
+@pytest.mark.spec("scheduler::Daily lock blocks a concurrent run")
 def test_provider_and_combo_locks_are_independent(repository):
     locks = RunLockManager(repository)
 

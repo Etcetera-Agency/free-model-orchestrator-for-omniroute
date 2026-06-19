@@ -63,6 +63,7 @@ def test_live_quota_fetch_uses_omniroute_fixture_and_recomputes_remaining():
     assert quota.reset_at == now - timedelta(minutes=2) + timedelta(hours=6)
 
 
+@pytest.mark.spec("quota-manager::Quota source unavailable")
 def test_live_quota_stale_source_fails_closed():
     now = datetime(2026, 6, 18, 8, 0, tzinfo=timezone.utc)
     transport = _QuotaTransport(body=_quota_body(generated_at=now - timedelta(hours=2)))

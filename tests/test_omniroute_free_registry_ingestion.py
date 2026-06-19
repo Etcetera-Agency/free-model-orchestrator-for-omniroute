@@ -62,6 +62,7 @@ def test_free_registry_schema_drift_is_reported_from_realistic_payload():
     assert ("models[1]", "missing_field", "freeType") in drift
 
 
+@pytest.mark.spec("persistence::Duplicate payload is one snapshot")
 def test_free_registry_sync_persists_snapshot_and_model_definitions(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     transport = _RegistryTransport()

@@ -47,6 +47,9 @@ def test_all_structured_llm_sites_use_shared_adapter_and_validate_pydantic_outpu
     assert all(call["response_model"] for call in transport.calls)
 
 
+@pytest.mark.spec("llm-runtime::All sites use the adapter")
+@pytest.mark.spec("llm-runtime::PostgreSQL URL redaction")
+@pytest.mark.spec("llm-runtime::Bearer token redaction")
 def test_adapter_redacts_prompt_and_applies_site_limit_before_transport_call():
     calls = []
 

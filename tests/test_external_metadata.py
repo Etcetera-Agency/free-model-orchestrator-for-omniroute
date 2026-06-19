@@ -76,6 +76,7 @@ def test_artificial_analysis_error_does_not_expose_api_key():
     assert "x-api-key" not in str(exc.value)
 
 
+@pytest.mark.spec("role-scorer::Artificial Analysis metadata fetch")
 def test_artificial_analysis_fetcher_normalizes_scoring_metrics():
     payload = {
         "intelligence_index_version": 4.1,
@@ -156,6 +157,7 @@ def test_artificial_analysis_invalid_json_and_network_errors_are_structured():
         assert exc.value.source == "artificial_analysis"
 
 
+@pytest.mark.spec("aa-index-migration::New major index arrives")
 def test_artificial_analysis_snapshot_index_version_feeds_migration_detection():
     payload = {
         "intelligence_index_version": 4.2,
@@ -226,6 +228,7 @@ def test_artificial_analysis_free_snapshot_follows_pagination_and_aggregates():
     ]
 
 
+@pytest.mark.spec("aa-index-migration::AA API key missing")
 def test_artificial_analysis_free_snapshot_requires_api_key_before_network():
     client = PaginatingHttpClient([_aa_page(4.1, ["a"], has_more=False, page=1)])
 
@@ -262,6 +265,7 @@ def test_artificial_analysis_free_snapshot_normalizes_end_to_end_alias():
     assert metrics["median_output_tokens_per_second"] == 19.21
 
 
+@pytest.mark.spec("role-scorer::Artificial Analysis free-tier pagination")
 def test_artificial_analysis_free_fixture_body_parses_with_real_metrics():
     body = fixture_body("artificial_analysis_language_models_free")
     client = FakeHttpClient(FakeResponse(200, body))

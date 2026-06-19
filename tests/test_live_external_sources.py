@@ -46,6 +46,7 @@ def _skip_if_offline(exc: ExternalMetadataError) -> None:
         pytest.skip(f"external source unavailable: {exc}")
 
 
+@pytest.mark.spec("free-candidate-discovery::Fetch models.dev api catalog")
 def test_models_dev_live_catalog_yields_candidates():
     try:
         catalog = fetch_models_dev_catalog(timeout=30)
@@ -63,6 +64,7 @@ def test_models_dev_live_catalog_yields_candidates():
     assert candidates, "live models.dev catalog should surface at least one free candidate"
 
 
+@pytest.mark.spec("role-scorer::Artificial Analysis free-tier pagination")
 def test_artificial_analysis_live_free_snapshot_paginates():
     api_key = _aa_api_key()
     if not api_key:

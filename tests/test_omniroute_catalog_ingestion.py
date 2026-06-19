@@ -111,6 +111,7 @@ def test_live_catalog_scan_records_failed_snapshots_without_overwriting_success(
     assert rows[-1][1]["error"]["reason"] == "http_error"
 
 
+@pytest.mark.spec("free-candidate-discovery::models.dev invalid payload")
 def test_live_catalog_fetch_rejects_invalid_models_payload(postgres_url):
     scanner = _prepare_scanner(postgres_url)
     transport = _CatalogTransport(models_body={"object": "list", "data": {"not": "a list"}})

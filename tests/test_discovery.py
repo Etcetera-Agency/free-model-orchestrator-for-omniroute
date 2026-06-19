@@ -182,6 +182,8 @@ def test_candidate_multiple_signals_are_collapsed():
     assert candidates[("p", "vendor/free-chat")].reasons == ("multiple_signals",)
 
 
+@pytest.mark.spec("provider-scanner::Catalog fetched before scan")
+@pytest.mark.spec("provider-scanner::Fewer than two snapshots")
 def test_scanner_snapshots_by_hash_and_skips_unchanged_diff(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     scanner = CatalogScanner(postgres_url)

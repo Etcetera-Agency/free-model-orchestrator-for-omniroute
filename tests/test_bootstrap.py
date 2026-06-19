@@ -45,6 +45,7 @@ def test_invalid_env_maps_to_exit_3_and_does_not_dispatch(env_patch):
     assert calls == []
 
 
+@pytest.mark.spec("runtime-bootstrap::Invalid environment fails before running")
 def test_build_startup_config_reads_mode_specific_environment():
     filesystem = build_startup_config(valid_env())
     command = build_startup_config(

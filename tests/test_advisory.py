@@ -9,6 +9,8 @@ from fmo.aa_migration import (
 from fmo.smart_review import apply_review_diffs, run_combo_review
 
 
+@pytest.mark.spec("smart-combo-reviewer::Unknown endpoint add")
+@pytest.mark.spec("smart-combo-reviewer::Duplicate add")
 def test_reviewer_single_call_and_forbidden_ops_rejected():
     calls = []
 

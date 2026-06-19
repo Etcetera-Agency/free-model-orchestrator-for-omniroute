@@ -27,6 +27,7 @@ def test_stage_commands_invoke_pipeline_runner(command):
     assert runner.calls[0][1].provider == "openai"
 
 
+@pytest.mark.spec("cli-and-operations::Stage command invokes its stage")
 def test_stage_failure_surfaces_runner_exit_code():
     runner = FakeRunner([CliResult(exit_code=EXIT_CODES["external_dependency_failed"], changed=False)])
 
@@ -46,6 +47,7 @@ def test_apply_and_rollback_surface_guarded_runner_outcomes(exit_code):
     assert result.changed is (exit_code != 5)
 
 
+@pytest.mark.spec("audit-rollback::Roll back a run")
 def test_rollback_uses_runner_outcome():
     runner = FakeRunner([CliResult(exit_code=EXIT_CODES["rollback_failed"], changed=True)])
 
@@ -55,6 +57,7 @@ def test_rollback_uses_runner_outcome():
     assert runner.calls[0][0] == "rollback"
 
 
+@pytest.mark.spec("cli-and-operations::Dry-run validation")
 def test_dry_run_stays_local_and_does_not_call_combo_test():
     runner = FakeRunner()
 

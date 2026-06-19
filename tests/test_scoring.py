@@ -43,6 +43,7 @@ def test_probe_uses_dedicated_route_no_cache_and_capability_suites():
     assert result.suites == ("basic_text", "vision")
 
 
+@pytest.mark.spec("probe-runner::Probe error table")
 def test_probe_error_map_and_promotion_preconditions():
     assert handle_probe_error(402) == ("exclude", "quota_research")
     assert handle_probe_error(429) == ("quota_manager", "no_retry")
@@ -122,6 +123,7 @@ def test_eligibility_filter_returns_distinct_edge_reasons(endpoint_patch, requir
     assert decision.reason == reason
 
 
+@pytest.mark.spec("role-scorer::Missing metric remains missing")
 def test_aa_subscore_missing_metric_redistributes_and_all_missing_unknown():
     score = aa_subscore(
         {"intelligence_index": 50, "agentic_index": 50, "median_end_to_end_seconds": 5},
@@ -135,6 +137,7 @@ def test_aa_subscore_missing_metric_redistributes_and_all_missing_unknown():
     assert unknown.unknown is True
 
 
+@pytest.mark.spec("role-scorer::Missing metric remains missing")
 def test_normalize_degenerate_percentiles_is_zero():
     assert _normalize(50, 100, 100) == 0.0
     assert _normalize(50, 100, 90) == 0.0

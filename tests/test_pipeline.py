@@ -19,6 +19,7 @@ def repository(postgres_url):
     return Repository(Database(postgres_url))
 
 
+@pytest.mark.spec("pipeline-orchestration::Run is identified")
 def test_starting_run_persists_run_record(repository):
     runner = PipelineRunner(repository, stages=[])
 
@@ -171,6 +172,8 @@ def test_runner_never_calls_combo_test(repository):
         ("rollback_failed", 7),
     ],
 )
+@pytest.mark.spec("pipeline-orchestration::Unsafe apply outcome")
+@pytest.mark.spec("pipeline-orchestration::External dependency failure outcome")
 def test_outcomes_map_to_exit_codes(status, exit_code):
     assert outcome_exit_code(status) == exit_code
     assert EXIT_CODES[status] == exit_code

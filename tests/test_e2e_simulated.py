@@ -30,6 +30,7 @@ class SimProbeClient:
         return {"status_code": 200, "content": "ok", "model": payload["model"]}
 
 
+@pytest.mark.spec("scheduler::Apply pipeline runs")
 def test_simulated_daily_batch_builds_and_applies_free_combo():
     candidates = build_free_candidates(
         {
