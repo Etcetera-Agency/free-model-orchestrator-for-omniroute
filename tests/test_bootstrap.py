@@ -5,6 +5,7 @@ import pytest
 from fmo.bootstrap import bootstrap_and_dispatch, build_startup_config
 from fmo.cli import main
 from fmo.db import MigrationRunner
+from fmo.persistence import Database, Repository
 
 
 def valid_env(**overrides):
@@ -38,7 +39,7 @@ def test_invalid_env_maps_to_exit_3_and_does_not_dispatch(env_patch):
         ["full"],
         env=valid_env(**env_patch),
         health_check=lambda: {"ok": True},
-        dispatcher=lambda argv, preconditions_ok: calls.append((argv, preconditions_ok)) or 0,
+        dispatcher=lambda argv, preconditions_ok, config: calls.append((argv, preconditions_ok)) or 0,
     )
 
     assert exit_code == 3
@@ -80,7 +81,7 @@ def test_health_check_runs_before_dispatch():
         ["full"],
         env=valid_env(),
         health_check=lambda: calls.append("health") or {"ok": True},
-        dispatcher=lambda argv, preconditions_ok: calls.append(("dispatch", argv, preconditions_ok)) or 0,
+        dispatcher=lambda argv, preconditions_ok, config: calls.append(("dispatch", argv, preconditions_ok)) or 0,
     )
 
     assert exit_code == 0
@@ -88,7 +89,6 @@ def test_health_check_runs_before_dispatch():
 
 
 @pytest.mark.spec("runtime-bootstrap::Entrypoint uses real arguments")
-@pytest.mark.spec("runtime-bootstrap::Production dispatch executes a real stage")
 def test_main_uses_real_argv_and_validation_state(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     calls = []
@@ -97,8 +97,57 @@ def test_main_uses_real_argv_and_validation_state(postgres_url):
         ["apply", "--dry-run"],
         env=valid_env(DATABASE_URL=postgres_url),
         health_check=lambda: {"ok": True},
-        dispatcher=lambda argv, preconditions_ok: calls.append((argv, preconditions_ok)) or 0,
+        dispatcher=lambda argv, preconditions_ok, config: calls.append((argv, preconditions_ok)) or 0,
     )
 
     assert exit_code == 0
     assert calls == [(["apply", "--dry-run"], True)]
+
+
+@pytest.mark.spec("runtime-bootstrap::Production dispatch executes a real stage")
+def test_production_dispatch_composes_and_runs_stage_without_injected_runner(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+
+    exit_code = main(
+        ["scan-providers"],
+        env=valid_env(DATABASE_URL=postgres_url),
+        health_check=lambda: {"ok": True},
+    )
+
+    repository = Repository(Database(postgres_url))
+    with repository.database.transaction() as transaction:
+        runs = repository.runs.list(transaction)
+    assert exit_code == 0
+    assert len(runs) == 1
+    assert runs[0]["status"] == "success"
+    assert [stage["name"] for stage in runs[0]["error_json"]["stages"]] == ["free-candidate-discovery"]
+
+
+@pytest.mark.spec("runtime-bootstrap::Diagnostics read persisted state by default")
+def test_production_dispatch_reads_diagnostics_without_injected_reader(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    with repository.database.transaction() as transaction:
+        role = repository.roles.upsert(
+            transaction,
+            role_id="coder",
+            requirements={"minimum_context_window": 8192},
+            expected_load={"requests": 1},
+            criticality=5,
+        )
+        repository.allocation_plans.upsert(
+            transaction,
+            role_id=role["id"],
+            status="planned",
+            targets=[],
+            constraint_report={"ok": True},
+            input_state_hash="plan-key",
+        )
+
+    exit_code = main(
+        ["explain-role", "--role", "coder"],
+        env=valid_env(DATABASE_URL=postgres_url),
+        health_check=lambda: {"ok": True},
+    )
+
+    assert exit_code == 0

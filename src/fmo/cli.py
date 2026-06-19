@@ -5,6 +5,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from fmo.bootstrap import bootstrap_and_dispatch
+from fmo.config import StartupConfig
+from fmo.composition import compose_runtime
 from fmo.external_metadata import ExternalMetadataError
 from fmo.metadata_sync import sync_external_metadata
 
@@ -97,7 +99,7 @@ def run_cli(
         return CliResult(exit_code=EXIT_CODES["unsafe_to_apply"], changed=False)
     if args.command in {"explain-endpoint", "explain-role"}:
         return _run_diagnostics(args, diagnostics_reader)
-    if args.command in {"sync-metadata", "full"}:
+    if pipeline_runner is None and args.command in {"sync-metadata", "full"}:
         sync = metadata_sync or sync_external_metadata
         try:
             sync(dry_run=args.dry_run)
@@ -119,15 +121,21 @@ def main(
     *,
     env: dict[str, str] | None = None,
     health_check: Callable[[], dict] | None = None,
-    dispatcher: Callable[[list[str], bool], int] | None = None,
+    dispatcher: Callable[..., int] | None = None,
 ) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     run = dispatcher or _dispatch_cli
     return bootstrap_and_dispatch(args, env=env or os.environ, health_check=health_check, dispatcher=run)
 
 
-def _dispatch_cli(argv: list[str], preconditions_ok: bool) -> int:
-    return run_cli(argv, preconditions_ok=preconditions_ok).exit_code
+def _dispatch_cli(argv: list[str], preconditions_ok: bool, config: StartupConfig) -> int:
+    runtime = compose_runtime(config)
+    return run_cli(
+        argv,
+        preconditions_ok=preconditions_ok,
+        pipeline_runner=runtime.run_command,
+        diagnostics_reader=runtime.read_diagnostics,
+    ).exit_code
 
 
 def _run_diagnostics(args: argparse.Namespace, diagnostics_reader: DiagnosticsReader | None) -> CliResult:

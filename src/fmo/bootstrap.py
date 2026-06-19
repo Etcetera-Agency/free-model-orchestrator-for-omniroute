@@ -7,7 +7,7 @@ from fmo.config import StartupConfig, validate_startup
 from fmo.omniroute import OmniRouteClient
 
 
-Dispatcher = Callable[[list[str], bool], int]
+Dispatcher = Callable[[list[str], bool, StartupConfig], int]
 
 
 def build_startup_config(env: Mapping[str, str] | None = None) -> StartupConfig:
@@ -37,7 +37,7 @@ def bootstrap_and_dispatch(
         validate_startup(config, health_check=health_check or _health_check(config))
     except ValueError:
         return 3
-    return dispatcher(list(argv), True)
+    return dispatcher(list(argv), True, config)
 
 
 def _health_check(config: StartupConfig) -> Callable[[], dict]:
