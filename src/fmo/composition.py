@@ -98,11 +98,19 @@ def stages_for_command(command: str, stages: Sequence[Stage]) -> list[Stage]:
 def _metadata_stage(sync: MetadataSync) -> Callable[[PipelineContext], StageResult]:
     def run(context: PipelineContext) -> StageResult:
         try:
-            sync(dry_run=bool(context.config.get("dry_run", False)))
+            result = sync(dry_run=bool(context.config.get("dry_run", False)))
         except ExternalMetadataError as exc:
             return StageResult(status="external_dependency_failed", reason=exc.reason)
         except Exception as exc:
             return StageResult(status="external_dependency_failed", reason=str(exc))
+        if not bool(context.config.get("dry_run", False)):
+            with context.repository.database.transaction() as transaction:
+                context.repository.external_metadata.store_sync_result(
+                    transaction,
+                    candidates=result.candidates,
+                    aa_snapshot=result.aa_snapshot,
+                    run_id=context.run_id,
+                )
         return StageResult(status="success", changed=not bool(context.config.get("dry_run", False)))
 
     return run
