@@ -27,6 +27,8 @@ Implemented package modules live under `src/fmo/`:
 - Hermes inventory and dynamic role lifecycle.
 - Advisory smart combo review, Artificial Analysis index migration, LLM prompt safety.
 - Web-cookie candidate handling and CLI command surface.
+- Production CLI composition, repository-backed diagnostics, apply guard
+  preconditions, metadata persistence, and scheduler service entrypoint.
 
 OpenSpec living specs are in `openspec/specs/`. Historical/implementation changes
 are in `openspec/changes/`.
@@ -118,6 +120,7 @@ diff
 apply
 rollback
 full
+serve
 explain-endpoint
 explain-role
 aa-index status|analyze|proposal|approve|reject|rollout|rollback
@@ -126,7 +129,7 @@ aa-index status|analyze|proposal|approve|reject|rollout|rollback
 Common flags:
 
 ```text
---dry-run --provider --account --endpoint --role --run-id --force --json --verbose
+--dry-run --provider --account --endpoint --role --run-id --force --json --verbose --run-once
 ```
 
 Exit codes:
@@ -158,7 +161,7 @@ Run a targeted file:
 Validate OpenSpec:
 
 ```bash
-openspec validate --all --strict
+npx --yes @fission-ai/openspec@latest validate --all --strict
 ```
 
 ### Executable-spec coverage gate
@@ -183,8 +186,9 @@ def test_snapshot_cannot_commit():
     ...
 ```
 
-The pending allowlist tracks scenarios not yet bound (mostly scenarios of
-not-yet-implemented change proposals); it must shrink over time, never grow.
+The pending allowlist tracks scenarios not yet bound. It is currently empty and
+must not grow unless a new approved change explicitly carries uncovered
+scenarios during TDD.
 
 ## Safety Model
 
@@ -211,7 +215,7 @@ proposal + tasks
 → targeted pytest
 → full pytest (includes the executable-spec coverage gate)
 → remove the now-covered scenarios from tests/spec_coverage_pending.txt
-→ openspec validate --all --strict
+→ npx --yes @fission-ai/openspec@latest validate --all --strict
 → archive when approved
 ```
 
