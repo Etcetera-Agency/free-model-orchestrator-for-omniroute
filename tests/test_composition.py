@@ -164,3 +164,21 @@ def test_full_pipeline_persists_metadata_before_downstream_stages(postgres_url):
     assert count == 1
     assert stage_names.index("external-metadata-sync") < stage_names.index("free-candidate-discovery")
     assert stage_names.index("external-metadata-sync") < stage_names.index("role-scoring")
+
+
+@pytest.mark.spec("scheduler::Service fires the daily run")
+def test_composed_scheduler_run_once_starts_full_pipeline_at_cron(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    config = build_startup_config(valid_env(DATABASE_URL=postgres_url, HERMES_INVENTORY_CRON="0 4 * * *"))
+    result = MetadataSyncResult(candidates={}, aa_snapshot=AASnapshot(index_version="4.1", models=()))
+    runtime = compose_runtime(config, metadata_sync=lambda **_kwargs: result)
+
+    cli_result = runtime.run_scheduler_once("2026-06-19T04:00:00Z")
+
+    repository = Repository(Database(postgres_url))
+    with repository.database.transaction() as transaction:
+        runs = [run for run in repository.runs.list(transaction) if run["run_type"] == "full"]
+    assert cli_result.exit_code == 0
+    assert len(runs) == 1
+    assert runs[0]["trigger"] == "scheduled"
+    assert runs[0]["run_type"] == "full"

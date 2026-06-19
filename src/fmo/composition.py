@@ -11,6 +11,7 @@ from fmo.metadata_sync import sync_external_metadata
 from fmo.omniroute import OmniRouteClient
 from fmo.persistence import Database, Repository
 from fmo.pipeline import CANONICAL_STAGE_NAMES, PipelineContext, PipelineRunner, PipelineRunResult, Stage, StageResult
+from fmo.scheduler import Scheduler
 
 
 @dataclass(frozen=True)
@@ -27,6 +28,7 @@ class ComposedRuntime:
     repository: Repository
     omniroute_client: OmniRouteClient
     stages: Sequence[Stage]
+    cron: str
 
     def run_command(self, command: str, args: argparse.Namespace) -> RuntimeCliResult:
         selected_stages = stages_for_command(command, self.stages)
@@ -47,6 +49,20 @@ class ComposedRuntime:
             return f"{kind}:{identifier}:not_found"
         return f"{kind}:{identifier}:{row}"
 
+    def run_scheduler_once(self, timestamp: str) -> RuntimeCliResult:
+        scheduler = Scheduler(self.repository, cron=self.cron, pipeline_runner=self.run_pipeline)
+        result = scheduler.tick(timestamp)
+        if result is None:
+            return RuntimeCliResult(exit_code=0, changed=False)
+        return _cli_result(result)
+
+    def run_pipeline(self, trigger: str, run_type: str) -> PipelineRunResult:
+        return PipelineRunner(
+            self.repository,
+            stages=list(self.stages),
+            config={"command": run_type, "dry_run": False},
+        ).run(trigger=trigger, run_type=run_type)
+
 
 MetadataSync = Callable[..., object]
 
@@ -64,6 +80,7 @@ def compose_runtime(
         repository=repository,
         omniroute_client=client,
         stages=build_canonical_stages(metadata_sync=metadata_sync),
+        cron=config.hermes_inventory_cron,
     )
 
 

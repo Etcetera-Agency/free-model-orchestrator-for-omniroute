@@ -1,8 +1,10 @@
 import argparse
 import os
 import sys
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime, timezone
 
 from fmo.bootstrap import bootstrap_and_dispatch
 from fmo.config import StartupConfig
@@ -28,6 +30,7 @@ COMMANDS = [
     "apply",
     "rollback",
     "full",
+    "serve",
     "explain-endpoint",
     "explain-role",
 ]
@@ -54,6 +57,7 @@ class CliResult:
 
 PipelineRunner = Callable[[str, argparse.Namespace], CliResult]
 DiagnosticsReader = Callable[[str, str], str]
+SchedulerRunner = Callable[[str], CliResult]
 
 
 PIPELINE_COMMANDS = {
@@ -93,10 +97,13 @@ def run_cli(
     metadata_sync: Callable[..., object] | None = None,
     pipeline_runner: PipelineRunner | None = None,
     diagnostics_reader: DiagnosticsReader | None = None,
+    scheduler_runner: SchedulerRunner | None = None,
 ) -> CliResult:
     args = parse_args(argv)
     if args.command == "apply" and not preconditions_ok:
         return CliResult(exit_code=EXIT_CODES["unsafe_to_apply"], changed=False)
+    if args.command == "serve":
+        return _run_scheduler(args, scheduler_runner)
     if args.command in {"explain-endpoint", "explain-role"}:
         return _run_diagnostics(args, diagnostics_reader)
     if pipeline_runner is None and args.command in {"sync-metadata", "full"}:
@@ -135,6 +142,7 @@ def _dispatch_cli(argv: list[str], preconditions_ok: bool, config: StartupConfig
         preconditions_ok=preconditions_ok,
         pipeline_runner=runtime.run_command,
         diagnostics_reader=runtime.read_diagnostics,
+        scheduler_runner=runtime.run_scheduler_once,
     ).exit_code
 
 
@@ -152,6 +160,20 @@ def _run_diagnostics(args: argparse.Namespace, diagnostics_reader: DiagnosticsRe
     return CliResult(exit_code=EXIT_CODES["success"], changed=False, output=diagnostics_reader(kind, identifier))
 
 
+def _run_scheduler(args: argparse.Namespace, scheduler_runner: SchedulerRunner | None) -> CliResult:
+    if scheduler_runner is None:
+        return CliResult(exit_code=EXIT_CODES["success"], changed=False)
+    while True:
+        result = scheduler_runner(_utc_timestamp())
+        if args.run_once:
+            return result
+        time.sleep(60)
+
+
+def _utc_timestamp() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
 def _add_common_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--provider")
@@ -162,3 +184,4 @@ def _add_common_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--verbose", action="store_true")
+    parser.add_argument("--run-once", action="store_true")

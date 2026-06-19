@@ -89,3 +89,18 @@ def test_explain_endpoint_and_role_read_diagnostics():
     assert endpoint.output == "endpoint:endpoint-1:score=95 selected"
     assert role.output == "role:coder:score=95 selected"
     assert calls == [("endpoint", "endpoint-1"), ("role", "coder")]
+
+
+@pytest.mark.spec("scheduler::Service fires the daily run")
+def test_serve_run_once_invokes_scheduler_runner():
+    calls = []
+
+    def scheduler_runner(timestamp):
+        calls.append(timestamp)
+        return CliResult(exit_code=0, changed=True)
+
+    result = run_cli(["serve", "--run-once"], preconditions_ok=True, scheduler_runner=scheduler_runner)
+
+    assert result.exit_code == 0
+    assert result.changed is True
+    assert calls and calls[0].endswith("Z")
