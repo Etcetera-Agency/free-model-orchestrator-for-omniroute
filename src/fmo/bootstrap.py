@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import os
 from collections.abc import Callable, Mapping, Sequence
+from typing import Any
 
+from fmo.apply_guard import ApplyPreconditions, check_apply_preconditions
 from fmo.config import StartupConfig, validate_startup
 from fmo.omniroute import OmniRouteClient
+from fmo.persistence import Database, Repository
 
 
 Dispatcher = Callable[[list[str], bool, StartupConfig], int]
@@ -37,7 +40,8 @@ def bootstrap_and_dispatch(
         validate_startup(config, health_check=health_check or _health_check(config))
     except ValueError:
         return 3
-    return dispatcher(list(argv), True, config)
+    preconditions_ok = _apply_preconditions_ok(config) if _requires_apply_preconditions(argv) else True
+    return dispatcher(list(argv), preconditions_ok, config)
 
 
 def _health_check(config: StartupConfig) -> Callable[[], dict]:
@@ -50,3 +54,82 @@ def _health_check(config: StartupConfig) -> Callable[[], dict]:
 
 def _empty_to_none(value: str | None) -> str | None:
     return value or None
+
+
+def _requires_apply_preconditions(argv: Sequence[str]) -> bool:
+    return any(arg == "apply" for arg in argv)
+
+
+def _apply_preconditions_ok(config: StartupConfig) -> bool:
+    if config.database_url is None:
+        return False
+    try:
+        repository = Repository(Database(config.database_url))
+        with repository.database.transaction() as transaction:
+            preconditions = ApplyPreconditions(
+                db_available=_database_available(transaction),
+                snapshot_saved=_snapshot_saved(transaction),
+                desired_state_valid=_desired_state_valid(transaction),
+                quota_safe=_quota_safe(transaction),
+                probes_passed=_probes_passed(transaction),
+            )
+        check_apply_preconditions(preconditions)
+    except Exception:
+        return False
+    return True
+
+
+def _database_available(transaction: Any) -> bool:
+    transaction.execute("SELECT 1")
+    return True
+
+
+def _snapshot_saved(transaction: Any) -> bool:
+    row = transaction.execute(
+        """
+        SELECT 1
+        FROM combo_snapshots
+        WHERE phase IN ('current', 'planned')
+        LIMIT 1
+        """
+    ).fetchone()
+    return row is not None
+
+
+def _desired_state_valid(transaction: Any) -> bool:
+    row = transaction.execute(
+        """
+        SELECT 1
+        FROM allocation_plans
+        WHERE status IN ('planned', 'validated')
+          AND jsonb_array_length(targets) > 0
+        LIMIT 1
+        """
+    ).fetchone()
+    return row is not None
+
+
+def _quota_safe(transaction: Any) -> bool:
+    row = transaction.execute(
+        """
+        SELECT constraint_report
+        FROM allocation_plans
+        WHERE status IN ('planned', 'validated')
+        ORDER BY created_at DESC
+        LIMIT 1
+        """
+    ).fetchone()
+    if row is None:
+        return False
+    report = row["constraint_report"]
+    return isinstance(report, dict) and report.get("ok") is True and report.get("quota_safe") is not False
+
+
+def _probes_passed(transaction: Any) -> bool:
+    row = transaction.execute(
+        """
+        SELECT bool_and(passed) AS passed, count(*) AS total
+        FROM endpoint_probes
+        """
+    ).fetchone()
+    return row is not None and row["total"] > 0 and row["passed"] is True

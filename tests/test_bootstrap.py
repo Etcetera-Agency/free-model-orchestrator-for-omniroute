@@ -94,14 +94,50 @@ def test_main_uses_real_argv_and_validation_state(postgres_url):
     calls = []
 
     exit_code = main(
-        ["apply", "--dry-run"],
+        ["full", "--dry-run"],
         env=valid_env(DATABASE_URL=postgres_url),
         health_check=lambda: {"ok": True},
         dispatcher=lambda argv, preconditions_ok, config: calls.append((argv, preconditions_ok)) or 0,
     )
 
     assert exit_code == 0
-    assert calls == [(["apply", "--dry-run"], True)]
+    assert calls == [(["full", "--dry-run"], True)]
+
+
+@pytest.mark.spec("combo-applier::Failing guard input blocks apply")
+def test_apply_entrypoint_fails_closed_when_guard_inputs_missing(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+
+    exit_code = main(
+        ["apply"],
+        env=valid_env(DATABASE_URL=postgres_url),
+        health_check=lambda: {"ok": True},
+    )
+
+    repository = Repository(Database(postgres_url))
+    with repository.database.transaction() as transaction:
+        assert repository.runs.list(transaction) == []
+    assert exit_code == 5
+
+
+@pytest.mark.spec("runtime-bootstrap::Entrypoint uses real arguments")
+@pytest.mark.spec("combo-applier::Healthy guard inputs allow apply")
+def test_apply_entrypoint_allows_apply_when_guard_inputs_are_healthy(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    _seed_healthy_apply_guard(postgres_url)
+
+    exit_code = main(
+        ["apply"],
+        env=valid_env(DATABASE_URL=postgres_url),
+        health_check=lambda: {"ok": True},
+    )
+
+    repository = Repository(Database(postgres_url))
+    with repository.database.transaction() as transaction:
+        runs = repository.runs.list(transaction)
+    assert exit_code == 0
+    assert len(runs) == 1
+    assert [stage["name"] for stage in runs[0]["error_json"]["stages"]] == ["apply"]
 
 
 @pytest.mark.spec("runtime-bootstrap::Production dispatch executes a real stage")
@@ -151,3 +187,58 @@ def test_production_dispatch_reads_diagnostics_without_injected_reader(postgres_
     )
 
     assert exit_code == 0
+
+
+def _seed_healthy_apply_guard(postgres_url):
+    repository = Repository(Database(postgres_url))
+    with repository.database.transaction() as transaction:
+        provider = repository.providers.upsert(
+            transaction,
+            omniroute_instance_id="local",
+            omniroute_provider_id="openai",
+            provider_type="api",
+        )
+        account = repository.provider_accounts.upsert(
+            transaction,
+            provider_id=provider["id"],
+            omniroute_connection_id="conn-openai",
+        )
+        endpoint = repository.provider_endpoints.upsert(
+            transaction,
+            provider_account_id=account["id"],
+            provider_model_id="gpt-test",
+            lifecycle_status="active",
+            access_status="free_quota_available",
+        )
+        role = repository.roles.upsert(
+            transaction,
+            role_id="coder",
+            requirements={"minimum_context_window": 8192},
+            expected_load={"requests": 1},
+            criticality=5,
+        )
+        repository.combo_snapshots.upsert(
+            transaction,
+            role_id=role["id"],
+            state_hash="current-key",
+            state_json={"models": ["openai/gpt-test"]},
+            phase="current",
+        )
+        repository.allocation_plans.upsert(
+            transaction,
+            role_id=role["id"],
+            status="planned",
+            targets=[{"endpoint_id": str(endpoint["id"])}],
+            constraint_report={"ok": True, "quota_safe": True},
+            input_state_hash="plan-key",
+        )
+        repository.probes.record(
+            transaction,
+            endpoint_id=endpoint["id"],
+            suite_version="v1",
+            probe_type="smoke",
+            request_hash="probe-key",
+            passed=True,
+            started_at="2026-06-18T00:00:00Z",
+            finished_at="2026-06-18T00:00:01Z",
+        )
