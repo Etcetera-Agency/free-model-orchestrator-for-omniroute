@@ -268,7 +268,9 @@ def _command_for_stage(stage_name):
         "telemetry-sync": "sync-telemetry",
         "quota-sync": "sync-quotas",
         "hermes-inventory": "sync-hermes-inventory",
+        "role-lifecycle": "reconcile-roles",
         "role-scoring": "score-roles",
+        "demand-forecast": "forecast-demand",
         "allocation": "allocate",
         "diff": "diff",
         "apply": "apply",
@@ -515,7 +517,9 @@ def test_full_pipeline_runs_through_apply_and_audit(postgres_url):
         "telemetry-sync",
         "quota-sync",
         "hermes-inventory",
+        "role-lifecycle",
         "role-scoring",
+        "demand-forecast",
         "allocation",
         "diff",
         "apply",
@@ -659,6 +663,95 @@ def test_hermes_inventory_stage_missing_env_fails_closed(postgres_url):
     assert role_count == 0
 
 
+@pytest.mark.spec("dynamic-role-lifecycle::Removed role enters grace")
+@pytest.mark.spec("dynamic-role-lifecycle::Role reactivated within grace")
+@pytest.mark.spec("dynamic-role-lifecycle::New role bootstrapped")
+@pytest.mark.spec("pipeline-orchestration::Reconcile and forecast precede allocation")
+def test_role_lifecycle_reconciles_removed_reactivated_and_new_roles(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    with repository.database.transaction() as transaction:
+        repository.roles.upsert(
+            transaction,
+            role_id="removed",
+            requirements={"capabilities": []},
+            expected_load={"requests": 1},
+            criticality=1,
+        )
+        repository.roles.upsert(
+            transaction,
+            role_id="back",
+            requirements={"capabilities": []},
+            expected_load={"requests": 1},
+            criticality=1,
+        )
+        transaction.execute("UPDATE roles SET role_lifecycle_status = 'retiring' WHERE id = 'back'")
+        repository.roles.upsert(
+            transaction,
+            role_id="new",
+            requirements={"capabilities": []},
+            expected_load={"requests": 1},
+            criticality=1,
+        )
+        transaction.execute("UPDATE roles SET role_lifecycle_status = 'bootstrap_pending' WHERE id = 'new'")
+        for role_id in ("back", "new"):
+            repository.role_consumers.upsert(
+                transaction,
+                role_id=role_id,
+                consumer_type="cron_job",
+                consumer_key=f"{role_id}-consumer",
+                cadence="0 4 * * *",
+                calls_per_run=2,
+                source_hash="test",
+            )
+
+    result = run_composed_stage(repository, "role-lifecycle")
+
+    with repository.database.transaction() as transaction:
+        rows = transaction.execute("SELECT id, role_lifecycle_status, missing_since FROM roles ORDER BY id").fetchall()
+    by_role = {row["id"]: row for row in rows}
+    assert result.exit_code == 0
+    assert by_role["removed"]["role_lifecycle_status"] == "retiring"
+    assert by_role["removed"]["missing_since"] is not None
+    assert by_role["back"]["role_lifecycle_status"] == "active"
+    assert by_role["new"]["role_lifecycle_status"] == "bootstrap_pending"
+
+
+@pytest.mark.spec("demand-forecast::Demand comes from the forecast")
+@pytest.mark.spec("demand-forecast::Cold start floor applied")
+@pytest.mark.spec("demand-forecast::Reserve applied once")
+def test_demand_forecast_persists_floor_and_one_time_reserve(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    with repository.database.transaction() as transaction:
+        repository.roles.upsert(
+            transaction,
+            role_id="cold",
+            requirements={"capabilities": []},
+            expected_load={"requests": 0},
+            criticality=1,
+        )
+        transaction.execute("UPDATE roles SET role_lifecycle_status = 'bootstrap_pending' WHERE id = 'cold'")
+
+    first = run_composed_stage(repository, "demand-forecast")
+    second = run_composed_stage(repository, "demand-forecast")
+
+    with repository.database.transaction() as transaction:
+        forecasts = transaction.execute(
+            """
+            SELECT expected_requests, demand_source, base_historical_requests
+            FROM role_demand_forecasts
+            WHERE role_id = 'cold'
+            ORDER BY created_at
+            """
+        ).fetchall()
+    assert first.exit_code == 0
+    assert second.exit_code == 0
+    assert float(forecasts[0]["expected_requests"]) == 1.2
+    assert forecasts[0]["demand_source"] == "bootstrap"
+    assert float(forecasts[1]["expected_requests"]) == 1.0
+
+
 @pytest.mark.spec("pipeline-orchestration::Scoring persists per-role scores")
 def test_role_scoring_stage_persists_per_role_scores(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
@@ -696,6 +789,7 @@ def test_allocation_stage_persists_plan_and_constraint_report(postgres_url):
             calls_per_run=33,
             source_hash="test",
         )
+    run_composed_stage(repository, "demand-forecast", client=client)
 
     result = run_composed_stage(repository, "allocation", client=client)
 
@@ -707,7 +801,7 @@ def test_allocation_stage_persists_plan_and_constraint_report(postgres_url):
     assert plan["status"] == "planned"
     assert len(plan["targets"]) == 1
     assert plan["constraint_report"]["apply"] is True
-    assert plan["constraint_report"]["pool_reports"][next(iter(plan["constraint_report"]["pool_reports"]))]["usage"] == 33.0
+    assert plan["constraint_report"]["pool_reports"][next(iter(plan["constraint_report"]["pool_reports"]))]["usage"] == pytest.approx(39.6)
 
 
 @pytest.mark.spec("pipeline-orchestration::Diff is computed without mutating OmniRoute")
@@ -719,6 +813,7 @@ def test_diff_stage_persists_minimal_diff_without_mutating_omniroute(postgres_ur
     client = PipelineOpsClient()
     prepare_scored_endpoint(repository, client=client)
     run_composed_stage(repository, "role-scoring", client=client)
+    run_composed_stage(repository, "demand-forecast", client=client)
     run_composed_stage(repository, "allocation", client=client)
     llm_runtime = RecordingLlmRuntime(
         review_diffs=[{"op": "add", "role": "routing_fast", "endpoint_id": "reviewer-added"}]
@@ -747,6 +842,7 @@ def test_diff_stage_skips_reviewer_when_site_limit_disabled(postgres_url):
     client = PipelineOpsClient()
     prepare_scored_endpoint(repository, client=client)
     run_composed_stage(repository, "role-scoring", client=client)
+    run_composed_stage(repository, "demand-forecast", client=client)
     run_composed_stage(repository, "allocation", client=client)
     config = build_startup_config(valid_env(DATABASE_URL=postgres_url, LLM_SMART_REVIEW_CALL_LIMIT="0"))
     llm_runtime = RecordingLlmRuntime(review_diffs=[{"op": "add", "role": "routing_fast", "endpoint_id": "x"}])
@@ -770,6 +866,7 @@ def test_apply_stage_mutates_fmo_combo_and_reports_real_smoke_signal(postgres_ur
     client = PipelineOpsClient()
     prepare_scored_endpoint(repository, client=client)
     run_composed_stage(repository, "role-scoring", client=client)
+    run_composed_stage(repository, "demand-forecast", client=client)
     run_composed_stage(repository, "allocation", client=client)
     run_composed_stage(repository, "diff", client=client)
 
@@ -802,6 +899,7 @@ def test_apply_stage_smoke_failure_rolls_back_and_maps_failures(postgres_url):
     client = PipelineOpsClient(smoke_status=500)
     prepare_scored_endpoint(repository, client=client)
     run_composed_stage(repository, "role-scoring", client=client)
+    run_composed_stage(repository, "demand-forecast", client=client)
     run_composed_stage(repository, "allocation", client=client)
     run_composed_stage(repository, "diff", client=client)
 
@@ -823,6 +921,7 @@ def test_audit_stage_persists_records_and_detects_drift(postgres_url):
     client = PipelineOpsClient()
     prepare_scored_endpoint(repository, client=client)
     run_composed_stage(repository, "role-scoring", client=client)
+    run_composed_stage(repository, "demand-forecast", client=client)
     run_composed_stage(repository, "allocation", client=client)
     run_composed_stage(repository, "diff", client=client)
     run_composed_stage(repository, "apply", client=client)
@@ -1297,7 +1396,9 @@ def test_full_runtime_invokes_every_production_adapter_in_order(postgres_url):
         "telemetry-sync",
         "quota-sync",
         "hermes-inventory",
+        "role-lifecycle",
         "role-scoring",
+        "demand-forecast",
         "allocation",
         "diff",
         "apply",

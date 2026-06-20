@@ -2,9 +2,3 @@
 # Remove a line once a test carries @pytest.mark.spec("<that id>").
 # This file must shrink over time; the coverage gate forbids leaving a
 # scenario both here and already covered.
-demand-forecast::Cold start floor applied
-demand-forecast::Demand comes from the forecast
-dynamic-role-lifecycle::New role bootstrapped
-dynamic-role-lifecycle::Removed role enters grace
-dynamic-role-lifecycle::Role reactivated within grace
-pipeline-orchestration::Reconcile and forecast precede allocation

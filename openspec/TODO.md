@@ -1,11 +1,6 @@
 # OpenSpec TODO
 
-## Active Slice Backlog
-
-- `wire-demand-forecast-and-role-lifecycle`: implement and bind executable
-  coverage for forecast-derived demand, cold-start floors, role removal grace,
-  reactivation, new-role bootstrap, and reconcile/forecast-before-allocation
-  ordering.
+No deferred review follow-up work discovered.
 
 ## Dropped (not needed for project essence)
 

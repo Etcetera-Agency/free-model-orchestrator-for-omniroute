@@ -22,10 +22,9 @@ def test_runtime_docs_record_executable_scenario_policy_and_pending_allowlist():
     assert "Executable scenarios" in agents
     assert "@pytest.mark." + "spec(" in agents
     assert "<capability>::<Scenario name>" in agents
-    assert pending_lines
-    assert "wire-demand-forecast-and-role-lifecycle" in todo
+    assert pending_lines == []
     assert "repository methods" in completion_review
     assert "adapter-backed boundary" in completion_review
-    assert "Active Slice Backlog" in todo
-    assert "No deferred review follow-up work discovered." not in todo
+    assert "No deferred review follow-up work discovered." in todo
+    assert "Active Slice Backlog" not in todo
     assert "Active review follow-up slices" not in todo

@@ -18,6 +18,7 @@ from fmo.apply_guard import ApplyPreconditions, check_apply_preconditions
 from fmo.aa_migration import run_migration_agent
 from fmo.config import StartupConfig
 from fmo.external_metadata import ExternalMetadataError
+from fmo.forecast import apply_historical_reserve, cold_start_demand, protected_demand
 from fmo.hermes_inventory import (
     HermesInventoryError,
     Inventory,
@@ -245,7 +246,9 @@ def build_canonical_stages(
         "telemetry-sync": Stage("telemetry-sync", _adapter_stage("telemetry-sync", deps, stage_adapters)),
         "quota-sync": Stage("quota-sync", _adapter_stage("quota-sync", deps, stage_adapters)),
         "hermes-inventory": Stage("hermes-inventory", _adapter_stage("hermes-inventory", deps, stage_adapters)),
+        "role-lifecycle": Stage("role-lifecycle", _adapter_stage("role-lifecycle", deps, stage_adapters)),
         "role-scoring": Stage("role-scoring", _adapter_stage("role-scoring", deps, stage_adapters)),
+        "demand-forecast": Stage("demand-forecast", _adapter_stage("demand-forecast", deps, stage_adapters)),
         "allocation": Stage("allocation", _adapter_stage("allocation", deps, stage_adapters)),
         "diff": Stage("diff", _adapter_stage("diff", deps, stage_adapters)),
         "apply": Stage("apply", _adapter_stage("apply", deps, stage_adapters)),
@@ -343,7 +346,9 @@ def _production_stage_adapters() -> dict[str, StageAdapter]:
         "telemetry-sync": _telemetry_sync_stage,
         "quota-sync": _quota_sync_stage,
         "hermes-inventory": _hermes_inventory_stage,
+        "role-lifecycle": _role_lifecycle_stage,
         "role-scoring": _role_scoring_stage,
+        "demand-forecast": _demand_forecast_stage,
         "allocation": _allocation_stage,
         "diff": _diff_stage,
         "apply": _apply_stage,
@@ -865,6 +870,42 @@ def _run_hermes_inspector(dependencies: StageDependencies, inventory):
         return None
 
 
+def _role_lifecycle_stage(_dependencies: StageDependencies, context: PipelineContext) -> StageResult:
+    with context.repository.database.transaction() as transaction:
+        desired = {
+            row["role_id"]
+            for row in transaction.execute(
+                "SELECT DISTINCT role_id FROM role_consumers WHERE active = true"
+            ).fetchall()
+        }
+        roles = transaction.execute("SELECT id, role_lifecycle_status FROM roles").fetchall()
+        changed = 0
+        for role in roles:
+            if role["id"] in desired and role["role_lifecycle_status"] in {"retiring", "retired_pending_delete"}:
+                transaction.execute(
+                    """
+                    UPDATE roles
+                    SET role_lifecycle_status = 'active',
+                        missing_since = NULL
+                    WHERE id = %(role_id)s
+                    """,
+                    {"role_id": role["id"]},
+                )
+                changed += 1
+            elif role["id"] not in desired and role["role_lifecycle_status"] in {"active", "bootstrap_pending"}:
+                transaction.execute(
+                    """
+                    UPDATE roles
+                    SET role_lifecycle_status = 'retiring',
+                        missing_since = COALESCE(missing_since, now())
+                    WHERE id = %(role_id)s
+                    """,
+                    {"role_id": role["id"]},
+                )
+                changed += 1
+    return _effect_result("role-lifecycle", changed=changed > 0)
+
+
 def _role_scoring_stage(_dependencies: StageDependencies, context: PipelineContext) -> StageResult:
     with context.repository.database.transaction() as transaction:
         roles = transaction.execute("SELECT id, requirements FROM roles ORDER BY id").fetchall()
@@ -919,9 +960,79 @@ def _role_scoring_stage(_dependencies: StageDependencies, context: PipelineConte
     return _effect_result("role-scoring", changed=written > 0)
 
 
+def _demand_forecast_stage(_dependencies: StageDependencies, context: PipelineContext) -> StageResult:
+    with context.repository.database.transaction() as transaction:
+        roles = transaction.execute("SELECT id, role_lifecycle_status FROM roles ORDER BY id").fetchall()
+        consumer_rows = transaction.execute(
+            """
+            SELECT role_id, SUM(calls_per_run) AS calls
+            FROM role_consumers
+            WHERE active = true
+            GROUP BY role_id
+            """
+        ).fetchall()
+        consumer_demand = {row["role_id"]: float(row["calls"] or 0) for row in consumer_rows}
+        written = 0
+        for role in roles:
+            previous = transaction.execute(
+                """
+                SELECT historical_reserve_multiplier
+                FROM role_demand_forecasts
+                WHERE role_id = %(role_id)s
+                  AND historical_reserve_multiplier IS NOT NULL
+                LIMIT 1
+                """,
+                {"role_id": role["id"]},
+            ).fetchone()
+            cold_start = cold_start_demand(
+                schedule=consumer_demand.get(role["id"]),
+                bootstrap=1.0 if role["role_lifecycle_status"] == "bootstrap_pending" else None,
+                role_minimum=1.0,
+                global_minimum=1.0,
+            )
+            reserve = apply_historical_reserve(
+                cold_start.value,
+                multiplier=1.2,
+                already_applied=previous is not None,
+            )
+            protected = protected_demand(expected=reserve.reserved, p95=reserve.reserved, peak_multiplier=1.0)
+            transaction.execute(
+                """
+                INSERT INTO role_demand_forecasts (
+                  role_id, forecast_start, forecast_end, expected_requests,
+                  protected_requests, confidence, input_state_hash, demand_source,
+                  base_historical_requests, historical_reserve_multiplier,
+                  cold_start_safety_multiplier, bootstrap_weight, history_weight,
+                  representative_sample_count, representative_history_ready
+                )
+                VALUES (
+                  %(role_id)s, now(), now() + interval '1 day', %(expected)s,
+                  %(protected)s, 0.8000, %(hash)s, %(source)s,
+                  %(base)s, %(multiplier)s, 1.0, %(bootstrap_weight)s,
+                  %(history_weight)s, %(sample_count)s, %(history_ready)s
+                )
+                """,
+                {
+                    "role_id": role["id"],
+                    "expected": reserve.reserved,
+                    "protected": protected,
+                    "hash": _hash_parts(role["id"], str(reserve.reserved), cold_start.source),
+                    "source": cold_start.source,
+                    "base": reserve.base,
+                    "multiplier": reserve.multiplier,
+                    "bootstrap_weight": 1.0 if cold_start.source == "bootstrap" else 0.0,
+                    "history_weight": 0.0 if cold_start.source == "bootstrap" else 1.0,
+                    "sample_count": 1 if role["id"] in consumer_demand else 0,
+                    "history_ready": role["id"] in consumer_demand,
+                },
+            )
+            written += 1
+    return _effect_result("demand-forecast", changed=written > 0)
+
+
 def _allocation_stage(_dependencies: StageDependencies, context: PipelineContext) -> StageResult:
     with context.repository.database.transaction() as transaction:
-        roles = transaction.execute("SELECT id, expected_load FROM roles ORDER BY id").fetchall()
+        roles = transaction.execute("SELECT id FROM roles ORDER BY id").fetchall()
         score_rows = transaction.execute(
             """
             SELECT DISTINCT ON (rs.role_id, rs.endpoint_id)
@@ -934,19 +1045,18 @@ def _allocation_stage(_dependencies: StageDependencies, context: PipelineContext
             ORDER BY rs.role_id, rs.endpoint_id, rs.calculated_at DESC
             """
         ).fetchall()
-        consumer_demand = {
-            row["role_id"]: float(row["calls"])
+        forecast_demand = {
+            row["role_id"]: float(row["protected_requests"])
             for row in transaction.execute(
                 """
-                SELECT role_id, SUM(calls_per_run) AS calls
-                FROM role_consumers
-                WHERE active = true
-                GROUP BY role_id
+                SELECT DISTINCT ON (role_id) role_id, protected_requests
+                FROM role_demand_forecasts
+                ORDER BY role_id, created_at DESC
                 """
             ).fetchall()
         }
         demand = {
-            role["id"]: consumer_demand.get(role["id"], float((role["expected_load"] or {}).get("requests", 1)))
+            role["id"]: forecast_demand.get(role["id"], cold_start_demand(schedule=None, bootstrap=None, role_minimum=1, global_minimum=1).value)
             for role in roles
         }
         endpoints = [
@@ -1500,7 +1610,9 @@ _COMMAND_STAGE_NAMES = {
     "sync-telemetry": "telemetry-sync",
     "sync-quotas": "quota-sync",
     "sync-hermes-inventory": "hermes-inventory",
+    "reconcile-roles": "role-lifecycle",
     "score-roles": "role-scoring",
+    "forecast-demand": "demand-forecast",
     "allocate": "allocation",
     "diff": "diff",
     "apply": "apply",
