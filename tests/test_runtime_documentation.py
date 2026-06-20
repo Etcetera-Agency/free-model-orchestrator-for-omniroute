@@ -4,10 +4,7 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_ACTIVE_PENDING = {
-    "system-architecture::Refactor preserves behavior",
-    "system-architecture::Stage domains live in separate modules",
-}
+EXPECTED_ACTIVE_PENDING = set()
 
 
 @pytest.mark.spec("runtime-documentation::Active docs state")
@@ -29,10 +26,25 @@ def test_runtime_docs_record_executable_scenario_policy_and_pending_allowlist():
     assert set(pending_lines) == EXPECTED_ACTIVE_PENDING
     assert "repository methods" in completion_review
     assert "adapter-backed boundary" in completion_review
-    for change_id in (
-        "refactor-composition-into-stage-modules",
-    ):
-        assert change_id in todo
-    assert "No deferred review follow-up work discovered outside the active slice queue." in todo
+    assert "No deferred review follow-up work discovered." in todo
     assert "Active Slice Backlog" not in todo
     assert "Active review follow-up slices" not in todo
+
+
+@pytest.mark.spec("system-architecture::Stage domains live in separate modules")
+@pytest.mark.spec("system-architecture::Refactor preserves behavior")
+def test_composition_root_is_thin_and_stage_domains_are_split():
+    root = (ROOT / "src" / "fmo" / "composition.py").read_text(encoding="utf-8")
+    stages = (ROOT / "src" / "fmo" / "composition_stages.py").read_text(encoding="utf-8")
+    aa_index = (ROOT / "src" / "fmo" / "aa_index_runtime.py").read_text(encoding="utf-8")
+    contracts = (ROOT / "src" / "fmo" / "composition_contracts.py").read_text(encoding="utf-8")
+
+    assert root.count("\ndef ") <= 8
+    assert "def _apply_stage" not in root
+    assert "def _quota_research_stage" not in root
+    assert "def _run_aa_index_command" not in root
+    assert "class RuntimeCliResult" not in root
+    assert "def _apply_stage" in stages
+    assert "def _quota_research_stage" in stages
+    assert "def _run_aa_index_command" in aa_index
+    assert "class RuntimeCliResult" in contracts

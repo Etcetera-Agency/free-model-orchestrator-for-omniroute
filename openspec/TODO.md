@@ -1,10 +1,6 @@
 # OpenSpec TODO
 
-## Active slice queue
-
-- [ ] `refactor-composition-into-stage-modules`
-
-No deferred review follow-up work discovered outside the active slice queue.
+No deferred review follow-up work discovered.
 
 ## Dropped (not needed for project essence)
 

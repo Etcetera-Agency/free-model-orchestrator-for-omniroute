@@ -2,5 +2,3 @@
 # Remove a line once a test carries @pytest.mark.spec("<that id>").
 # This file must shrink over time; the coverage gate forbids leaving a
 # scenario both here and already covered.
-system-architecture::Refactor preserves behavior
-system-architecture::Stage domains live in separate modules

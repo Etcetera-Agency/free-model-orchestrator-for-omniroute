@@ -86,4 +86,7 @@
   pre-change combo state, records `rollback_reverted` audit entries, returns
   exit 7 on restore failure, and leaves `aa-index rollback` as the only AA
   threshold rollback path.
+- Composition is now split into a thin root plus `composition_stages`,
+  `aa_index_runtime`, and `composition_contracts`, with a structural test
+  guarding the module boundary and the full suite passing without DB skips.
 - Remaining deferred repo-level work: none discovered in this batch.
