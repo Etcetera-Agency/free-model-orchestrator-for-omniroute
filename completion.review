@@ -22,8 +22,7 @@
   the executable effect harness rejects `success` results that lack a declared
   repository write, OmniRoute call, or idempotent no-change effect.
 - Remaining active OpenSpec slices are tracked in `openspec/TODO.md` and
-  `tests/spec_coverage_pending.txt`: AA index CLI dispatch and demand
-  forecast/role lifecycle.
+  `tests/spec_coverage_pending.txt`: demand forecast/role lifecycle.
 - Production composition now wires `model-matching`, `quota-research`, and
   `access-classification` to their domain modules. Matching writes canonical
   endpoint bindings, quota research writes content-hashed summary snapshots and
@@ -51,6 +50,10 @@
   `role-scoring`, uses the selected Hermes source adapter, persists inventory
   runs and role consumers, bootstraps new roles, runs the Inspector prompt-only,
   and lets allocation consume Hermes-derived `calls_per_run` demand.
+- `aa-index` CLI commands now dispatch through the runtime handler. Analyze and
+  proposal steps run `run_migration_agent` through the shared runtime, persist
+  advisory threshold proposals, and deterministic approve/rollout/rollback
+  paths own threshold activation and rollback.
 - Run-lock acquisition is now database-atomic through a partial unique index on
   active held lock rows; repository tests cover two independent connections,
   fresh schema installs, and migration installs.
@@ -58,4 +61,4 @@
   index assertion and making concurrent-thread completion explicit.
 - Remaining deferred repo-level work is the active slice backlog listed in
   `openspec/TODO.md`; no additional review follow-up was discovered for
-  `wire-hermes-inventory-source`.
+  `wire-aa-index-cli-dispatch`.

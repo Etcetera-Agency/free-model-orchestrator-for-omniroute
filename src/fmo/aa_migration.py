@@ -46,17 +46,22 @@ def run_migration_agent(instructor_call, selected_model: dict | None) -> dict:
     if selected_model is None:
         return {"status": "waiting_for_model"}
     try:
-        proposal = complete_with_adapter(
-            instructor_call,
-            site=LlmSiteConfig(
-                name="aa-index-migration",
-                model=selected_model.get("endpoint", "omniroute/free-migration"),
-                max_prompt_chars=4000,
-                advisory=True,
-            ),
-            context={"prompt": json.dumps(selected_model, sort_keys=True)},
-            response_model=MigrationProposalResponse,
+        site = LlmSiteConfig(
+            name="aa-index-migration",
+            model=selected_model.get("endpoint", "omniroute/free-migration"),
+            max_prompt_chars=4000,
+            advisory=True,
         )
+        context = {"prompt": json.dumps(selected_model, sort_keys=True)}
+        if hasattr(instructor_call, "complete"):
+            proposal = instructor_call.complete(site=site, context=context, response_model=MigrationProposalResponse)
+        else:
+            proposal = complete_with_adapter(
+                instructor_call,
+                site=site,
+                context=context,
+                response_model=MigrationProposalResponse,
+            )
     except Exception:
         return {"status": "advisory_unavailable"}
     return proposal.model_dump()

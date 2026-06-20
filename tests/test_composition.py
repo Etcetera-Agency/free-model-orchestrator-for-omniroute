@@ -18,6 +18,7 @@ from fmo.composition import (
     stages_for_command,
 )
 from fmo.db import MigrationRunner
+from fmo.aa_migration import MigrationProposalResponse
 from fmo.hermes_inventory import Consumer, Inventory, InspectorForecastResponse
 from fmo.metadata_sync import MetadataSyncResult
 from fmo.persistence import Database, Repository
@@ -188,6 +189,11 @@ class RecordingLlmRuntime:
                 average_output_tokens=50,
                 confidence="medium",
             )
+        if response_model is MigrationProposalResponse:
+            return response_model(
+                index_version="4.2",
+                roles={"routing_fast": {"metric": "intelligence_index", "threshold": 60}},
+            )
         raise AssertionError(f"unexpected response model {response_model}")
 
 
@@ -203,6 +209,11 @@ class FakeInstructorCompletions:
     def create(self, **kwargs):
         self.calls.append(kwargs)
         response_model = kwargs["response_model"]
+        if response_model is MigrationProposalResponse:
+            return response_model(
+                index_version="4.2",
+                roles={"routing_fast": {"metric": "intelligence_index", "threshold": 60}},
+            )
         return response_model(metric="requests", amount=1, window="day", evidence=["fixture"], hard_stop=True)
 
 
@@ -939,6 +950,78 @@ def test_llm_model_selection_returns_none_without_catalog_or_bootstrap(postgres_
     config = build_startup_config(valid_env(DATABASE_URL=postgres_url))
 
     assert select_llm_model(repository, config) is None
+
+
+@pytest.mark.spec("aa-index-migration::Advisory proposal generated")
+@pytest.mark.spec("aa-index-migration::Deterministic approval and rollout")
+def test_aa_index_runtime_generates_approves_rolls_out_and_rolls_back(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    seed_confirmed_llm_candidate(repository, model_id="free-migration", intelligence_index=88)
+    with repository.database.transaction() as transaction:
+        transaction.execute("UPDATE artificial_analysis_model_metrics SET index_version = '4.2'")
+        repository.roles.upsert(
+            transaction,
+            role_id="routing_fast",
+            requirements={"capabilities": []},
+            expected_load={"requests": 1},
+            criticality=1,
+        )
+    config = build_startup_config(valid_env(DATABASE_URL=postgres_url))
+    fake_instructor_client = FakeInstructorClient()
+    runtime = compose_runtime(
+        config,
+        adapters=StageAdapters(
+            instructor_from_openai=lambda _client: fake_instructor_client,
+            openai_client_factory=lambda **kwargs: FakeOpenAIClient(**kwargs),
+            hermes_inventory=lambda _config: hermes_inventory_fixture(),
+        ),
+    )
+
+    proposal = runtime.run_aa_index("analyze", object())
+    approved = runtime.run_aa_index("approve", object())
+    rolled_out = runtime.run_aa_index("rollout", object())
+    rolled_back = runtime.run_aa_index("rollback", object())
+
+    with repository.database.transaction() as transaction:
+        migration = transaction.execute("SELECT status, threshold_proposal_json FROM artificial_analysis_index_migrations").fetchone()
+        threshold = transaction.execute("SELECT role_id, metric, threshold_value, is_active FROM artificial_analysis_threshold_versions").fetchone()
+    assert proposal.exit_code == 0
+    assert approved.exit_code == 0
+    assert rolled_out.exit_code == 0
+    assert rolled_back.exit_code == 0
+    assert fake_instructor_client.chat.completions.calls[0]["model"] == "free-migration"
+    assert migration["status"] == "rolled_back"
+    assert migration["threshold_proposal_json"]["roles"]["routing_fast"]["threshold"] == 60
+    assert threshold["role_id"] == "routing_fast"
+    assert threshold["metric"] == "intelligence_index"
+    assert float(threshold["threshold_value"]) == 60.0
+    assert threshold["is_active"] is False
+
+
+@pytest.mark.spec("aa-index-migration::AA unavailable freezes thresholds")
+@pytest.mark.spec("cli-and-operations::aa-index failure maps to an exit code")
+def test_aa_index_analyze_fails_closed_without_aa_snapshot_or_model(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    config = build_startup_config(valid_env(DATABASE_URL=postgres_url))
+    runtime = compose_runtime(
+        config,
+        adapters=StageAdapters(
+            instructor_from_openai=lambda _client: FakeInstructorClient(),
+            openai_client_factory=lambda **kwargs: FakeOpenAIClient(**kwargs),
+            hermes_inventory=lambda _config: hermes_inventory_fixture(),
+        ),
+    )
+
+    result = runtime.run_aa_index("analyze", object())
+
+    with runtime.repository.database.transaction() as transaction:
+        migration_count = transaction.execute("SELECT count(*) AS total FROM artificial_analysis_index_migrations").fetchone()["total"]
+        combo_count = transaction.execute("SELECT count(*) AS total FROM combo_snapshots WHERE omniroute_combo_id LIKE 'fmo-%'").fetchone()["total"]
+    assert result.exit_code == 4
+    assert result.error_reason == "aa_unavailable"
+    assert migration_count == 0
+    assert combo_count == 0
 
 
 @pytest.mark.spec("persistence::Sync writes metadata through the repository")

@@ -2,11 +2,6 @@
 # Remove a line once a test carries @pytest.mark.spec("<that id>").
 # This file must shrink over time; the coverage gate forbids leaving a
 # scenario both here and already covered.
-aa-index-migration::AA unavailable freezes thresholds
-aa-index-migration::Advisory proposal generated
-aa-index-migration::Deterministic approval and rollout
-cli-and-operations::aa-index failure maps to an exit code
-cli-and-operations::aa-index subcommand routes to the handler
 demand-forecast::Cold start floor applied
 demand-forecast::Demand comes from the forecast
 dynamic-role-lifecycle::New role bootstrapped

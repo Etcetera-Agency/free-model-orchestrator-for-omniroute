@@ -59,6 +59,7 @@ class CliResult:
 PipelineRunner = Callable[[str, argparse.Namespace], CliResult]
 DiagnosticsReader = Callable[[str, str], str]
 SchedulerRunner = Callable[[str], CliResult]
+AaIndexHandler = Callable[[str, argparse.Namespace], CliResult]
 
 
 PIPELINE_COMMANDS = {
@@ -71,6 +72,7 @@ PIPELINE_COMMANDS = {
     "probe-models",
     "sync-telemetry",
     "sync-quotas",
+    "sync-hermes-inventory",
     "score-roles",
     "allocate",
     "diff",
@@ -99,8 +101,11 @@ def run_cli(
     pipeline_runner: PipelineRunner | None = None,
     diagnostics_reader: DiagnosticsReader | None = None,
     scheduler_runner: SchedulerRunner | None = None,
+    aa_index_handler: AaIndexHandler | None = None,
 ) -> CliResult:
     args = parse_args(argv)
+    if args.command == "aa-index":
+        return _run_aa_index(args, aa_index_handler)
     if args.command == "apply" and not preconditions_ok:
         return CliResult(exit_code=EXIT_CODES["unsafe_to_apply"], changed=False)
     if args.command == "serve":
@@ -144,7 +149,14 @@ def _dispatch_cli(argv: list[str], preconditions_ok: bool, config: StartupConfig
         pipeline_runner=runtime.run_command,
         diagnostics_reader=runtime.read_diagnostics,
         scheduler_runner=runtime.run_scheduler_once,
+        aa_index_handler=runtime.run_aa_index,
     ).exit_code
+
+
+def _run_aa_index(args: argparse.Namespace, handler: AaIndexHandler | None) -> CliResult:
+    if handler is None:
+        return CliResult(exit_code=EXIT_CODES["validation_failed"], changed=False, error_reason="aa_index_handler_required")
+    return handler(args.aa_command, args)
 
 
 def _run_diagnostics(args: argparse.Namespace, diagnostics_reader: DiagnosticsReader | None) -> CliResult:

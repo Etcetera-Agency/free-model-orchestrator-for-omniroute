@@ -15,6 +15,7 @@ from fmo.access import classify_access
 from fmo.allocation import allocate_globally, build_priority_combo, validate_plan
 from fmo.applier import ComboApplier
 from fmo.apply_guard import ApplyPreconditions, check_apply_preconditions
+from fmo.aa_migration import run_migration_agent
 from fmo.config import StartupConfig
 from fmo.external_metadata import ExternalMetadataError
 from fmo.hermes_inventory import (
@@ -59,6 +60,8 @@ class ComposedRuntime:
     omniroute_client: OmniRouteClient
     stages: Sequence[Stage]
     cron: str
+    llm_runtime: SharedInstructorRuntime
+    config: StartupConfig
 
     def run_command(self, command: str, args: argparse.Namespace) -> RuntimeCliResult:
         selected_stages = stages_for_command(command, self.stages)
@@ -92,6 +95,9 @@ class ComposedRuntime:
             stages=list(self.stages),
             config={"command": run_type, "dry_run": False},
         ).run(trigger=trigger, run_type=run_type)
+
+    def run_aa_index(self, command: str, _args: argparse.Namespace) -> RuntimeCliResult:
+        return _run_aa_index_command(self.repository, self.llm_runtime, self.config, command)
 
 
 MetadataSync = Callable[..., object]
@@ -146,6 +152,8 @@ def compose_runtime(
         omniroute_client=client,
         stages=build_canonical_stages(dependencies=dependencies, metadata_sync=metadata_sync, adapters=selected_adapters),
         cron=config.hermes_inventory_cron,
+        llm_runtime=llm_runtime,
+        config=config,
     )
 
 
@@ -1138,6 +1146,172 @@ def _audit_stage(dependencies: StageDependencies, context: PipelineContext) -> S
             )
             written += 1
     return _effect_result("audit", changed=written > 0)
+
+
+def _run_aa_index_command(
+    repository: Repository,
+    llm_runtime: SharedInstructorRuntime,
+    config: StartupConfig,
+    command: str,
+) -> RuntimeCliResult:
+    if command == "status":
+        return RuntimeCliResult(exit_code=0, changed=False, output="ok")
+    if command in {"analyze", "proposal"}:
+        return _run_aa_index_proposal(repository, llm_runtime, config)
+    if command == "approve":
+        return _update_latest_aa_migration(repository, from_status="proposed", to_status="approved", changed=True)
+    if command == "reject":
+        return _update_latest_aa_migration(repository, from_status="proposed", to_status="rejected", changed=True)
+    if command == "rollout":
+        return _rollout_latest_aa_migration(repository)
+    if command == "rollback":
+        return _rollback_latest_aa_migration(repository)
+    return RuntimeCliResult(exit_code=3, changed=False, error_reason="unknown_aa_index_command")
+
+
+def _run_aa_index_proposal(repository: Repository, llm_runtime: SharedInstructorRuntime, config: StartupConfig) -> RuntimeCliResult:
+    with repository.database.transaction() as transaction:
+        latest = transaction.execute(
+            """
+            SELECT index_version
+            FROM artificial_analysis_model_metrics
+            ORDER BY fetched_at DESC
+            LIMIT 1
+            """
+        ).fetchone()
+    if latest is None:
+        return RuntimeCliResult(exit_code=4, changed=False, error_reason="aa_unavailable")
+    model = select_llm_model(repository, config)
+    if model is None:
+        return RuntimeCliResult(exit_code=4, changed=False, error_reason="migration_model_unavailable")
+    proposal = run_migration_agent(llm_runtime, {"endpoint": model, "available": True})
+    if proposal.get("status") in {"waiting_for_model", "advisory_unavailable"}:
+        return RuntimeCliResult(exit_code=4, changed=False, error_reason=str(proposal.get("status")))
+    with repository.database.transaction() as transaction:
+        transaction.execute(
+            """
+            INSERT INTO artificial_analysis_index_migrations (
+              new_index_version, change_type, status, baseline_snapshot_json,
+              threshold_proposal_json, llm_proposal_json
+            )
+            VALUES (
+              %(version)s, 'major', 'proposed', '{}'::jsonb,
+              %(proposal)s, %(proposal)s
+            )
+            """,
+            {"version": latest["index_version"], "proposal": Jsonb(proposal)},
+        )
+    return RuntimeCliResult(exit_code=0, changed=True)
+
+
+def _update_latest_aa_migration(
+    repository: Repository,
+    *,
+    from_status: str,
+    to_status: str,
+    changed: bool,
+) -> RuntimeCliResult:
+    with repository.database.transaction() as transaction:
+        row = transaction.execute(
+            """
+            UPDATE artificial_analysis_index_migrations
+            SET status = %(to_status)s,
+                approved_at = CASE WHEN %(to_status)s = 'approved' THEN now() ELSE approved_at END,
+                rolled_back_at = CASE WHEN %(to_status)s = 'rolled_back' THEN now() ELSE rolled_back_at END,
+                updated_at = now()
+            WHERE id = (
+              SELECT id
+              FROM artificial_analysis_index_migrations
+              WHERE status = %(from_status)s
+              ORDER BY created_at DESC
+              LIMIT 1
+            )
+            RETURNING id
+            """,
+            {"from_status": from_status, "to_status": to_status},
+        ).fetchone()
+    if row is None:
+        return RuntimeCliResult(exit_code=3, changed=False, error_reason="migration_not_found")
+    return RuntimeCliResult(exit_code=0, changed=changed)
+
+
+def _rollout_latest_aa_migration(repository: Repository) -> RuntimeCliResult:
+    with repository.database.transaction() as transaction:
+        row = transaction.execute(
+            """
+            SELECT id, new_index_version, threshold_proposal_json
+            FROM artificial_analysis_index_migrations
+            WHERE status = 'approved'
+            ORDER BY created_at DESC
+            LIMIT 1
+            """
+        ).fetchone()
+        if row is None:
+            return RuntimeCliResult(exit_code=3, changed=False, error_reason="migration_not_found")
+        for role_id, policy in (row["threshold_proposal_json"].get("roles") or {}).items():
+            transaction.execute(
+                """
+                UPDATE artificial_analysis_threshold_versions
+                SET is_active = false
+                WHERE role_id = %(role_id)s
+                """,
+                {"role_id": role_id},
+            )
+            transaction.execute(
+                """
+                INSERT INTO artificial_analysis_threshold_versions (
+                  role_id, metric, threshold_value, index_version, migration_id, is_active
+                )
+                VALUES (
+                  %(role_id)s, %(metric)s, %(threshold)s, %(version)s, %(migration_id)s, true
+                )
+                """,
+                {
+                    "role_id": role_id,
+                    "metric": policy["metric"],
+                    "threshold": policy.get("threshold", policy.get("threshold_value", 0)),
+                    "version": row["new_index_version"],
+                    "migration_id": row["id"],
+                },
+            )
+        transaction.execute(
+            """
+            UPDATE artificial_analysis_index_migrations
+            SET status = 'rolled_out', rolled_out_at = now(), updated_at = now()
+            WHERE id = %(id)s
+            """,
+            {"id": row["id"]},
+        )
+    return RuntimeCliResult(exit_code=0, changed=True)
+
+
+def _rollback_latest_aa_migration(repository: Repository) -> RuntimeCliResult:
+    with repository.database.transaction() as transaction:
+        row = transaction.execute(
+            """
+            UPDATE artificial_analysis_index_migrations
+            SET status = 'rolled_back', rolled_back_at = now(), updated_at = now()
+            WHERE id = (
+              SELECT id
+              FROM artificial_analysis_index_migrations
+              WHERE status = 'rolled_out'
+              ORDER BY created_at DESC
+              LIMIT 1
+            )
+            RETURNING id
+            """
+        ).fetchone()
+        if row is None:
+            return RuntimeCliResult(exit_code=3, changed=False, error_reason="migration_not_found")
+        transaction.execute(
+            """
+            UPDATE artificial_analysis_threshold_versions
+            SET is_active = false
+            WHERE migration_id = %(migration_id)s
+            """,
+            {"migration_id": row["id"]},
+        )
+    return RuntimeCliResult(exit_code=0, changed=True)
 
 
 def _smoke_combo(client: Any, combo_id: str) -> bool:

@@ -36,6 +36,33 @@ def test_stage_failure_surfaces_runner_exit_code():
     assert result.exit_code == 4
 
 
+@pytest.mark.spec("cli-and-operations::aa-index subcommand routes to the handler")
+def test_aa_index_subcommand_invokes_handler_instead_of_default_noop():
+    calls = []
+
+    def handler(command, args):
+        calls.append((command, args.aa_command))
+        return CliResult(exit_code=0, changed=True)
+
+    result = run_cli(["aa-index", "analyze"], preconditions_ok=True, aa_index_handler=handler)
+
+    assert result.exit_code == 0
+    assert result.changed is True
+    assert calls == [("analyze", "analyze")]
+
+
+@pytest.mark.spec("cli-and-operations::aa-index failure maps to an exit code")
+def test_aa_index_failure_surfaces_handler_exit_code():
+    result = run_cli(
+        ["aa-index", "proposal"],
+        preconditions_ok=True,
+        aa_index_handler=lambda _command, _args: CliResult(exit_code=4, changed=False),
+    )
+
+    assert result.exit_code == 4
+    assert result.changed is False
+
+
 @pytest.mark.spec("cli-and-operations::Apply surfaces gating outcomes")
 @pytest.mark.parametrize("exit_code", [5, 6, 7])
 def test_apply_and_rollback_surface_guarded_runner_outcomes(exit_code):

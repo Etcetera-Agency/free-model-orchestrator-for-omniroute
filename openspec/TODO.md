@@ -2,9 +2,6 @@
 
 ## Active Slice Backlog
 
-- `wire-aa-index-cli-dispatch`: implement and bind executable coverage for
-  `aa-index` CLI dispatch, failure exit mapping, advisory proposal generation,
-  deterministic approval/rollout, and AA-unavailable freeze behavior.
 - `wire-demand-forecast-and-role-lifecycle`: implement and bind executable
   coverage for forecast-derived demand, cold-start floors, role removal grace,
   reactivation, new-role bootstrap, and reconcile/forecast-before-allocation
