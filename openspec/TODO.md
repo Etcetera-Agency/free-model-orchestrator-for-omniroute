@@ -8,8 +8,6 @@ Each slice carries uncovered scenarios listed in
 `tests/spec_coverage_pending.txt`. Bind a test, drop the matching line, then
 archive when implemented.
 
-- `wire-account-discovery-stage` — `account-discovery` module is unit-tested but
-  never wired into the pipeline; `discover-accounts` runs a catalog scan.
 
 ## Dropped (not needed for project essence)
 

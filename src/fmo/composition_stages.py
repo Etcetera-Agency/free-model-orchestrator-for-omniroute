@@ -12,6 +12,7 @@ from urllib.parse import urljoin
 from psycopg.types.json import Jsonb
 
 from fmo.access import classify_access
+from fmo.accounts import AccountFetchError, discover_live_accounts
 from fmo.allocation import allocate_globally, build_priority_combo, validate_plan
 from fmo.applier import ComboApplier
 from fmo.apply_guard import ApplyPreconditions, check_apply_preconditions
@@ -54,6 +55,7 @@ APPLY_STAGE_EVIDENCE_MAX_AGE = timedelta(days=1)
 MetadataSync = Callable[..., object]
 RegistrySync = Callable[[Any], object]
 CatalogScan = Callable[[CatalogScanner, Any, str], object]
+AccountDiscovery = Callable[..., object]
 StageAdapter = Callable[["StageDependencies", PipelineContext], StageResult]
 HermesInventoryAdapter = Callable[[StartupConfig], object]
 
@@ -71,6 +73,7 @@ class StageDependencies:
 class StageAdapters:
     registry_sync: RegistrySync = sync_live_free_registry
     catalog_scan: CatalogScan = field(default_factory=lambda: _scan_catalogs)
+    account_discovery: AccountDiscovery = discover_live_accounts
     stage_adapters: dict[str, StageAdapter] = field(default_factory=lambda: _production_stage_adapters())
     hermes_inventory: HermesInventoryAdapter | None = None
     instructor_from_openai: Any | None = None
@@ -105,7 +108,7 @@ def _free_candidate_stage(dependencies: StageDependencies, adapters: StageAdapte
             if command in {"sync-free-registry", "full"}:
                 outcome = adapters.registry_sync(dependencies.omniroute_client)
                 persist_free_registry_outcome(context.repository, outcome)
-            if command in {"scan-providers", "discover-accounts", "full"}:
+            if command in {"scan-providers", "full"}:
                 scanner = CatalogScanner(context.repository)
                 adapters.catalog_scan(scanner, dependencies.omniroute_client, _omniroute_instance_id(dependencies))
         except RegistryFetchError as exc:
@@ -116,7 +119,7 @@ def _free_candidate_stage(dependencies: StageDependencies, adapters: StageAdapte
             return StageResult(status="external_dependency_failed", reason=str(exc))
         return StageResult(
             status="success",
-            changed=command in {"sync-free-registry", "scan-providers", "discover-accounts", "full"},
+            changed=command in {"sync-free-registry", "scan-providers", "full"},
             idempotency_key=f"free-candidate-discovery:{command}",
             details={"adapter": "free-candidate-discovery", "command": command},
         )
@@ -147,6 +150,127 @@ def _not_implemented_stage(name: str) -> StageAdapter:
         )
 
     return run
+
+
+def _account_discovery_stage(dependencies: StageDependencies, adapters: StageAdapters) -> Callable[[PipelineContext], StageResult]:
+    def run(context: PipelineContext) -> StageResult:
+        if dependencies.omniroute_client is None:
+            return StageResult(status="external_dependency_failed", reason="omniroute_client_required")
+        with context.repository.database.transaction() as transaction:
+            previous_pools = _previous_account_pools(transaction)
+        try:
+            outcome = adapters.account_discovery(dependencies.omniroute_client, previous_pools=previous_pools)
+        except AccountFetchError as exc:
+            return StageResult(status="external_dependency_failed", reason=exc.reason)
+        with context.repository.database.transaction() as transaction:
+            written = _persist_account_discovery(context, transaction, outcome)
+        return _effect_result("account-discovery", changed=written > 0)
+
+    return run
+
+
+def _previous_account_pools(transaction: Any) -> dict[str, str]:
+    rows = transaction.execute(
+        """
+        SELECT omniroute_connection_id, qp.name AS pool_name
+        FROM provider_accounts pa
+        JOIN quota_pools qp ON qp.id = pa.quota_pool_id
+        WHERE omniroute_connection_id IS NOT NULL
+        """
+    ).fetchall()
+    return {str(row["omniroute_connection_id"]): str(row["pool_name"]) for row in rows}
+
+
+def _persist_account_discovery(context: PipelineContext, transaction: Any, outcome: Any) -> int:
+    accounts_by_connection = {}
+    for connection in outcome.connections:
+        provider_slug = str(connection.get("provider") or "unknown")
+        connection_id = str(connection["id"])
+        provider = context.repository.providers.upsert(
+            transaction,
+            omniroute_instance_id="default",
+            omniroute_provider_id=provider_slug,
+            provider_type=str(connection.get("authType") or connection.get("auth_type") or "unknown"),
+        )
+        account = context.repository.provider_accounts.upsert(
+            transaction,
+            provider_id=provider["id"],
+            omniroute_connection_id=connection_id,
+            external_account_ref=str(connection.get("upstream_account_id") or connection_id),
+            metadata=connection,
+            enabled=bool(connection.get("enabled", True)),
+        )
+        pool = outcome.pools[connection_id]
+        quota_pool_id = _ensure_named_quota_pool(transaction, provider_slug, pool.pool_key)
+        transaction.execute(
+            """
+            UPDATE provider_accounts
+            SET quota_independence_status = %(status)s,
+                quota_pool_id = %(quota_pool_id)s
+            WHERE id = %(account_id)s
+            """,
+            {"status": pool.independence_status, "quota_pool_id": quota_pool_id, "account_id": account["id"]},
+        )
+        transaction.execute(
+            """
+            INSERT INTO quota_pool_members (
+              quota_pool_id, provider_account_id, membership_reason, confidence
+            )
+            VALUES (%(quota_pool_id)s, %(account_id)s, %(reason)s, %(confidence)s)
+            """,
+            {
+                "quota_pool_id": quota_pool_id,
+                "account_id": account["id"],
+                "reason": "account-discovery",
+                "confidence": 1.0 if pool.independence_status == "confirmed" else 0.0,
+            },
+        )
+        accounts_by_connection[connection_id] = account["id"]
+    independent_count = len(
+        {
+            pool.pool_key
+            for key, pool in outcome.pools.items()
+            if key == pool.pool_key and pool.independence_status == "confirmed"
+        }
+    )
+    transaction.execute(
+        """
+        INSERT INTO account_discovery_snapshots (
+          run_id, raw_provider_count, active_connection_count,
+          virtual_account_count, independent_quota_pool_count, snapshot_json
+        )
+        VALUES (
+          %(run_id)s, %(raw_count)s, %(active_count)s,
+          %(virtual_count)s, %(independent_count)s, %(snapshot)s
+        )
+        """,
+        {
+            "run_id": context.run_id,
+            "raw_count": len(outcome.connections),
+            "active_count": sum(1 for connection in outcome.connections if connection.get("enabled", True)),
+            "virtual_count": len(accounts_by_connection),
+            "independent_count": independent_count,
+            "snapshot": Jsonb(
+                {
+                    "connections": outcome.connections,
+                    "pools": {
+                        key: {
+                            "pool_key": pool.pool_key,
+                            "independence_status": pool.independence_status,
+                            "capacity": pool.capacity,
+                        }
+                        for key, pool in outcome.pools.items()
+                    },
+                    "rate_limits_available": outcome.rate_limits_available,
+                    "errors": [
+                        {"source": error.source, "reason": error.reason, "status_code": error.status_code}
+                        for error in outcome.errors
+                    ],
+                }
+            ),
+        },
+    )
+    return len(accounts_by_connection) + 1
 
 
 def _production_stage_adapters() -> dict[str, StageAdapter]:
@@ -926,10 +1050,12 @@ def _allocation_stage(_dependencies: StageDependencies, context: PipelineContext
         score_rows = transaction.execute(
             """
             SELECT DISTINCT ON (rs.role_id, rs.endpoint_id)
-                   rs.role_id, rs.endpoint_id, rs.total_score, pe.provider_account_id,
+                   rs.role_id, rs.endpoint_id, rs.total_score,
+                   COALESCE(pa.quota_pool_id, pe.provider_account_id) AS quota_pool_id,
                    eas.effective_remaining
             FROM role_scores rs
             JOIN provider_endpoints pe ON pe.id = rs.endpoint_id
+            JOIN provider_accounts pa ON pa.id = pe.provider_account_id
             JOIN endpoint_access_states eas ON eas.endpoint_id = pe.id
             WHERE rs.eligibility = true
             ORDER BY rs.role_id, rs.endpoint_id, rs.calculated_at DESC
@@ -953,7 +1079,7 @@ def _allocation_stage(_dependencies: StageDependencies, context: PipelineContext
         endpoints = [
             {
                 "id": str(row["endpoint_id"]),
-                "pool": str(row["provider_account_id"]),
+                "pool": str(row["quota_pool_id"]),
                 "score": float(row["total_score"]),
                 "capacity": _remaining_requests(row["effective_remaining"]),
             }
@@ -1466,6 +1592,25 @@ def _ensure_quota_pool(transaction: Any, provider_id: str, connection_id: str, a
         "UPDATE provider_accounts SET quota_pool_id = %(quota_pool_id)s WHERE id = %(account_id)s",
         {"quota_pool_id": pool["id"], "account_id": account_id},
     )
+    return pool["id"]
+
+
+def _ensure_named_quota_pool(transaction: Any, provider_id: str, pool_key: str) -> Any:
+    name = pool_key if pool_key.endswith(":requests") else f"{provider_id}:{pool_key}:requests"
+    pool = transaction.execute(
+        """
+        INSERT INTO quota_pools (name, provider_group, reset_policy)
+        VALUES (%(name)s, %(provider_group)s, %(reset_policy)s)
+        ON CONFLICT (name)
+        DO UPDATE SET provider_group = EXCLUDED.provider_group
+        RETURNING id
+        """,
+        {
+            "name": name,
+            "provider_group": provider_id,
+            "reset_policy": Jsonb({"source": "account-discovery"}),
+        },
+    ).fetchone()
     return pool["id"]
 
 

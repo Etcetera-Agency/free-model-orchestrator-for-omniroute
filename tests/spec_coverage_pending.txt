@@ -5,9 +5,3 @@
 #
 # Active proposal slices awaiting TDD implementation (see openspec/TODO.md and
 # openspec/changes/<id>/). Each line is dropped when its test lands.
-
-# wire-account-discovery-stage
-pipeline-orchestration::Account discovery persists quota pools
-pipeline-orchestration::Account discovery ordered before allocation inputs
-pipeline-orchestration::Unavailable rate-limit data stays conservative
-cli-and-operations::Discover-accounts command uses account discovery

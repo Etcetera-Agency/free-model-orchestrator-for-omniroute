@@ -16,8 +16,11 @@ Common flags include `--dry-run`, `--provider`, `--account`, `--endpoint`,
 
 Each per-stage command SHALL execute its corresponding pipeline stage through the
 pipeline runner and return that stage's real outcome and exit code; commands
-SHALL NOT return an unconditional success. `apply` and `rollback` SHALL run
-through the runner's fail-closed gating. Diagnostics SHALL read persisted state.
+SHALL NOT return an unconditional success. The `discover-accounts` command SHALL
+execute the `account-discovery` stage (connection/rate-limit fetch and
+quota-pool grouping), NOT the free-candidate-discovery stage. `apply` and
+`rollback` SHALL run through the runner's fail-closed gating. Diagnostics SHALL
+read persisted state.
 
 #### Scenario: Stage command invokes its stage
 - **WHEN** a per-stage command such as `allocate` or `scan-providers` runs
@@ -38,6 +41,14 @@ through the runner's fail-closed gating. Diagnostics SHALL read persisted state.
   model payloads
 - **AND** provider accounts, catalog snapshots, and discovered endpoints are
   written through the production persistence path
+
+#### Scenario: Discover-accounts command uses account discovery
+- **WHEN** an operator runs `discover-accounts`
+- **THEN** the runner executes the `account-discovery` stage, fetching
+  connections and rate-limit availability and grouping quota pools
+- **AND** pool membership and independence status are persisted through the
+  production persistence path
+- **AND** the command does not run the free-candidate-discovery stage
 
 #### Scenario: Apply surfaces gating outcomes
 - **WHEN** `apply` runs and a safety gate fails

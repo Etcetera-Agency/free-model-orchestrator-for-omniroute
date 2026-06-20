@@ -7,13 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 # Active proposal slices awaiting TDD implementation. Each entry is dropped from
 # tests/spec_coverage_pending.txt (and here) when its test lands. Slices are
 # listed in openspec/TODO.md and openspec/changes/<id>/.
-EXPECTED_ACTIVE_PENDING = {
-    # wire-account-discovery-stage
-    "pipeline-orchestration::Account discovery persists quota pools",
-    "pipeline-orchestration::Account discovery ordered before allocation inputs",
-    "pipeline-orchestration::Unavailable rate-limit data stays conservative",
-    "cli-and-operations::Discover-accounts command uses account discovery",
-}
+EXPECTED_ACTIVE_PENDING = set()
 
 
 @pytest.mark.spec("runtime-documentation::Active docs state")

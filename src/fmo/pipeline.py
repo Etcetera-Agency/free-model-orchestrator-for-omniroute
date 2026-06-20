@@ -21,6 +21,7 @@ EXIT_CODES = {
 CANONICAL_STAGE_NAMES = [
     "external-metadata-sync",
     "free-candidate-discovery",
+    "account-discovery",
     "model-matching",
     "quota-research",
     "access-classification",

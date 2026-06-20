@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from psycopg.types.json import Jsonb
 
+from fmo.accounts import AccountDiscoveryOutcome
 from fmo.artificial_analysis import AAModelMetrics, AASnapshot
 from fmo.bootstrap import build_startup_config
 from fmo.candidates import FreeCandidate
@@ -73,6 +74,12 @@ def empty_stage_adapters():
             errors=[],
         ),
         catalog_scan=lambda _scanner, _client, _omniroute_instance_id: {},
+        account_discovery=lambda _client, previous_pools=None: AccountDiscoveryOutcome(
+            connections=[],
+            pools={},
+            rate_limits_available=True,
+            errors=[],
+        ),
         stage_adapters={},
     )
 
@@ -82,6 +89,7 @@ def empty_adapters_with_stage_effects():
     return StageAdapters(
         registry_sync=adapters.registry_sync,
         catalog_scan=adapters.catalog_scan,
+        account_discovery=adapters.account_discovery,
         stage_adapters=effectful_stage_adapters(*CANONICAL_STAGE_NAMES[2:]),
     )
 
@@ -151,6 +159,30 @@ class PipelineOpsClient(QuotaSearchClient):
 
     def get(self, path):
         self.get_calls.append(path)
+        if path == "/api/providers":
+            return {
+                "connections": [
+                    {
+                        "id": "conn-provider-a",
+                        "provider": "provider-a",
+                        "enabled": True,
+                        "upstream_account_id": "acct-provider-a",
+                        "status": "confirmed",
+                        "quota": 100,
+                    }
+                ]
+            }
+        if path == "/api/rate-limits":
+            return {
+                "connections": [
+                    {
+                        "connectionId": "conn-provider-a",
+                        "provider": "provider-a",
+                        "enabled": True,
+                        "remaining": 100,
+                    }
+                ]
+            }
         if path == "/api/usage/analytics":
             return {
                 "byProvider": [{"provider": "provider-a", "requests": 10, "successRatePct": 90, "avgLatencyMs": 120}],
@@ -225,6 +257,45 @@ class MultiComboOpsClient(PipelineOpsClient):
 
     def _before_models(self, combo_id):
         return {"fmo-a": ["old-a"], "fmo-b": ["old-b"]}[combo_id]
+
+
+class AccountDiscoveryOpsClient(PipelineOpsClient):
+    def __init__(self, *, rate_limits_fail=False, connections=None):
+        super().__init__()
+        self.rate_limits_fail = rate_limits_fail
+        self.connections = connections or [
+            {
+                "id": "conn-a",
+                "provider": "provider-a",
+                "enabled": True,
+                "upstream_account_id": "shared-account",
+                "status": "confirmed",
+                "quota": 100,
+            },
+            {
+                "id": "conn-b",
+                "provider": "provider-a",
+                "enabled": True,
+                "upstream_account_id": "shared-account",
+                "status": "confirmed",
+                "quota": 100,
+            },
+        ]
+
+    def get(self, path):
+        self.get_calls.append(path)
+        if path == "/api/providers":
+            return {"connections": self.connections}
+        if path == "/api/rate-limits":
+            if self.rate_limits_fail:
+                raise OmniRouteRequestError("GET", path, 500)
+            return {
+                "connections": [
+                    {"connectionId": connection["id"], "provider": connection["provider"], "enabled": True}
+                    for connection in self.connections
+                ]
+            }
+        return super().get(path)
 
 
 class RecordingLlmRuntime:
@@ -349,6 +420,7 @@ def run_runtime_command(repository, client, command, **args):
 def _command_for_stage(stage_name):
     commands = {
         "model-matching": "match-models",
+        "account-discovery": "discover-accounts",
         "quota-research": "research-quotas",
         "access-classification": "classify-access",
         "probing": "probe-models",
@@ -659,6 +731,7 @@ def test_full_pipeline_runs_through_apply_and_audit(postgres_url):
     adapters = StageAdapters(
         registry_sync=empty_stage_adapters().registry_sync,
         catalog_scan=empty_stage_adapters().catalog_scan,
+        account_discovery=empty_stage_adapters().account_discovery,
         hermes_inventory=lambda _config: hermes_inventory_fixture(),
     )
     stages = build_canonical_stages(
@@ -673,6 +746,7 @@ def test_full_pipeline_runs_through_apply_and_audit(postgres_url):
     assert [record["name"] for record in result.stage_results] == [
         "external-metadata-sync",
         "free-candidate-discovery",
+        "account-discovery",
         "model-matching",
         "quota-research",
         "access-classification",
@@ -689,6 +763,143 @@ def test_full_pipeline_runs_through_apply_and_audit(postgres_url):
         "audit",
     ]
     assert result.stage_results[-1]["status"] == "success"
+
+
+@pytest.mark.spec("pipeline-orchestration::Account discovery persists quota pools")
+def test_account_discovery_stage_persists_quota_pools_and_membership(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    client = AccountDiscoveryOpsClient()
+
+    result = run_composed_stage(repository, "account-discovery", client=client)
+
+    with repository.database.transaction() as transaction:
+        account_rows = transaction.execute(
+            """
+            SELECT omniroute_connection_id, quota_independence_status, quota_pool_id
+            FROM provider_accounts
+            ORDER BY omniroute_connection_id
+            """
+        ).fetchall()
+        member_count = transaction.execute("SELECT count(*) AS total FROM quota_pool_members").fetchone()["total"]
+        snapshot = transaction.execute("SELECT snapshot_json FROM account_discovery_snapshots").fetchone()
+    assert result.exit_code == 0
+    assert result.stage_results[0]["details"]["effect"] == "repository_write"
+    assert client.get_calls[:2] == ["/api/providers", "/api/rate-limits"]
+    assert [row["quota_independence_status"] for row in account_rows] == ["confirmed", "confirmed"]
+    assert all(row["quota_pool_id"] for row in account_rows)
+    assert len({row["quota_pool_id"] for row in account_rows}) == 1
+    assert member_count == 2
+    assert snapshot["snapshot_json"]["rate_limits_available"] is True
+
+
+@pytest.mark.spec("pipeline-orchestration::Unavailable rate-limit data stays conservative")
+def test_account_discovery_stage_rate_limit_failure_stays_conservative(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    client = AccountDiscoveryOpsClient(rate_limits_fail=True)
+
+    result = run_composed_stage(repository, "account-discovery", client=client)
+
+    with repository.database.transaction() as transaction:
+        statuses = [
+            row["quota_independence_status"]
+            for row in transaction.execute("SELECT quota_independence_status FROM provider_accounts ORDER BY omniroute_connection_id").fetchall()
+        ]
+        snapshot = transaction.execute("SELECT snapshot_json FROM account_discovery_snapshots").fetchone()
+    assert result.exit_code == 0
+    assert statuses == ["assumed_shared", "assumed_shared"]
+    assert snapshot["snapshot_json"]["rate_limits_available"] is False
+    assert snapshot["snapshot_json"]["errors"][0]["status_code"] == 500
+
+
+@pytest.mark.spec("pipeline-orchestration::Account discovery ordered before allocation inputs")
+def test_canonical_pipeline_orders_account_discovery_before_quota_and_scoring():
+    names = CANONICAL_STAGE_NAMES
+
+    assert names.index("free-candidate-discovery") < names.index("account-discovery")
+    assert names.index("account-discovery") < names.index("quota-sync")
+    assert names.index("account-discovery") < names.index("role-scoring")
+
+
+@pytest.mark.spec("cli-and-operations::Discover-accounts command uses account discovery")
+def test_discover_accounts_command_selects_account_discovery_stage(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    runtime = ComposedRuntime(
+        repository=repository,
+        omniroute_client=AccountDiscoveryOpsClient(),
+        stages=build_canonical_stages(
+            dependencies=StageDependencies(repository=repository, omniroute_client=AccountDiscoveryOpsClient()),
+            metadata_sync=lambda **_kwargs: MetadataSyncResult(candidates={}, aa_snapshot=AASnapshot(index_version="4.1", models=())),
+        ),
+        cron="0 4 * * *",
+        llm_runtime=None,
+        config=build_startup_config(valid_env(DATABASE_URL=postgres_url)),
+    )
+
+    result = runtime.run_command("discover-accounts", argparse.Namespace(dry_run=False))
+
+    with repository.database.transaction() as transaction:
+        stages = repository.runs.list(transaction)[0]["error_json"]["stages"]
+        account_count = transaction.execute("SELECT count(*) AS total FROM provider_accounts").fetchone()["total"]
+    assert result.exit_code == 0
+    assert [stage["name"] for stage in stages] == ["account-discovery"]
+    assert account_count == 2
+
+
+@pytest.mark.spec("pipeline-orchestration::Account discovery persists quota pools")
+def test_allocation_uses_account_quota_pool_not_per_account_capacity(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    pool_id = None
+    for model_id in ["shared-a", "shared-b"]:
+        endpoint = seed_confirmed_llm_candidate(repository, model_id=model_id, intelligence_index=80, remaining=1)
+        with repository.database.transaction() as transaction:
+            account = transaction.execute(
+                """
+                SELECT provider_account_id
+                FROM provider_endpoints
+                WHERE id = %(endpoint_id)s
+                """,
+                {"endpoint_id": endpoint["id"]},
+            ).fetchone()
+            if pool_id is None:
+                pool_id = transaction.execute(
+                    """
+                    INSERT INTO quota_pools (name, provider_group, reset_policy)
+                    VALUES ('provider-a:shared:requests', 'provider-a', '{}'::jsonb)
+                    RETURNING id
+                    """
+                ).fetchone()["id"]
+            transaction.execute(
+                """
+                UPDATE provider_accounts
+                SET quota_pool_id = %(pool_id)s,
+                    quota_independence_status = 'assumed_shared'
+                WHERE id = %(account_id)s
+                """,
+                {"pool_id": pool_id, "account_id": account["provider_account_id"]},
+            )
+    with repository.database.transaction() as transaction:
+        repository.roles.upsert(
+            transaction,
+            role_id="shared_capacity",
+            requirements={"capabilities": []},
+            expected_load={"requests": 2},
+            criticality=1,
+        )
+    run_composed_stage(repository, "role-scoring")
+    run_composed_stage(repository, "demand-forecast")
+
+    result = run_composed_stage(repository, "allocation")
+
+    with repository.database.transaction() as transaction:
+        plan = transaction.execute("SELECT status, targets, constraint_report FROM allocation_plans WHERE role_id = 'shared_capacity'").fetchone()
+    assert result.exit_code == 0
+    assert plan["status"] == "degraded"
+    assert plan["targets"] == []
+    assert plan["constraint_report"]["reason"] == "no_primary"
 
 
 @pytest.mark.spec("cli-and-operations::Dry-run runs the stage, not an unconditional success")
@@ -2009,6 +2220,7 @@ def test_full_runtime_invokes_every_production_adapter_in_order(postgres_url):
         adapters=StageAdapters(
             registry_sync=registry_sync,
             catalog_scan=catalog_scan,
+            account_discovery=empty_stage_adapters().account_discovery,
             stage_adapters={name: domain_stage(name) for name in CANONICAL_STAGE_NAMES[2:]},
         ),
     )
@@ -2071,6 +2283,7 @@ def test_unwired_canonical_stage_returns_not_implemented_and_stops_full(postgres
     assert [stage["name"] for stage in stages] == [
         "external-metadata-sync",
         "free-candidate-discovery",
+        "account-discovery",
         "model-matching",
     ]
     assert stages[-1]["status"] == "not_implemented"

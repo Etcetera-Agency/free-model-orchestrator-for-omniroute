@@ -104,4 +104,9 @@
   filters before weighted scoring, persists context/quality rejection reasons,
   surfaces endpoint rejection diagnostics, and skips new allocation plans while
   a role quality gate needs AA index recalibration.
+- The canonical pipeline now includes a real `account-discovery` stage after
+  candidate discovery and before quota/scoring inputs. `discover-accounts`
+  dispatches to that stage, quota-pool membership and independence status are
+  persisted, rate-limit failures stay conservative, and allocation uses
+  account quota pools instead of double-counting same-pool accounts.
 - Remaining deferred repo-level work: none discovered in this batch.

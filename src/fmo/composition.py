@@ -19,6 +19,7 @@ from fmo.composition_stages import (
     StageAdapters,
     StageDependencies,
     _adapter_stage,
+    _account_discovery_stage,
     _free_candidate_stage,
     _latest_role_diagnostic,
     _metadata_stage,
@@ -166,6 +167,7 @@ def build_canonical_stages(
     stage_by_name = {
         "external-metadata-sync": Stage("external-metadata-sync", _metadata_stage(sync)),
         "free-candidate-discovery": Stage("free-candidate-discovery", _free_candidate_stage(deps, stage_adapters)),
+        "account-discovery": Stage("account-discovery", _account_discovery_stage(deps, stage_adapters)),
         "model-matching": Stage("model-matching", _adapter_stage("model-matching", deps, stage_adapters)),
         "quota-research": Stage("quota-research", _adapter_stage("quota-research", deps, stage_adapters)),
         "access-classification": Stage("access-classification", _adapter_stage("access-classification", deps, stage_adapters)),
@@ -229,7 +231,7 @@ def _run_type(command: str) -> str:
 
 _COMMAND_STAGE_NAMES = {
     "sync-free-registry": "free-candidate-discovery",
-    "discover-accounts": "free-candidate-discovery",
+    "discover-accounts": "account-discovery",
     "scan-providers": "free-candidate-discovery",
     "research-quotas": "quota-research",
     "classify-access": "access-classification",
