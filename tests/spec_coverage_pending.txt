@@ -19,10 +19,6 @@ pipeline-orchestration::Scoring stage drops below-context endpoint
 pipeline-orchestration::Scoring stage drops below-gate endpoint
 pipeline-orchestration::Index-version mismatch keeps current combo
 
-# fix-cli-dry-run-pipeline-preview
-cli-and-operations::Dry-run runs the stage, not an unconditional success
-cli-and-operations::Apply dry-run previews without mutating
-
 # harden-omniroute-retry-and-idempotency
 omniroute-client::GET transient 5xx retried
 omniroute-client::GET network error retried

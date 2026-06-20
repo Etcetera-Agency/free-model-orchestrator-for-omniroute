@@ -124,8 +124,6 @@ def run_cli(
             return CliResult(exit_code=EXIT_CODES["external_dependency_failed"], changed=False, error_reason=exc.reason)
         if args.command == "sync-metadata":
             return CliResult(exit_code=EXIT_CODES["success"], changed=False)
-    if args.dry_run:
-        return CliResult(exit_code=EXIT_CODES["success"], changed=False, combo_test_called=False)
     if args.command in PIPELINE_COMMANDS or args.command == "full":
         if pipeline_runner is None:
             return CliResult(exit_code=EXIT_CODES["success"], changed=False)

@@ -999,6 +999,7 @@ def _apply_stage(dependencies: StageDependencies, context: PipelineContext) -> S
     applier = ComboApplier(current={combo_id: list(models) for combo_id, models in current.items()})
     combo_test_called = False
     applied = []
+    dry_run = bool(context.config.get("dry_run", False))
     for diff in diffs:
         combo_id = diff["omniroute_combo_id"]
         diff_before = list(diff["state_json"].get("before", []))
@@ -1012,6 +1013,8 @@ def _apply_stage(dependencies: StageDependencies, context: PipelineContext) -> S
                 reason="combo_drift_detected",
                 details={"combo_test_called": combo_test_called},
             )
+        if dry_run:
+            continue
         expected_hash = applier.state_hash(combo_id)
         dependencies.omniroute_client.post(f"/api/combos/{combo_id}", {"models": desired})
         smoke_ok = _smoke_combo(dependencies.omniroute_client, combo_id)
@@ -1024,6 +1027,13 @@ def _apply_stage(dependencies: StageDependencies, context: PipelineContext) -> S
             return StageResult(status="apply_failed_rolled_back", reason="smoke_failed", details={"combo_test_called": True})
         _persist_applied_snapshot(context, diff, live_baseline, desired)
         applied.append((diff, live_baseline, desired))
+    if dry_run:
+        return StageResult(
+            status="success",
+            changed=False,
+            idempotency_key="apply:dry-run",
+            details={"combo_test_called": False, "effect": "idempotent_no_change"},
+        )
     result = _effect_result("apply", changed=bool(applied))
     return StageResult(
         status=result.status,

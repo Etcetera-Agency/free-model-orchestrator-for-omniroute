@@ -93,4 +93,7 @@
   non-empty `choices[0].message.content` passes, empty content fails, and
   `OmniRouteRequestError` maps to rollback instead of a crash. Fabricated
   top-level `status_code` smoke fixtures are removed from production apply tests.
+- CLI dry-run now executes selected pipeline stages instead of returning
+  unconditional success. `apply --dry-run` runs guard/drift validation, reports
+  unsafe gates, and skips combo mutation, smoke calls, and `/api/combos/test`.
 - Remaining deferred repo-level work: none discovered in this batch.

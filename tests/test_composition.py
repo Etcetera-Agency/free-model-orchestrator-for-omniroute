@@ -660,6 +660,33 @@ def test_full_pipeline_runs_through_apply_and_audit(postgres_url):
     assert result.stage_results[-1]["status"] == "success"
 
 
+@pytest.mark.spec("cli-and-operations::Dry-run runs the stage, not an unconditional success")
+def test_full_dry_run_executes_runtime_without_omniroute_mutation(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    config = build_startup_config(valid_env(DATABASE_URL=postgres_url))
+    client = PipelineOpsClient()
+    metadata = MetadataSyncResult(candidates={}, aa_snapshot=AASnapshot(index_version="4.1", models=()))
+    runtime = compose_runtime(
+        config,
+        metadata_sync=lambda **_kwargs: metadata,
+        adapters=empty_adapters_with_stage_effects(),
+    )
+    runtime = ComposedRuntime(
+        repository=runtime.repository,
+        omniroute_client=client,
+        stages=runtime.stages,
+        cron=runtime.cron,
+        llm_runtime=runtime.llm_runtime,
+        config=runtime.config,
+    )
+
+    result = runtime.run_command("full", argparse.Namespace(dry_run=True))
+
+    assert result.exit_code == 0
+    assert result.combo_test_called is False
+    assert client.calls == []
+
+
 @pytest.mark.spec("pipeline-orchestration::Probe respects confirmed free capacity")
 @pytest.mark.spec("pipeline-orchestration::Probe persists results and excludes failures")
 def test_probe_stage_gates_on_confirmed_capacity_and_persists_results(postgres_url):
@@ -1039,6 +1066,7 @@ def test_apply_stage_mutates_fmo_combo_and_reports_real_smoke_signal(postgres_ur
 
 
 @pytest.mark.spec("pipeline-orchestration::Failing guard blocks apply")
+@pytest.mark.spec("cli-and-operations::Apply dry-run previews without mutating")
 def test_apply_stage_guard_failure_blocks_mutation(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     repository = Repository(Database(postgres_url))
@@ -1048,6 +1076,43 @@ def test_apply_stage_guard_failure_blocks_mutation(postgres_url):
 
     assert result.exit_code == 5
     assert client.combos["fmo-routing_fast"] == ["old-endpoint"]
+
+
+@pytest.mark.spec("cli-and-operations::Apply dry-run previews without mutating")
+def test_apply_stage_dry_run_reports_unsafe_without_mutating(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    client = PipelineOpsClient()
+
+    result = run_runtime_command(repository, client, "apply", dry_run=True)
+
+    assert result.exit_code == 5
+    assert result.error_reason.startswith("apply preconditions failed:")
+    assert client.combos["fmo-routing_fast"] == ["old-endpoint"]
+    assert not any(call[0].startswith("/api/combos/") for call in client.calls)
+    assert not any(call[0] == "/api/combos/test" for call in client.calls)
+
+
+@pytest.mark.spec("cli-and-operations::Apply dry-run previews without mutating")
+def test_apply_stage_dry_run_previews_valid_plan_without_combo_mutation(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    client = PipelineOpsClient()
+    prepare_scored_endpoint(repository, client=client)
+    run_composed_stage(repository, "role-scoring", client=client)
+    run_composed_stage(repository, "demand-forecast", client=client)
+    run_composed_stage(repository, "allocation", client=client)
+    run_composed_stage(repository, "diff", client=client)
+    client.calls.clear()
+
+    result = run_runtime_command(repository, client, "apply", dry_run=True)
+
+    assert result.exit_code == 0
+    assert result.changed is False
+    assert result.combo_test_called is False
+    assert client.combos["fmo-routing_fast"] == ["old-endpoint"]
+    assert not any(call[0].startswith("/api/combos/") for call in client.calls)
+    assert not any(call[0] == "/api/combos/test" for call in client.calls)
 
 
 @pytest.mark.spec("combo-applier::Failing quota evidence blocks the apply stage")

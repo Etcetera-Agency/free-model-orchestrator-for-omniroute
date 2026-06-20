@@ -87,14 +87,37 @@ def test_rollback_uses_runner_outcome():
 @pytest.mark.spec("cli-and-operations::Dry-run validation")
 @pytest.mark.spec("persistence::Dry-run persists nothing")
 def test_dry_run_stays_local_and_does_not_call_combo_test():
-    runner = FakeRunner()
+    runner = FakeRunner([CliResult(exit_code=0, changed=False, combo_test_called=False)])
 
     result = run_cli(["apply", "--dry-run"], preconditions_ok=True, pipeline_runner=runner)
 
     assert result.exit_code == 0
     assert result.changed is False
     assert result.combo_test_called is False
-    assert runner.calls == []
+    assert runner.calls[0][0] == "apply"
+    assert runner.calls[0][1].dry_run is True
+
+
+@pytest.mark.spec("cli-and-operations::Dry-run runs the stage, not an unconditional success")
+def test_dry_run_runs_pipeline_stage_and_surfaces_real_outcome():
+    runner = FakeRunner([CliResult(exit_code=EXIT_CODES["external_dependency_failed"], changed=False)])
+
+    result = run_cli(["diff", "--dry-run"], preconditions_ok=True, pipeline_runner=runner)
+
+    assert result.exit_code == EXIT_CODES["external_dependency_failed"]
+    assert runner.calls[0][0] == "diff"
+    assert runner.calls[0][1].dry_run is True
+
+
+@pytest.mark.spec("cli-and-operations::Dry-run runs the stage, not an unconditional success")
+def test_full_dry_run_runs_pipeline_and_surfaces_real_outcome():
+    runner = FakeRunner([CliResult(exit_code=EXIT_CODES["validation_failed"], changed=False)])
+
+    result = run_cli(["full", "--dry-run"], preconditions_ok=True, pipeline_runner=runner)
+
+    assert result.exit_code == EXIT_CODES["validation_failed"]
+    assert runner.calls[0][0] == "full"
+    assert runner.calls[0][1].dry_run is True
 
 
 @pytest.mark.spec("cli-and-operations::Explain an endpoint")
