@@ -69,7 +69,7 @@ class ComposedRuntime:
 MetadataSync = Callable[..., object]
 RegistrySync = Callable[[Any], object]
 CatalogScan = Callable[[CatalogScanner, Any, str], object]
-DomainStage = Callable[[str, "StageDependencies", PipelineContext], StageResult]
+StageAdapter = Callable[["StageDependencies", PipelineContext], StageResult]
 
 
 @dataclass(frozen=True)
@@ -83,7 +83,7 @@ class StageDependencies:
 class StageAdapters:
     registry_sync: RegistrySync = sync_live_free_registry
     catalog_scan: CatalogScan = field(default_factory=lambda: _scan_catalogs)
-    domain_stage: DomainStage = field(default_factory=lambda: _domain_stage_adapter)
+    stage_adapters: dict[str, StageAdapter] = field(default_factory=dict)
 
 
 def compose_runtime(
@@ -192,14 +192,24 @@ def _adapter_stage(
     dependencies: StageDependencies,
     adapters: StageAdapters,
 ) -> Callable[[PipelineContext], StageResult]:
+    adapter = adapters.stage_adapters.get(name, _not_implemented_stage(name))
+
     def run(context: PipelineContext) -> StageResult:
-        return adapters.domain_stage(name, dependencies, context)
+        return adapter(dependencies, context)
 
     return run
 
 
-def _domain_stage_adapter(name: str, _dependencies: StageDependencies, _context: PipelineContext) -> StageResult:
-    return StageResult(status="success", idempotency_key=f"{name}:domain-adapter", details={"adapter": name})
+def _not_implemented_stage(name: str) -> StageAdapter:
+    def run(_dependencies: StageDependencies, _context: PipelineContext) -> StageResult:
+        return StageResult(
+            status="not_implemented",
+            idempotency_key=f"{name}:not-implemented",
+            reason=f"{name} adapter is not wired",
+            details={"adapter": name, "effect": None},
+        )
+
+    return run
 
 
 def _scan_catalogs(scanner: CatalogScanner, client: Any, omniroute_instance_id: str) -> object:

@@ -11,6 +11,7 @@ from fmo.pipeline import (
     StageResult,
     outcome_exit_code,
 )
+from tests._stage_effects import assert_success_has_declared_effect
 
 
 @pytest.fixture()
@@ -169,6 +170,7 @@ def test_runner_never_calls_combo_test(repository):
         ("success", 0),
         ("partial_stale", 2),
         ("validation_failed", 3),
+        ("not_implemented", 3),
         ("external_dependency_failed", 4),
         ("unsafe_to_apply", 5),
         ("apply_failed_rolled_back", 6),
@@ -211,3 +213,16 @@ def test_external_dependency_failure_maps_to_code_4(repository):
     result = runner.run(trigger="manual")
 
     assert result.exit_code == 4
+
+
+@pytest.mark.spec("pipeline-orchestration::Stage success requires a real effect")
+def test_success_stage_without_declared_effect_fails_effect_harness(repository):
+    runner = PipelineRunner(
+        repository,
+        stages=[Stage("model-matching", lambda context: StageResult(status="success", idempotency_key="fake"))],
+    )
+
+    result = runner.run(trigger="manual")
+
+    with pytest.raises(AssertionError):
+        assert_success_has_declared_effect(result.stage_results[0])

@@ -15,12 +15,20 @@
   endpoint, registry snapshot, and free-model rows through repository methods;
   source regression tests reject embedded table SQL in those stage modules.
 - Production composition now dispatches `sync-free-registry` and
-  `scan-providers` through registry/scanner adapters, invokes every canonical
-  stage through an adapter-backed boundary during `full`, and rejects the old
-  unconditional success placeholder helper.
+  `scan-providers` through registry/scanner adapters, removes the shared
+  `_domain_stage_adapter` no-op, and requires explicit per-stage adapters for
+  canonical domain stages at the adapter-backed boundary.
+- Unwired canonical stages now fail closed with `not_implemented` (exit 3), and
+  the executable effect harness rejects `success` results that lack a declared
+  repository write, OmniRoute call, or idempotent no-change effect.
+- Remaining unwired stages are tracked by active OpenSpec slices:
+  model-matching/quota-research/access-classification,
+  probing/telemetry-sync/quota-sync, role-scoring/allocation/diff, and
+  apply/audit.
 - Run-lock acquisition is now database-atomic through a partial unique index on
   active held lock rows; repository tests cover two independent connections,
   fresh schema installs, and migration installs.
 - Code Simplifier review cleaned the new scheduler tests by sharing the partial
   index assertion and making concurrent-thread completion explicit.
-- Remaining deferred repo-level work: none discovered in this slice.
+- Remaining deferred repo-level work: implement and archive the active stage
+  wiring slices listed in `openspec/TODO.md`.

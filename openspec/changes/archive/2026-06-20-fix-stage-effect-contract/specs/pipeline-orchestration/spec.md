@@ -1,10 +1,5 @@
-# pipeline-orchestration Specification
+## MODIFIED Requirements
 
-## Purpose
-Define the deterministic daily pipeline runner that records orchestrator runs,
-executes ordered stages, skips unchanged idempotent work, fails closed on unsafe
-state, and maps outcomes to operator exit codes.
-## Requirements
 ### Requirement: Ordered pipeline run
 
 The system SHALL provide a pipeline runner that executes the orchestrator stages
@@ -40,17 +35,6 @@ declared effect SHALL be rejected by the executable test suite.
 - **AND** an adapter that returns `success` without producing its declared effect
   fails the executable test suite
 
-### Requirement: Idempotent stage skipping
-
-The runner SHALL skip a stage whose idempotency key (catalog snapshot, quota
-source, quota rule, probe, combo apply) matches a prior successful result, so a
-re-run with unchanged inputs applies no combo change and re-runs no unchanged
-probe.
-
-#### Scenario: Unchanged re-run skips work
-- **WHEN** the same run repeats with an unchanged stage idempotency key
-- **THEN** that stage is not re-executed and no duplicate state is written
-
 ### Requirement: Fail-closed gating
 
 The runner SHALL stop downstream apply when a safety gate fails, and SHALL NOT
@@ -79,18 +63,3 @@ that returns success for unwired stages.
 - **THEN** it returns a non-success `not_implemented` status
 - **AND** the run stops at that stage with a non-success exit code
 - **AND** no downstream stage reports fabricated success
-
-### Requirement: Run outcome exit codes
-
-The runner SHALL map a run outcome to a deterministic exit code: 0 success;
-2 partial/stale; 3 validation failed; 4 external dependency failed; 5 unsafe to
-apply; 6 apply failed and rolled back; 7 rollback failed. When multiple stages
-fail, the runner SHALL report the most severe outcome.
-
-#### Scenario: Unsafe apply outcome
-- **WHEN** apply preconditions are not met
-- **THEN** the run exits with code 5 and changes nothing
-
-#### Scenario: External dependency failure outcome
-- **WHEN** a required external fetch fails
-- **THEN** the run exits with code 4

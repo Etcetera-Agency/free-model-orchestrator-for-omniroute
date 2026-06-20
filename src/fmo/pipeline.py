@@ -11,6 +11,7 @@ EXIT_CODES = {
     "success": 0,
     "partial_stale": 2,
     "validation_failed": 3,
+    "not_implemented": 3,
     "external_dependency_failed": 4,
     "unsafe_to_apply": 5,
     "apply_failed_rolled_back": 6,
@@ -36,6 +37,7 @@ CANONICAL_STAGE_NAMES = [
 STOP_STATUSES = {
     "partial_stale",
     "validation_failed",
+    "not_implemented",
     "external_dependency_failed",
     "unsafe_to_apply",
     "apply_failed_rolled_back",

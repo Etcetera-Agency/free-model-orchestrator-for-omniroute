@@ -9,8 +9,9 @@ from fmo.composition import StageAdapters, build_canonical_stages, compose_runti
 from fmo.db import MigrationRunner
 from fmo.metadata_sync import MetadataSyncResult
 from fmo.persistence import Database, Repository
-from fmo.pipeline import CANONICAL_STAGE_NAMES, StageResult
+from fmo.pipeline import CANONICAL_STAGE_NAMES
 from fmo.registry import FreeRegistry, FreeRegistrySyncOutcome
+from tests._stage_effects import assert_success_has_declared_effect, effectful_success
 
 
 def valid_env(**overrides):
@@ -39,6 +40,22 @@ def empty_stage_adapters():
         ),
         catalog_scan=lambda _scanner, _client, _omniroute_instance_id: {},
     )
+
+
+def empty_adapters_with_stage_effects():
+    adapters = empty_stage_adapters()
+    return StageAdapters(
+        registry_sync=adapters.registry_sync,
+        catalog_scan=adapters.catalog_scan,
+        stage_adapters=effectful_stage_adapters(*CANONICAL_STAGE_NAMES[2:]),
+    )
+
+
+def effectful_stage_adapters(*stage_names):
+    return {
+        name: (lambda _deps, _context, stage_name=name: effectful_success(stage_name, "idempotent_no_change"))
+        for name in stage_names
+    }
 
 
 @pytest.mark.spec("runtime-bootstrap::Production dispatch executes a real stage")
@@ -166,7 +183,11 @@ def test_full_pipeline_persists_metadata_before_downstream_stages(postgres_url):
         },
         aa_snapshot=AASnapshot(index_version="4.1", models=()),
     )
-    runtime = compose_runtime(config, metadata_sync=lambda **_kwargs: result, adapters=empty_stage_adapters())
+    runtime = compose_runtime(
+        config,
+        metadata_sync=lambda **_kwargs: result,
+        adapters=empty_adapters_with_stage_effects(),
+    )
 
     cli_result = runtime.run_command("full", object())
 
@@ -186,7 +207,11 @@ def test_composed_scheduler_run_once_starts_full_pipeline_at_cron(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     config = build_startup_config(valid_env(DATABASE_URL=postgres_url, HERMES_INVENTORY_CRON="0 4 * * *"))
     result = MetadataSyncResult(candidates={}, aa_snapshot=AASnapshot(index_version="4.1", models=()))
-    runtime = compose_runtime(config, metadata_sync=lambda **_kwargs: result, adapters=empty_stage_adapters())
+    runtime = compose_runtime(
+        config,
+        metadata_sync=lambda **_kwargs: result,
+        adapters=empty_adapters_with_stage_effects(),
+    )
 
     cli_result = runtime.run_scheduler_once("2026-06-19T04:00:00Z")
 
@@ -313,9 +338,12 @@ def test_full_runtime_invokes_every_production_adapter_in_order(postgres_url):
         calls.append("free-candidate-discovery:catalog")
         return {}
 
-    def domain_stage(name, _dependencies, _context):
-        calls.append(name)
-        return StageResult(status="success", idempotency_key=f"{name}:test")
+    def domain_stage(name):
+        def run(_dependencies, _context):
+            calls.append(name)
+            return effectful_success(name, "idempotent_no_change")
+
+        return run
 
     runtime = compose_runtime(
         config,
@@ -323,7 +351,7 @@ def test_full_runtime_invokes_every_production_adapter_in_order(postgres_url):
         adapters=StageAdapters(
             registry_sync=registry_sync,
             catalog_scan=catalog_scan,
-            domain_stage=domain_stage,
+            stage_adapters={name: domain_stage(name) for name in CANONICAL_STAGE_NAMES[2:]},
         ),
     )
 
@@ -346,12 +374,43 @@ def test_full_runtime_invokes_every_production_adapter_in_order(postgres_url):
         "apply",
         "audit",
     ]
+    repository = Repository(Database(postgres_url))
+    with repository.database.transaction() as transaction:
+        run = repository.runs.list(transaction)[0]
+    for record in run["error_json"]["stages"][2:]:
+        assert_success_has_declared_effect(record)
 
 
 @pytest.mark.spec("runtime-bootstrap::Placeholder stage rejected")
+@pytest.mark.spec("pipeline-orchestration::Full run calls production adapters")
 def test_production_composition_has_no_success_placeholder_helper():
     source = Path("src/fmo/composition.py").read_text(encoding="utf-8")
     stages = build_canonical_stages(metadata_sync=lambda **_kwargs: None)
 
     assert "_successful_stage" not in source
+    assert "_domain_stage_adapter" not in source
+    assert "domain_stage" not in source
     assert [stage.name for stage in stages] == CANONICAL_STAGE_NAMES
+
+
+@pytest.mark.spec("pipeline-orchestration::Unwired stage fails closed")
+def test_unwired_canonical_stage_returns_not_implemented_and_stops_full(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    config = build_startup_config(valid_env(DATABASE_URL=postgres_url))
+    result = MetadataSyncResult(candidates={}, aa_snapshot=AASnapshot(index_version="4.1", models=()))
+    runtime = compose_runtime(config, metadata_sync=lambda **_kwargs: result, adapters=empty_stage_adapters())
+
+    cli_result = runtime.run_command("full", object())
+
+    repository = Repository(Database(postgres_url))
+    with repository.database.transaction() as transaction:
+        run = repository.runs.list(transaction)[0]
+    stages = run["error_json"]["stages"]
+    assert cli_result.exit_code == 3
+    assert [stage["name"] for stage in stages] == [
+        "external-metadata-sync",
+        "free-candidate-discovery",
+        "model-matching",
+    ]
+    assert stages[-1]["status"] == "not_implemented"
+    assert stages[-1]["reason"] == "model-matching adapter is not wired"
