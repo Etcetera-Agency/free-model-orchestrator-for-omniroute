@@ -2,12 +2,6 @@
 
 No deferred review follow-up work discovered.
 
-## Active stage-wiring follow-up
-
-- Implement and archive `wire-apply-audit-stages`: wire `apply` and `audit`;
-  replace the apply/audit xfail placeholders with real smoke, rollback, and
-  audit effect assertions.
-
 ## Dropped (not needed for project essence)
 
 - AA provider/detail/performance endpoints — the single free-tier endpoint

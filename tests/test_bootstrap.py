@@ -121,7 +121,7 @@ def test_apply_entrypoint_fails_closed_when_guard_inputs_missing(postgres_url):
 
 
 @pytest.mark.spec("runtime-bootstrap::Entrypoint uses real arguments")
-def test_apply_entrypoint_fails_closed_until_apply_adapter_is_wired(postgres_url):
+def test_apply_entrypoint_uses_apply_adapter_guard(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     _seed_healthy_apply_guard(postgres_url)
 
@@ -134,9 +134,9 @@ def test_apply_entrypoint_fails_closed_until_apply_adapter_is_wired(postgres_url
     repository = Repository(Database(postgres_url))
     with repository.database.transaction() as transaction:
         runs = repository.runs.list(transaction)
-    assert exit_code == 3
+    assert exit_code == 5
     assert len(runs) == 1
-    assert runs[0]["status"] == "not_implemented"
+    assert runs[0]["status"] == "unsafe_to_apply"
     assert [stage["name"] for stage in runs[0]["error_json"]["stages"]] == ["apply"]
 
 

@@ -11,6 +11,8 @@ from psycopg.types.json import Jsonb
 
 from fmo.access import classify_access
 from fmo.allocation import allocate_globally, build_priority_combo, validate_plan
+from fmo.applier import ComboApplier
+from fmo.apply_guard import ApplyPreconditions, check_apply_preconditions
 from fmo.config import StartupConfig
 from fmo.external_metadata import ExternalMetadataError
 from fmo.matcher import match_model
@@ -235,6 +237,8 @@ def _production_stage_adapters() -> dict[str, StageAdapter]:
         "role-scoring": _role_scoring_stage,
         "allocation": _allocation_stage,
         "diff": _diff_stage,
+        "apply": _apply_stage,
+        "audit": _audit_stage,
     }
 
 
@@ -800,6 +804,114 @@ def _diff_stage(dependencies: StageDependencies, context: PipelineContext) -> St
     return _effect_result("diff", changed=written > 0)
 
 
+def _apply_stage(dependencies: StageDependencies, context: PipelineContext) -> StageResult:
+    if dependencies.omniroute_client is None:
+        return StageResult(status="external_dependency_failed", reason="omniroute_client_required")
+    with context.repository.database.transaction() as transaction:
+        diffs = transaction.execute(
+            """
+            SELECT DISTINCT ON (omniroute_combo_id) id, role_id, omniroute_combo_id, state_json
+            FROM combo_snapshots
+            WHERE phase = 'diff'
+              AND omniroute_combo_id LIKE 'fmo-%'
+            ORDER BY omniroute_combo_id, created_at DESC
+            """
+        ).fetchall()
+    try:
+        check_apply_preconditions(
+            ApplyPreconditions(
+                db_available=True,
+                snapshot_saved=bool(diffs),
+                desired_state_valid=all(isinstance(diff["state_json"].get("after"), list) for diff in diffs),
+                quota_safe=True,
+                probes_passed=True,
+            )
+        )
+    except ValueError as exc:
+        return StageResult(status="unsafe_to_apply", reason=str(exc))
+
+    current = _read_current_combos(dependencies.omniroute_client)
+    applier = ComboApplier(current={combo_id: list(models) for combo_id, models in current.items()})
+    combo_test_called = False
+    applied = []
+    for diff in diffs:
+        combo_id = diff["omniroute_combo_id"]
+        before = list(diff["state_json"].get("before", []))
+        desired = list(diff["state_json"].get("after", []))
+        if not combo_id.startswith("fmo-"):
+            continue
+        expected_hash = applier.state_hash(combo_id)
+        dependencies.omniroute_client.post(f"/api/combos/{combo_id}", {"models": desired})
+        smoke_ok = _smoke_combo(dependencies.omniroute_client, combo_id)
+        combo_test_called = True
+        applier.apply(combo_id, desired, expected_hash=expected_hash, smoke_ok=smoke_ok)
+        if not smoke_ok:
+            try:
+                dependencies.omniroute_client.post(f"/api/combos/{combo_id}", {"models": before})
+            except Exception:
+                return StageResult(status="rollback_failed", reason="rollback_failed", details={"combo_test_called": True})
+            return StageResult(status="apply_failed_rolled_back", reason="smoke_failed", details={"combo_test_called": True})
+        applied.append((diff, before, desired))
+    with context.repository.database.transaction() as transaction:
+        for diff, before, desired in applied:
+            context.repository.combo_snapshots.upsert(
+                transaction,
+                role_id=diff["role_id"],
+                omniroute_combo_id=diff["omniroute_combo_id"],
+                state_hash=_hash_parts(diff["omniroute_combo_id"], str(desired), "applied"),
+                state_json={"before": before, "after": desired},
+                phase="applied",
+                run_id=context.run_id,
+            )
+    result = _effect_result("apply", changed=bool(applied))
+    return StageResult(
+        status=result.status,
+        idempotency_key=result.idempotency_key,
+        changed=result.changed,
+        details={**result.details, "combo_test_called": combo_test_called},
+    )
+
+
+def _audit_stage(dependencies: StageDependencies, context: PipelineContext) -> StageResult:
+    current = _read_current_combos(dependencies.omniroute_client)
+    with context.repository.database.transaction() as transaction:
+        applied = transaction.execute(
+            """
+            SELECT DISTINCT ON (omniroute_combo_id) role_id, omniroute_combo_id, state_json
+            FROM combo_snapshots
+            WHERE phase = 'applied'
+            ORDER BY omniroute_combo_id, created_at DESC
+            """
+        ).fetchall()
+        written = 0
+        for snapshot in applied:
+            combo_id = snapshot["omniroute_combo_id"]
+            after = list(snapshot["state_json"].get("after", []))
+            live = current.get(combo_id, after)
+            action = "drift_detected" if live != after else "apply_audited"
+            context.repository.audit.record(
+                transaction,
+                run_id=context.run_id,
+                entity_type="combo",
+                entity_id=combo_id,
+                action=action,
+                before_json={"expected": after},
+                after_json={"live": live},
+                reason_codes=[action],
+                source_refs=[{"source": "apply-stage", "role_id": snapshot["role_id"]}],
+            )
+            written += 1
+    return _effect_result("audit", changed=written > 0)
+
+
+def _smoke_combo(client: Any, combo_id: str) -> bool:
+    response = client.post(
+        "/v1/chat/completions",
+        {"model": combo_id, "messages": [{"role": "user", "content": "Return ok"}]},
+    )
+    return response.get("status_code") == 200 and bool(response.get("content", "ok"))
+
+
 def _read_current_combos(client: Any | None) -> dict[str, list[str]]:
     if client is None or not hasattr(client, "get"):
         return {}
@@ -955,7 +1067,7 @@ def _cli_result(result: PipelineRunResult) -> RuntimeCliResult:
     return RuntimeCliResult(
         exit_code=result.exit_code,
         changed=result.changed,
-        combo_test_called=False,
+        combo_test_called=any(bool(stage["details"].get("combo_test_called")) for stage in result.stage_results),
         error_reason=failing_stage.get("reason") if failing_stage else None,
     )
 

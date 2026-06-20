@@ -6,7 +6,14 @@ import pytest
 from fmo.artificial_analysis import AAModelMetrics, AASnapshot
 from fmo.bootstrap import build_startup_config
 from fmo.candidates import FreeCandidate
-from fmo.composition import StageAdapters, StageDependencies, build_canonical_stages, compose_runtime, stages_for_command
+from fmo.composition import (
+    StageAdapters,
+    StageDependencies,
+    _cli_result,
+    build_canonical_stages,
+    compose_runtime,
+    stages_for_command,
+)
 from fmo.db import MigrationRunner
 from fmo.metadata_sync import MetadataSyncResult
 from fmo.persistence import Database, Repository
@@ -74,14 +81,27 @@ class QuotaSearchClient:
 
 
 class PipelineOpsClient(QuotaSearchClient):
-    def __init__(self, *, probe_status=200):
+    def __init__(self, *, probe_status=200, smoke_status=200, rollback_fails=False):
         super().__init__()
         self.probe_status = probe_status
+        self.smoke_status = smoke_status
+        self.rollback_fails = rollback_fails
         self.get_calls = []
+        self.combos = {"fmo-routing_fast": ["old-endpoint"]}
 
     def post(self, path, payload, headers=None):
         if path == "/v1/search":
             return super().post(path, payload)
+        if path.startswith("/api/combos/"):
+            combo_id = path.rsplit("/", 1)[-1]
+            if self.rollback_fails and payload.get("models") == ["old-endpoint"]:
+                raise RuntimeError("rollback failed")
+            self.calls.append((path, payload, headers))
+            self.combos[combo_id] = list(payload["models"])
+            return {"ok": True}
+        if path == "/v1/chat/completions":
+            self.calls.append((path, payload, headers))
+            return {"status_code": self.smoke_status, "content": "ok" if self.smoke_status == 200 else ""}
         self.calls.append((path, payload, headers))
         return {"status_code": self.probe_status, "content": "ok" if self.probe_status == 200 else ""}
 
@@ -114,7 +134,7 @@ class PipelineOpsClient(QuotaSearchClient):
                 ],
             }
         if path == "/api/combos":
-            return {"combos": [{"id": "fmo-routing_fast", "models": ["old-endpoint"]}]}
+            return {"combos": [{"id": combo_id, "models": models} for combo_id, models in self.combos.items()]}
         raise AssertionError(f"unexpected GET {path}")
 
 
@@ -160,6 +180,8 @@ def _command_for_stage(stage_name):
         "role-scoring": "score-roles",
         "allocation": "allocate",
         "diff": "diff",
+        "apply": "apply",
+        "audit": "rollback",
     }
     return commands[stage_name]
 
@@ -267,7 +289,7 @@ def test_quota_research_missing_external_payload_fails_closed(postgres_url):
 
 
 @pytest.mark.spec("pipeline-orchestration::Full run calls production adapters")
-def test_full_pipeline_advances_past_scoring_allocation_and_stops_at_apply(postgres_url):
+def test_full_pipeline_runs_through_apply_and_audit(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     repository = Repository(Database(postgres_url))
     seed_endpoint(repository)
@@ -292,7 +314,7 @@ def test_full_pipeline_advances_past_scoring_allocation_and_stops_at_apply(postg
 
     result = PipelineRunner(repository, stages=stages).run(trigger="manual", run_type="full")
 
-    assert result.exit_code == 3
+    assert result.exit_code == 0
     assert [record["name"] for record in result.stage_results] == [
         "external-metadata-sync",
         "free-candidate-discovery",
@@ -306,8 +328,9 @@ def test_full_pipeline_advances_past_scoring_allocation_and_stops_at_apply(postg
         "allocation",
         "diff",
         "apply",
+        "audit",
     ]
-    assert result.stage_results[-1]["status"] == "not_implemented"
+    assert result.stage_results[-1]["status"] == "success"
 
 
 @pytest.mark.spec("pipeline-orchestration::Probe respects confirmed free capacity")
@@ -433,6 +456,82 @@ def test_diff_stage_persists_minimal_diff_without_mutating_omniroute(postgres_ur
     assert not any(call[0].startswith("/api/combos") for call in client.calls)
     assert snapshot["phase"] == "diff"
     assert snapshot["state_json"]["remove"] == ["old-endpoint"]
+
+
+@pytest.mark.spec("pipeline-orchestration::Production apply runs the real smoke test")
+@pytest.mark.spec("combo-applier::Production apply smoke-tests applied combos")
+@pytest.mark.spec("combo-applier::Fabricated smoke signal rejected")
+def test_apply_stage_mutates_fmo_combo_and_reports_real_smoke_signal(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    client = PipelineOpsClient()
+    prepare_scored_endpoint(repository, client=client)
+    run_composed_stage(repository, "role-scoring", client=client)
+    run_composed_stage(repository, "allocation", client=client)
+    run_composed_stage(repository, "diff", client=client)
+
+    result = run_composed_stage(repository, "apply", client=client)
+
+    assert result.exit_code == 0
+    assert result.stage_results[0]["details"]["combo_test_called"] is True
+    assert _cli_result(result).combo_test_called is True
+    assert any(call[0] == "/v1/chat/completions" for call in client.calls)
+    assert not any(call[0] == "/api/combos/test" for call in client.calls)
+    assert client.combos["fmo-routing_fast"] != ["old-endpoint"]
+
+
+@pytest.mark.spec("pipeline-orchestration::Failing guard blocks apply")
+def test_apply_stage_guard_failure_blocks_mutation(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    client = PipelineOpsClient()
+
+    result = run_composed_stage(repository, "apply", client=client)
+
+    assert result.exit_code == 5
+    assert client.combos["fmo-routing_fast"] == ["old-endpoint"]
+
+
+@pytest.mark.spec("pipeline-orchestration::Smoke failure rolls back")
+def test_apply_stage_smoke_failure_rolls_back_and_maps_failures(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    client = PipelineOpsClient(smoke_status=500)
+    prepare_scored_endpoint(repository, client=client)
+    run_composed_stage(repository, "role-scoring", client=client)
+    run_composed_stage(repository, "allocation", client=client)
+    run_composed_stage(repository, "diff", client=client)
+
+    result = run_composed_stage(repository, "apply", client=client)
+
+    assert result.exit_code == 6
+    assert client.combos["fmo-routing_fast"] == ["old-endpoint"]
+
+    rollback_client = PipelineOpsClient(smoke_status=500, rollback_fails=True)
+    rollback_repository = Repository(Database(postgres_url))
+    rollback_result = run_composed_stage(rollback_repository, "apply", client=rollback_client)
+    assert rollback_result.exit_code == 7
+
+
+@pytest.mark.spec("pipeline-orchestration::Audit persists records")
+def test_audit_stage_persists_records_and_detects_drift(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    client = PipelineOpsClient()
+    prepare_scored_endpoint(repository, client=client)
+    run_composed_stage(repository, "role-scoring", client=client)
+    run_composed_stage(repository, "allocation", client=client)
+    run_composed_stage(repository, "diff", client=client)
+    run_composed_stage(repository, "apply", client=client)
+    client.combos["fmo-routing_fast"] = ["manual-edit"]
+
+    result = run_composed_stage(repository, "audit", client=client)
+
+    with repository.database.transaction() as transaction:
+        audit = transaction.execute("SELECT action, reason_codes FROM change_log").fetchone()
+    assert result.exit_code == 0
+    assert audit["action"] == "drift_detected"
+    assert audit["reason_codes"] == ["drift_detected"]
 
 
 @pytest.mark.spec("runtime-bootstrap::Production dispatch executes a real stage")

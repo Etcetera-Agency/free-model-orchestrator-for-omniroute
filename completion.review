@@ -22,7 +22,7 @@
   the executable effect harness rejects `success` results that lack a declared
   repository write, OmniRoute call, or idempotent no-change effect.
 - Remaining unwired stages are tracked by active OpenSpec slices:
-  apply/audit.
+  none.
 - Production composition now wires `model-matching`, `quota-research`, and
   `access-classification` to their domain modules. Matching writes canonical
   endpoint bindings, quota research writes content-hashed summary snapshots and
@@ -36,10 +36,14 @@
   Scoring persists per-role endpoint scores, allocation persists one planned
   combo target set per role with constraint reports, and diff persists minimal
   combo changes without mutating OmniRoute.
+- Production composition now wires `apply` and `audit` end to end. Apply checks
+  repository-backed preconditions, mutates only `fmo-` combos, runs the real
+  smoke path without `/api/combos/test`, rolls back on smoke failure, and
+  reports the real combo-test signal. Audit persists apply records and drift
+  detection.
 - Run-lock acquisition is now database-atomic through a partial unique index on
   active held lock rows; repository tests cover two independent connections,
   fresh schema installs, and migration installs.
 - Code Simplifier review cleaned the new scheduler tests by sharing the partial
   index assertion and making concurrent-thread completion explicit.
-- Remaining deferred repo-level work: implement and archive the active stage
-  wiring slices listed in `openspec/TODO.md`.
+- Remaining deferred repo-level work: none discovered in this slice.
