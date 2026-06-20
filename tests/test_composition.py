@@ -1052,6 +1052,25 @@ def test_apply_stage_smoke_failure_rolls_back_and_maps_failures(postgres_url):
     assert rollback_result.exit_code == 7
 
 
+@pytest.mark.spec("combo-applier::Live state diverged from diff-time before")
+def test_apply_stage_blocks_when_live_combo_diverged_from_diff_before(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    client = PipelineOpsClient()
+    prepare_scored_endpoint(repository, client=client)
+    run_composed_stage(repository, "role-scoring", client=client)
+    run_composed_stage(repository, "demand-forecast", client=client)
+    run_composed_stage(repository, "allocation", client=client)
+    run_composed_stage(repository, "diff", client=client)
+    client.combos["fmo-routing_fast"] = ["manual-live"]
+
+    result = run_composed_stage(repository, "apply", client=client)
+
+    assert result.exit_code == 5
+    assert client.combos["fmo-routing_fast"] == ["manual-live"]
+    assert not any(call[0].startswith("/api/combos/") for call in client.calls)
+
+
 @pytest.mark.spec("combo-applier::Later combo failure rolls back earlier applied combos")
 @pytest.mark.spec("combo-applier::No combo is mutated without a persisted record")
 def test_multi_combo_apply_rolls_back_earlier_combo_on_later_smoke_failure(postgres_url):

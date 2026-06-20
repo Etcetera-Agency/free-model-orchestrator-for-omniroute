@@ -1194,22 +1194,29 @@ def _apply_stage(dependencies: StageDependencies, context: PipelineContext) -> S
     applied = []
     for diff in diffs:
         combo_id = diff["omniroute_combo_id"]
-        before = list(diff["state_json"].get("before", []))
+        diff_before = list(diff["state_json"].get("before", []))
+        live_baseline = list(current.get(combo_id, []))
         desired = list(diff["state_json"].get("after", []))
         if not combo_id.startswith("fmo-"):
             continue
+        if live_baseline != diff_before:
+            return StageResult(
+                status="unsafe_to_apply",
+                reason="combo_drift_detected",
+                details={"combo_test_called": combo_test_called},
+            )
         expected_hash = applier.state_hash(combo_id)
         dependencies.omniroute_client.post(f"/api/combos/{combo_id}", {"models": desired})
         smoke_ok = _smoke_combo(dependencies.omniroute_client, combo_id)
         combo_test_called = True
         applier.apply(combo_id, desired, expected_hash=expected_hash, smoke_ok=smoke_ok)
         if not smoke_ok:
-            if not _rollback_apply_mutations(dependencies.omniroute_client, applied, failed=(combo_id, before)):
+            if not _rollback_apply_mutations(dependencies.omniroute_client, applied, failed=(combo_id, live_baseline)):
                 return StageResult(status="rollback_failed", reason="rollback_failed", details={"combo_test_called": True})
             _delete_applied_snapshots_for_run(context, applied)
             return StageResult(status="apply_failed_rolled_back", reason="smoke_failed", details={"combo_test_called": True})
-        _persist_applied_snapshot(context, diff, before, desired)
-        applied.append((diff, before, desired))
+        _persist_applied_snapshot(context, diff, live_baseline, desired)
+        applied.append((diff, live_baseline, desired))
     result = _effect_result("apply", changed=bool(applied))
     return StageResult(
         status=result.status,

@@ -77,4 +77,8 @@
   moving to the next combo, restores the failed combo plus all earlier applied
   combos on later smoke failure, cleans rolled-back applied snapshots, and
   still attempts every restore before returning `rollback_failed`.
+- Apply now compares the live combo baseline captured at apply time with the
+  diff-time `before` state before mutating. Divergence returns
+  `unsafe_to_apply` without overwriting manual/live changes, and rollback uses
+  the live pre-mutation baseline.
 - Remaining deferred repo-level work: none discovered in this batch.

@@ -2,7 +2,6 @@
 
 ## Active slice queue
 
-- [ ] `rollback-apply-to-live-baseline`
 - [ ] `route-rollback-command-to-combo-revert`
 - [ ] `refactor-composition-into-stage-modules`
 
