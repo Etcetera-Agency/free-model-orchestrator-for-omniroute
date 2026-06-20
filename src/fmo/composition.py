@@ -6,6 +6,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any
+from urllib.parse import urljoin
 
 from psycopg.types.json import Jsonb
 
@@ -15,6 +16,7 @@ from fmo.applier import ComboApplier
 from fmo.apply_guard import ApplyPreconditions, check_apply_preconditions
 from fmo.config import StartupConfig
 from fmo.external_metadata import ExternalMetadataError
+from fmo.llm_runtime import LlmProviderConfig, SharedInstructorRuntime, build_instructor_runtime
 from fmo.matcher import match_model
 from fmo.metadata_sync import sync_external_metadata
 from fmo.omniroute import OmniRouteClient
@@ -27,6 +29,7 @@ from fmo.registry import RegistryFetchError, persist_free_registry_outcome, sync
 from fmo.scanner import CatalogFetchError, CatalogScanner, scan_live_omniroute_catalogs
 from fmo.scoring import eligible_for_scoring, score_endpoint
 from fmo.scheduler import Scheduler
+from fmo.smart_review import ComboReviewResult, run_combo_review
 from fmo.telemetry import sync_live_telemetry
 
 
@@ -91,6 +94,7 @@ class StageDependencies:
     repository: Repository | None
     omniroute_client: OmniRouteClient | None
     config: StartupConfig | None = None
+    llm_runtime: SharedInstructorRuntime | None = None
 
 
 @dataclass(frozen=True)
@@ -98,6 +102,8 @@ class StageAdapters:
     registry_sync: RegistrySync = sync_live_free_registry
     catalog_scan: CatalogScan = field(default_factory=lambda: _scan_catalogs)
     stage_adapters: dict[str, StageAdapter] = field(default_factory=lambda: _production_stage_adapters())
+    instructor_from_openai: Any | None = None
+    openai_client_factory: Any | None = None
 
 
 def compose_runtime(
@@ -108,15 +114,80 @@ def compose_runtime(
 ) -> ComposedRuntime:
     if config.database_url is None:
         raise ValueError("database_url_required")
+    if config.omniroute_api_key is None:
+        raise ValueError("omniroute_api_key_required")
+    selected_adapters = adapters or StageAdapters()
     repository = Repository(Database(config.database_url))
-    client = OmniRouteClient(base_url=config.omniroute_url)
-    dependencies = StageDependencies(repository=repository, omniroute_client=client, config=config)
+    client = OmniRouteClient(base_url=config.omniroute_url, api_key=config.omniroute_api_key)
+    llm_runtime = build_production_llm_runtime(config, repository, adapters=selected_adapters)
+    dependencies = StageDependencies(repository=repository, omniroute_client=client, config=config, llm_runtime=llm_runtime)
     return ComposedRuntime(
         repository=repository,
         omniroute_client=client,
-        stages=build_canonical_stages(dependencies=dependencies, metadata_sync=metadata_sync, adapters=adapters),
+        stages=build_canonical_stages(dependencies=dependencies, metadata_sync=metadata_sync, adapters=selected_adapters),
         cron=config.hermes_inventory_cron,
     )
+
+
+def build_production_llm_runtime(
+    config: StartupConfig,
+    repository: Repository,
+    *,
+    adapters: StageAdapters | None = None,
+) -> SharedInstructorRuntime:
+    selected_adapters = adapters or StageAdapters()
+    provider = LlmProviderConfig(
+        base_url=urljoin(config.omniroute_url.rstrip("/") + "/", "v1"),
+        api_key=config.omniroute_api_key or "",
+    )
+    return build_instructor_runtime(
+        provider=provider,
+        model_resolver=lambda: select_llm_model(repository, config),
+        instructor_from_openai=selected_adapters.instructor_from_openai,
+        openai_client_factory=selected_adapters.openai_client_factory,
+    )
+
+
+def select_llm_model(repository: Repository, config: StartupConfig) -> str | None:
+    if repository is not None:
+        with repository.database.transaction() as transaction:
+            row = transaction.execute(
+                """
+                SELECT f.provider_model_id
+                FROM free_model_definitions f
+                JOIN provider_accounts pa
+                  ON pa.omniroute_connection_id = COALESCE(f.omniroute_pool_key, f.provider_id)
+                JOIN provider_endpoints pe
+                  ON pe.provider_account_id = pa.id
+                 AND pe.provider_model_id = f.provider_model_id
+                JOIN endpoint_access_states eas
+                  ON eas.endpoint_id = pe.id
+                JOIN artificial_analysis_model_metrics aa
+                  ON aa.canonical_model_id = pe.canonical_model_id
+                LEFT JOIN LATERAL (
+                  SELECT status
+                  FROM endpoint_health_observations health
+                  WHERE health.endpoint_id = pe.id
+                  ORDER BY health.observed_at DESC
+                  LIMIT 1
+                ) latest_health ON true
+                WHERE f.status = 'active'
+                  AND eas.status = 'confirmed'
+                  AND COALESCE(
+                    (eas.effective_remaining ->> 'requests')::numeric,
+                    (eas.effective_remaining ->> 'tokens')::numeric,
+                    0
+                  ) > 0
+                  AND COALESCE(latest_health.status, 'active') = 'active'
+                ORDER BY aa.intelligence_index DESC NULLS LAST, f.provider_model_id
+                LIMIT 1
+                """
+            ).fetchone()
+            if row is not None:
+                return row["provider_model_id"]
+    if config.llm_bootstrap_model_id and config.llm_bootstrap_confirmed_free:
+        return config.llm_bootstrap_model_id
+    return None
 
 
 def build_canonical_stages(
@@ -324,6 +395,7 @@ def _quota_research_stage(dependencies: StageDependencies, context: PipelineCont
             model_id=endpoint["provider_model_id"],
             today=today,
             summary_confidence_cap=0.70,
+            instructor_call=dependencies.llm_runtime,
         )
         if result.error is not None:
             return StageResult(status="external_dependency_failed", reason=result.error.reason)
@@ -791,17 +863,35 @@ def _diff_stage(dependencies: StageDependencies, context: PipelineContext) -> St
                 "add": [endpoint_id for endpoint_id in desired if endpoint_id not in before],
                 "remove": [endpoint_id for endpoint_id in before if endpoint_id not in desired],
             }
+            review = _review_diff(dependencies, diff)
             context.repository.combo_snapshots.upsert(
                 transaction,
                 role_id=plan["role_id"],
                 omniroute_combo_id=combo_id,
                 state_hash=_hash_parts(combo_id, str(diff)),
-                state_json=diff,
+                state_json={**diff, "advisory_review": _review_payload(review)},
                 phase="diff",
                 run_id=context.run_id,
             )
             written += 1
     return _effect_result("diff", changed=written > 0)
+
+
+def _review_diff(dependencies: StageDependencies, diff: dict[str, Any]) -> ComboReviewResult:
+    if dependencies.config is not None and dependencies.config.llm_smart_review_call_limit == 0:
+        return run_combo_review(lambda _payload: {}, deterministic_combo={}, trigger=False)
+    if dependencies.llm_runtime is None:
+        return ComboReviewResult(status="failed", valid_diffs=[], rejected=[])
+    deterministic_combo = {str(diff["combo_id"]): list(diff.get("after", []))}
+    return run_combo_review(dependencies.llm_runtime, deterministic_combo=deterministic_combo, trigger=True)
+
+
+def _review_payload(review: ComboReviewResult) -> dict[str, Any]:
+    return {
+        "status": review.status,
+        "valid_diffs": review.valid_diffs,
+        "rejected": review.rejected,
+    }
 
 
 def _apply_stage(dependencies: StageDependencies, context: PipelineContext) -> StageResult:

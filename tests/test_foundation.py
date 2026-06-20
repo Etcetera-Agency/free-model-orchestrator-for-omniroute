@@ -184,6 +184,7 @@ def test_startup_validation_fails_before_model_endpoint_call(monkeypatch):
 def valid_startup_config(**overrides):
     values = {
         "omniroute_url": "https://omniroute.test",
+        "omniroute_api_key": "test-key",
         "database_url": "postgresql://user:pass@localhost:5432/fmo",
         "hermes_inventory_mode": "filesystem",
         "hermes_home": "/tmp/hermes",

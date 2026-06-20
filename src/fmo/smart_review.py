@@ -25,17 +25,22 @@ def run_combo_review(instructor_call, *, deterministic_combo: dict[str, list[str
     if not trigger:
         return ComboReviewResult(status="skipped_trigger", valid_diffs=[], rejected=[])
     try:
-        response = complete_with_adapter(
-            instructor_call,
-            site=LlmSiteConfig(
-                name="smart-combo-reviewer",
-                model="omniroute/free-reviewer",
-                max_prompt_chars=5000,
-                advisory=True,
-            ),
-            context={"prompt": json.dumps({"combo": deterministic_combo}, sort_keys=True)},
-            response_model=ComboReviewResponse,
+        site = LlmSiteConfig(
+            name="smart-combo-reviewer",
+            model="omniroute/free-reviewer",
+            max_prompt_chars=5000,
+            advisory=True,
         )
+        context = {"prompt": json.dumps({"combo": deterministic_combo}, sort_keys=True)}
+        if hasattr(instructor_call, "complete"):
+            response = instructor_call.complete(site=site, context=context, response_model=ComboReviewResponse)
+        else:
+            response = complete_with_adapter(
+                instructor_call,
+                site=site,
+                context=context,
+                response_model=ComboReviewResponse,
+            )
     except Exception:
         return ComboReviewResult(status="failed", valid_diffs=[], rejected=[])
     valid = []

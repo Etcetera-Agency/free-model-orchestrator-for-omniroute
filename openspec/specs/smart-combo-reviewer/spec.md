@@ -18,6 +18,7 @@ throws, review SHALL return failed without blocking deterministic allocation.
 - GIVEN the Instructor call raises an exception
 - WHEN review is requested
 - THEN status is `failed`
+
 ### Requirement: Independent diff validation, no repair loop
 
 The system SHALL validate each proposed diff independently and SHALL NOT ask the
@@ -44,6 +45,7 @@ deterministically. Duplicate add SHALL be idempotent.
 - GIVEN a diff adds an endpoint already present in the combo
 - WHEN diffs are applied
 - THEN the combo is unchanged and no duplicate is created
+
 ### Requirement: Advisory only — never blocks the deterministic plan
 
 The system SHALL apply the deterministic combo when the reviewer model is
@@ -55,4 +57,26 @@ triggers, and SHALL never call `/api/combos/test`.
 - GIVEN no eligible reviewer model is available
 - WHEN the review step runs
 - THEN the deterministic combo is applied unchanged with status `skipped_no_model`
+
+### Requirement: Advisory reviewer runs in the production diff path
+
+The production pipeline SHALL invoke `run_combo_review` as an advisory pass over
+the computed combo diff using the shared runtime. The reviewer is fail-open and
+advisory only: its structured output SHALL be persisted for operator visibility,
+but the applied diff SHALL be exactly the deterministic diff regardless of
+whether the reviewer succeeds, fails, or is disabled.
+
+#### Scenario: Reviewer output is recorded
+- **WHEN** the diff stage runs with the advisory reviewer enabled
+- **THEN** the reviewer's structured result is persisted alongside the diff
+
+#### Scenario: Applied diff is independent of the reviewer
+- **WHEN** the same run is executed with the reviewer succeeding and with the
+  reviewer unavailable
+- **THEN** the applied diff is byte-identical in both runs
+- **AND** a reviewer result that alters the applied diff fails the suite
+
+#### Scenario: Reviewer disabled by trigger
+- **WHEN** the advisory trigger is disabled
+- **THEN** no reviewer call is made and the deterministic diff is applied
 

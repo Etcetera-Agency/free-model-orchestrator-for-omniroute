@@ -2,7 +2,7 @@ import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping, TypeVar
+from typing import Any, Callable, Mapping, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
@@ -29,7 +29,7 @@ class LlmSiteConfig:
 class LlmProviderConfig:
     base_url: str
     api_key: str
-    model: str
+    model: str | None = None
     structured_output_mode: str = "json_schema"
 
 
@@ -41,9 +41,10 @@ ResponseModel = TypeVar("ResponseModel", bound=BaseModel)
 
 
 class SharedInstructorRuntime:
-    def __init__(self, *, provider: LlmProviderConfig, transport):
+    def __init__(self, *, provider: LlmProviderConfig, transport, model_resolver: Callable[[], str | None] | None = None):
         self.provider = provider
         self.transport = transport
+        self.model_resolver = model_resolver
 
     def complete(
         self,
@@ -57,10 +58,11 @@ class SharedInstructorRuntime:
         attempts = max(site.retries, 1)
         for _ in range(attempts):
             try:
+                model = self._resolve_model(site)
                 raw = self.transport(
                     {
                         "base_url": self.provider.base_url,
-                        "model": site.model or self.provider.model,
+                        "model": model,
                         "site": site.name,
                         "mode": self.provider.structured_output_mode,
                         "prompt": prompt,
@@ -71,6 +73,39 @@ class SharedInstructorRuntime:
             except Exception as exc:
                 last_error = exc
         raise LlmRuntimeError(str(last_error)) from last_error
+
+    def _resolve_model(self, site: LlmSiteConfig) -> str:
+        if self.model_resolver is not None:
+            model = self.model_resolver()
+            if model:
+                return model
+            raise LlmRuntimeError("llm_model_unavailable")
+        model = site.model or self.provider.model
+        if not model:
+            raise LlmRuntimeError("llm_model_unavailable")
+        return model
+
+
+def build_instructor_runtime(
+    *,
+    provider: LlmProviderConfig,
+    model_resolver: Callable[[], str | None],
+    instructor_from_openai=None,
+    openai_client_factory=None,
+) -> SharedInstructorRuntime:
+    client_factory = openai_client_factory or _import_openai_client()
+    instructor_factory = instructor_from_openai or _import_instructor_from_openai()
+    client = client_factory(base_url=provider.base_url, api_key=provider.api_key)
+    instructor_client = instructor_factory(client)
+
+    def transport(payload: Mapping[str, object]) -> BaseModel:
+        return instructor_client.chat.completions.create(
+            model=str(payload["model"]),
+            messages=[{"role": "user", "content": str(payload["prompt"])}],
+            response_model=payload["response_model"],
+        )
+
+    return SharedInstructorRuntime(provider=provider, transport=transport, model_resolver=model_resolver)
 
 
 def complete_with_adapter(
@@ -85,6 +120,18 @@ def complete_with_adapter(
         transport=instructor_call,
     )
     return runtime.complete(site=site, context=context, response_model=response_model)
+
+
+def _import_openai_client():
+    from openai import OpenAI
+
+    return OpenAI
+
+
+def _import_instructor_from_openai():
+    import instructor
+
+    return instructor.from_openai
 
 
 def assemble_prompt(site: LlmSiteConfig, context: Mapping[str, object]) -> str:

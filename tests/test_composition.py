@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
+from psycopg.types.json import Jsonb
 
 from fmo.artificial_analysis import AAModelMetrics, AASnapshot
 from fmo.bootstrap import build_startup_config
@@ -11,20 +12,25 @@ from fmo.composition import (
     StageDependencies,
     _cli_result,
     build_canonical_stages,
+    build_production_llm_runtime,
     compose_runtime,
+    select_llm_model,
     stages_for_command,
 )
 from fmo.db import MigrationRunner
 from fmo.metadata_sync import MetadataSyncResult
 from fmo.persistence import Database, Repository
 from fmo.pipeline import CANONICAL_STAGE_NAMES, PipelineRunner
+from fmo.quota_research import QuotaClaimResponse
 from fmo.registry import FreeRegistry, FreeRegistrySyncOutcome
+from fmo.smart_review import ComboReviewResponse
 from tests._stage_effects import assert_success_has_declared_effect, effectful_success
 
 
 def valid_env(**overrides):
     values = {
         "OMNIROUTE_URL": "https://omniroute.test",
+        "OMNIROUTE_API_KEY": "test-key",
         "DATABASE_URL": "postgresql://user:pass@localhost:5432/fmo",
         "HERMES_INVENTORY_MODE": "filesystem",
         "HERMES_HOME": "/tmp/hermes",
@@ -138,6 +144,50 @@ class PipelineOpsClient(QuotaSearchClient):
         raise AssertionError(f"unexpected GET {path}")
 
 
+class RecordingLlmRuntime:
+    def __init__(self, *, quota_amount=200.0, review_diffs=None, fail=False):
+        self.quota_amount = quota_amount
+        self.review_diffs = review_diffs or []
+        self.fail = fail
+        self.calls = []
+
+    def complete(self, *, site, context, response_model):
+        self.calls.append({"site": site.name, "context": context, "response_model": response_model.__name__})
+        if self.fail:
+            raise RuntimeError("llm unavailable")
+        if response_model is QuotaClaimResponse:
+            return response_model(
+                metric="requests",
+                amount=self.quota_amount,
+                window="day",
+                evidence=["https://llm.example/evidence"],
+                hard_stop=True,
+            )
+        if response_model is ComboReviewResponse:
+            return response_model(diffs=self.review_diffs)
+        raise AssertionError(f"unexpected response model {response_model}")
+
+
+class FakeOpenAIClient:
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs
+
+
+class FakeInstructorCompletions:
+    def __init__(self):
+        self.calls = []
+
+    def create(self, **kwargs):
+        self.calls.append(kwargs)
+        response_model = kwargs["response_model"]
+        return response_model(metric="requests", amount=1, window="day", evidence=["fixture"], hard_stop=True)
+
+
+class FakeInstructorClient:
+    def __init__(self):
+        self.chat = type("Chat", (), {"completions": FakeInstructorCompletions()})()
+
+
 def seed_endpoint(repository, *, model_id="free-chat"):
     with repository.database.transaction() as transaction:
         provider = repository.providers.upsert(
@@ -164,6 +214,12 @@ def seed_endpoint(repository, *, model_id="free-chat"):
 
 def run_composed_stage(repository, stage_name, *, client=None):
     dependencies = StageDependencies(repository=repository, omniroute_client=client or PipelineOpsClient())
+    stages = build_canonical_stages(dependencies=dependencies, metadata_sync=lambda **_kwargs: None)
+    selected = stages_for_command(_command_for_stage(stage_name), stages)
+    return PipelineRunner(repository, stages=selected).run(trigger=stage_name, run_type=stage_name)
+
+
+def run_composed_stage_with_dependencies(repository, stage_name, dependencies):
     stages = build_canonical_stages(dependencies=dependencies, metadata_sync=lambda **_kwargs: None)
     selected = stages_for_command(_command_for_stage(stage_name), stages)
     return PipelineRunner(repository, stages=selected).run(trigger=stage_name, run_type=stage_name)
@@ -208,6 +264,75 @@ def prepare_scored_endpoint(repository, *, client=None):
         )
 
 
+def seed_confirmed_llm_candidate(repository, *, model_id, intelligence_index, remaining=100, health_status="active"):
+    with repository.database.transaction() as transaction:
+        canonical = repository.canonical_models.upsert(transaction, canonical_slug=model_id)
+        provider = repository.providers.upsert(
+            transaction,
+            omniroute_instance_id="local",
+            omniroute_provider_id="provider-a",
+            provider_type="api",
+        )
+        account = repository.provider_accounts.upsert(
+            transaction,
+            provider_id=provider["id"],
+            omniroute_connection_id="pool-a",
+        )
+        endpoint = repository.provider_endpoints.upsert(
+            transaction,
+            provider_account_id=account["id"],
+            provider_model_id=model_id,
+            lifecycle_status="active",
+            access_status="confirmed",
+            metadata_hash=f"{model_id}:hash",
+        )
+        transaction.execute(
+            "UPDATE provider_endpoints SET canonical_model_id = %(model_id)s WHERE id = %(endpoint_id)s",
+            {"model_id": canonical["id"], "endpoint_id": endpoint["id"]},
+        )
+        transaction.execute(
+            """
+            INSERT INTO free_model_definitions (provider_id, provider_model_id, free_type, omniroute_pool_key, status)
+            VALUES ('provider-a', %(model_id)s, 'free', 'pool-a', 'active')
+            ON CONFLICT (provider_id, provider_model_id)
+            DO UPDATE SET status = EXCLUDED.status
+            """,
+            {"model_id": model_id},
+        )
+        transaction.execute(
+            """
+            INSERT INTO endpoint_access_states (
+              endpoint_id, status, reason_code, effective_remaining,
+              reset_at, hard_stop_capable, evidence
+            )
+            VALUES (
+              %(endpoint_id)s, 'confirmed', 'free_quota_available',
+              %(remaining)s, now() + interval '1 day', true, '{}'::jsonb
+            )
+            ON CONFLICT (endpoint_id)
+            DO UPDATE SET effective_remaining = EXCLUDED.effective_remaining
+            """,
+            {"endpoint_id": endpoint["id"], "remaining": Jsonb({"requests": remaining})},
+        )
+        transaction.execute(
+            """
+            INSERT INTO artificial_analysis_model_metrics (
+              canonical_model_id, intelligence_index, source_payload_hash, stale_after
+            )
+            VALUES (%(model_id)s, %(index)s, %(hash)s, now() + interval '1 day')
+            """,
+            {"model_id": canonical["id"], "index": intelligence_index, "hash": f"{model_id}:aa"},
+        )
+        transaction.execute(
+            """
+            INSERT INTO endpoint_health_observations (endpoint_id, granularity, status, observed_at)
+            VALUES (%(endpoint_id)s, 'model', %(status)s, now())
+            """,
+            {"endpoint_id": endpoint["id"], "status": health_status},
+        )
+    return endpoint
+
+
 @pytest.mark.spec("pipeline-orchestration::Matching writes endpoint bindings")
 def test_model_matching_stage_writes_endpoint_binding(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
@@ -226,14 +351,18 @@ def test_model_matching_stage_writes_endpoint_binding(postgres_url):
 
 
 @pytest.mark.spec("pipeline-orchestration::Quota research persists capped rules")
+@pytest.mark.spec("quota-research::Inspector path taken when runtime available")
+@pytest.mark.spec("quota-research::Inspector cannot exceed the deterministic cap")
 def test_quota_research_stage_persists_snapshot_and_capped_rule(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     repository = Repository(Database(postgres_url))
     seed_endpoint(repository)
     run_composed_stage(repository, "model-matching")
     client = QuotaSearchClient()
+    llm_runtime = RecordingLlmRuntime(quota_amount=200.0)
+    dependencies = StageDependencies(repository=repository, omniroute_client=client, llm_runtime=llm_runtime)
 
-    result = run_composed_stage(repository, "quota-research", client=client)
+    result = run_composed_stage_with_dependencies(repository, "quota-research", dependencies)
 
     with repository.database.transaction() as transaction:
         snapshot_count = transaction.execute("SELECT count(*) AS total FROM quota_source_snapshots").fetchone()["total"]
@@ -241,7 +370,28 @@ def test_quota_research_stage_persists_snapshot_and_capped_rule(postgres_url):
     assert result.exit_code == 0
     assert result.stage_results[0]["details"]["effect"] == "repository_write"
     assert client.calls[0][0] == "/v1/search"
+    assert llm_runtime.calls[0]["site"] == "quota-research-inspector"
     assert snapshot_count == 1
+    assert float(rule["confidence"]) == 0.70
+    assert rule["limits"]["requests"] == 200.0
+
+
+@pytest.mark.spec("quota-research::Fails open to deterministic extraction")
+def test_quota_research_falls_back_to_summary_extraction_when_inspector_fails(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    seed_endpoint(repository)
+    run_composed_stage(repository, "model-matching")
+    client = QuotaSearchClient()
+    llm_runtime = RecordingLlmRuntime(fail=True)
+    dependencies = StageDependencies(repository=repository, omniroute_client=client, llm_runtime=llm_runtime)
+
+    result = run_composed_stage_with_dependencies(repository, "quota-research", dependencies)
+
+    with repository.database.transaction() as transaction:
+        rule = transaction.execute("SELECT confidence, limits FROM quota_rules").fetchone()
+    assert result.exit_code == 0
+    assert llm_runtime.calls[0]["site"] == "quota-research-inspector"
     assert float(rule["confidence"]) == 0.70
     assert rule["limits"]["requests"] == 100.0
 
@@ -438,6 +588,8 @@ def test_allocation_stage_persists_plan_and_constraint_report(postgres_url):
 
 
 @pytest.mark.spec("pipeline-orchestration::Diff is computed without mutating OmniRoute")
+@pytest.mark.spec("smart-combo-reviewer::Reviewer output is recorded")
+@pytest.mark.spec("smart-combo-reviewer::Applied diff is independent of the reviewer")
 def test_diff_stage_persists_minimal_diff_without_mutating_omniroute(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     repository = Repository(Database(postgres_url))
@@ -445,8 +597,12 @@ def test_diff_stage_persists_minimal_diff_without_mutating_omniroute(postgres_ur
     prepare_scored_endpoint(repository, client=client)
     run_composed_stage(repository, "role-scoring", client=client)
     run_composed_stage(repository, "allocation", client=client)
+    llm_runtime = RecordingLlmRuntime(
+        review_diffs=[{"op": "add", "role": "routing_fast", "endpoint_id": "reviewer-added"}]
+    )
+    dependencies = StageDependencies(repository=repository, omniroute_client=client, llm_runtime=llm_runtime)
 
-    result = run_composed_stage(repository, "diff", client=client)
+    result = run_composed_stage_with_dependencies(repository, "diff", dependencies)
 
     with repository.database.transaction() as transaction:
         snapshot = transaction.execute("SELECT phase, state_json FROM combo_snapshots").fetchone()
@@ -454,8 +610,32 @@ def test_diff_stage_persists_minimal_diff_without_mutating_omniroute(postgres_ur
     assert result.stage_results[0]["details"]["effect"] == "repository_write"
     assert client.get_calls[-1] == "/api/combos"
     assert not any(call[0].startswith("/api/combos") for call in client.calls)
+    assert llm_runtime.calls[0]["site"] == "smart-combo-reviewer"
     assert snapshot["phase"] == "diff"
     assert snapshot["state_json"]["remove"] == ["old-endpoint"]
+    assert snapshot["state_json"]["after"] != ["reviewer-added"]
+    assert snapshot["state_json"]["advisory_review"]["status"] == "ok"
+
+
+@pytest.mark.spec("smart-combo-reviewer::Reviewer disabled by trigger")
+def test_diff_stage_skips_reviewer_when_site_limit_disabled(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    client = PipelineOpsClient()
+    prepare_scored_endpoint(repository, client=client)
+    run_composed_stage(repository, "role-scoring", client=client)
+    run_composed_stage(repository, "allocation", client=client)
+    config = build_startup_config(valid_env(DATABASE_URL=postgres_url, LLM_SMART_REVIEW_CALL_LIMIT="0"))
+    llm_runtime = RecordingLlmRuntime(review_diffs=[{"op": "add", "role": "routing_fast", "endpoint_id": "x"}])
+    dependencies = StageDependencies(repository=repository, omniroute_client=client, config=config, llm_runtime=llm_runtime)
+
+    result = run_composed_stage_with_dependencies(repository, "diff", dependencies)
+
+    with repository.database.transaction() as transaction:
+        snapshot = transaction.execute("SELECT state_json FROM combo_snapshots").fetchone()
+    assert result.exit_code == 0
+    assert llm_runtime.calls == []
+    assert snapshot["state_json"]["advisory_review"]["status"] == "skipped_trigger"
 
 
 @pytest.mark.spec("pipeline-orchestration::Production apply runs the real smoke test")
@@ -570,6 +750,83 @@ def test_production_sync_metadata_uses_composed_stage(postgres_url):
 
     assert result.exit_code == 0
     assert calls == [{"dry_run": False}]
+
+
+@pytest.mark.spec("llm-runtime::Client built from config")
+@pytest.mark.spec("llm-runtime::No site bypasses the shared runtime")
+@pytest.mark.spec("llm-runtime::Bootstrap model used before any catalog match")
+def test_production_llm_runtime_uses_instructor_from_openai_and_bootstrap_model(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    config = build_startup_config(
+        valid_env(
+            DATABASE_URL=postgres_url,
+            LLM_BOOTSTRAP_MODEL_ID="free-bootstrap",
+            LLM_BOOTSTRAP_MODEL_CONFIRMED_FREE="true",
+        )
+    )
+    openai_clients = []
+    instructor_clients = []
+    fake_instructor_client = FakeInstructorClient()
+
+    def openai_client_factory(**kwargs):
+        client = FakeOpenAIClient(**kwargs)
+        openai_clients.append(client)
+        return client
+
+    def instructor_from_openai(client):
+        instructor_clients.append(client)
+        return fake_instructor_client
+
+    runtime = build_production_llm_runtime(
+        config,
+        repository,
+        adapters=StageAdapters(
+            instructor_from_openai=instructor_from_openai,
+            openai_client_factory=openai_client_factory,
+        ),
+    )
+
+    response = runtime.complete(
+        site=type("Site", (), {"name": "quota-research-inspector", "model": "paid-static", "prompt_path": None, "max_prompt_chars": 1000, "retries": 1})(),
+        context={"prompt": "quota"},
+        response_model=QuotaClaimResponse,
+    )
+
+    assert response.amount == 1
+    assert openai_clients[0].kwargs == {"base_url": "https://omniroute.test/v1", "api_key": "test-key"}
+    assert instructor_clients == openai_clients
+    assert fake_instructor_client.chat.completions.calls[0]["model"] == "free-bootstrap"
+
+
+@pytest.mark.spec("llm-runtime::Highest-index confirmed-free model selected")
+@pytest.mark.spec("llm-runtime::Falls to next model by index on unavailability")
+def test_llm_model_selection_uses_confirmed_free_index_order_and_no_llm_fallback(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    config = build_startup_config(valid_env(DATABASE_URL=postgres_url))
+    seed_confirmed_llm_candidate(repository, model_id="free-low", intelligence_index=40)
+    seed_confirmed_llm_candidate(repository, model_id="free-high", intelligence_index=90, remaining=0)
+    seed_confirmed_llm_candidate(repository, model_id="free-unhealthy", intelligence_index=95, health_status="degraded")
+
+    selected = select_llm_model(repository, config)
+
+    with repository.database.transaction() as transaction:
+        combo_count = transaction.execute("SELECT count(*) AS total FROM combo_snapshots").fetchone()["total"]
+    assert selected == "free-low"
+    assert combo_count == 0
+
+    empty_repository = Repository(Database(postgres_url))
+    assert select_llm_model(empty_repository, config) == "free-low"
+
+
+@pytest.mark.spec("llm-runtime::No confirmed-free model degrades to no-LLM")
+def test_llm_model_selection_returns_none_without_catalog_or_bootstrap(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    config = build_startup_config(valid_env(DATABASE_URL=postgres_url))
+
+    assert select_llm_model(repository, config) is None
 
 
 @pytest.mark.spec("persistence::Sync writes metadata through the repository")

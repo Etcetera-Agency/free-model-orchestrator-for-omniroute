@@ -7,6 +7,11 @@ class StartupConfig:
     omniroute_url: str
     database_url: str | None
     hermes_inventory_mode: str
+    omniroute_api_key: str | None = None
+    llm_bootstrap_model_id: str | None = None
+    llm_bootstrap_confirmed_free: bool = False
+    llm_quota_research_call_limit: int = 1
+    llm_smart_review_call_limit: int = 1
     hermes_home: str | None = None
     hermes_agents_path: str | None = None
     hermes_routines_path: str | None = None
@@ -24,8 +29,17 @@ def validate_startup(config: StartupConfig, *, health_check, model_endpoint_chec
 
 
 def validate_static_config(config: StartupConfig) -> None:
-    if urlparse(config.omniroute_url).scheme not in {"http", "https"}:
+    parsed_omniroute = urlparse(config.omniroute_url)
+    if parsed_omniroute.scheme not in {"http", "https"}:
         raise ValueError("OMNIROUTE_URL must be http or https")
+    if not config.omniroute_api_key:
+        raise ValueError("OMNIROUTE_API_KEY is required")
+    if config.llm_bootstrap_model_id and not config.llm_bootstrap_confirmed_free:
+        raise ValueError("LLM_BOOTSTRAP_MODEL_CONFIRMED_FREE must be true when LLM_BOOTSTRAP_MODEL_ID is set")
+    if config.llm_quota_research_call_limit < 0:
+        raise ValueError("LLM_QUOTA_RESEARCH_CALL_LIMIT must be non-negative")
+    if config.llm_smart_review_call_limit < 0:
+        raise ValueError("LLM_SMART_REVIEW_CALL_LIMIT must be non-negative")
     if not config.database_url:
         raise ValueError("DATABASE_URL is required")
     if config.hermes_inventory_mode not in {"filesystem", "command", "http"}:

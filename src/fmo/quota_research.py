@@ -84,12 +84,13 @@ def research_quota_rule(
     model_id: str,
     today: datetime,
     summary_confidence_cap: float,
+    instructor_call=None,
     previous_limit: float | None = None,
 ) -> QuotaResearchResult:
     query = build_quota_query(provider, model_id, today=today)
     try:
         snapshot = run_quota_search(client, provider=provider, model_id=model_id, query=query)
-        claim = extract_summary_claim(snapshot)
+        claim = _extract_claim(snapshot, instructor_call=instructor_call)
         rule = activate_summary_rule(
             claim,
             summary_confidence_cap=summary_confidence_cap,
@@ -104,6 +105,25 @@ def research_quota_rule(
         error = QuotaResearchError("quota_research", "extraction_error")
         return QuotaResearchResult(snapshot=None, rule=None, error=error)
     return QuotaResearchResult(snapshot=snapshot, rule=rule)
+
+
+def _extract_claim(snapshot: SearchSnapshot, *, instructor_call) -> QuotaClaim:
+    if instructor_call is not None:
+        try:
+            return run_quota_inspector(instructor_call, _quota_inspector_prompt(snapshot))
+        except Exception:
+            pass
+    return extract_summary_claim(snapshot)
+
+
+def _quota_inspector_prompt(snapshot: SearchSnapshot) -> str:
+    return "\n".join(
+        [
+            snapshot.query,
+            snapshot.answer_text,
+            *snapshot.evidence_urls,
+        ]
+    )
 
 
 def extract_summary_claim(snapshot: SearchSnapshot) -> QuotaClaim:
@@ -121,16 +141,12 @@ def extract_summary_claim(snapshot: SearchSnapshot) -> QuotaClaim:
 
 
 def run_quota_inspector(call_instructor, prompt: str) -> QuotaClaim:
-    response = complete_with_adapter(
-        call_instructor,
-        site=LlmSiteConfig(
-            name="quota-research-inspector",
-            model="omniroute/free-quota-inspector",
-            max_prompt_chars=7000,
-        ),
-        context={"prompt": prompt},
-        response_model=QuotaClaimResponse,
+    site = LlmSiteConfig(
+        name="quota-research-inspector",
+        model="omniroute/free-quota-inspector",
+        max_prompt_chars=7000,
     )
+    response = _complete_quota_claim(call_instructor, site=site, prompt=prompt)
     return validate_claim(
         QuotaClaim(
             metric=response.metric,
@@ -139,6 +155,17 @@ def run_quota_inspector(call_instructor, prompt: str) -> QuotaClaim:
             evidence=response.evidence,
             hard_stop=response.hard_stop,
         )
+    )
+
+
+def _complete_quota_claim(call_instructor, *, site: LlmSiteConfig, prompt: str) -> QuotaClaimResponse:
+    if hasattr(call_instructor, "complete"):
+        return call_instructor.complete(site=site, context={"prompt": prompt}, response_model=QuotaClaimResponse)
+    return complete_with_adapter(
+        call_instructor,
+        site=site,
+        context={"prompt": prompt},
+        response_model=QuotaClaimResponse,
     )
 
 

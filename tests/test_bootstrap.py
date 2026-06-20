@@ -11,6 +11,7 @@ from fmo.persistence import Database, Repository
 def valid_env(**overrides):
     values = {
         "OMNIROUTE_URL": "https://omniroute.test",
+        "OMNIROUTE_API_KEY": "test-key",
         "DATABASE_URL": "postgresql://user:pass@localhost:5432/fmo",
         "HERMES_INVENTORY_MODE": "filesystem",
         "HERMES_HOME": "/tmp/hermes",
@@ -27,6 +28,7 @@ def valid_env(**overrides):
     "env_patch",
     [
         {"OMNIROUTE_URL": "ftp://omniroute.test"},
+        {"OMNIROUTE_API_KEY": ""},
         {"DATABASE_URL": ""},
         {"HERMES_INVENTORY_MODE": "bad"},
         {"HERMES_INVENTORY_CRON": "bad cron"},
@@ -38,6 +40,21 @@ def test_invalid_env_maps_to_exit_3_and_does_not_dispatch(env_patch):
     exit_code = bootstrap_and_dispatch(
         ["full"],
         env=valid_env(**env_patch),
+        health_check=lambda: {"ok": True},
+        dispatcher=lambda argv, preconditions_ok, config: calls.append((argv, preconditions_ok)) or 0,
+    )
+
+    assert exit_code == 3
+    assert calls == []
+
+
+@pytest.mark.spec("llm-runtime::Missing LLM provider config fails closed")
+def test_missing_llm_provider_config_fails_before_dispatch():
+    calls = []
+
+    exit_code = bootstrap_and_dispatch(
+        ["full"],
+        env=valid_env(OMNIROUTE_API_KEY=""),
         health_check=lambda: {"ok": True},
         dispatcher=lambda argv, preconditions_ok, config: calls.append((argv, preconditions_ok)) or 0,
     )
