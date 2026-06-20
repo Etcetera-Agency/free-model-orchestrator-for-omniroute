@@ -15,6 +15,7 @@ from fmo.hermes_inventory import (
 from fmo.role_lifecycle import reconcile_roles
 
 
+@pytest.mark.spec("hermes-inventory::Missing required env")
 def test_adapters_normalize_samples_and_missing_env_fails():
     sample = {"roles": [{"role": "research_scout", "consumer_type": "cron_job", "consumer": "daily", "cadence": "0 4 * * *", "calls_per_run": 2}]}
     assert normalize_filesystem_inventory(sample, env={"HERMES_HOME": "/tmp"}).consumers[0].consumer_type == "cron_job"
@@ -24,6 +25,7 @@ def test_adapters_normalize_samples_and_missing_env_fails():
         normalize_filesystem_inventory(sample, env={})
 
 
+@pytest.mark.spec("hermes-inventory::Unknown role observed")
 def test_daily_inventory_records_all_consumer_types_and_unknown_role_full_inventory():
     sample = {
         "roles": [
@@ -38,6 +40,7 @@ def test_daily_inventory_records_all_consumer_types_and_unknown_role_full_invent
     assert should_run_full_inventory(observed_role="new", known_roles={"r"}) == "full"
 
 
+@pytest.mark.spec("hermes-inventory::Schedule changed")
 def test_inventory_diff_marks_forecast_stale_and_material_allocation_gate():
     old = normalize_command_inventory({"roles": [{"role": "r", "consumer_type": "cron_job", "consumer": "c", "cadence": "daily", "calls_per_run": 1}]}, env={"HERMES_INVENTORY_COMMAND": "cmd"})
     new = normalize_command_inventory({"roles": [{"role": "r", "consumer_type": "cron_job", "consumer": "c", "cadence": "hourly", "calls_per_run": 1}]}, env={"HERMES_INVENTORY_COMMAND": "cmd"})
@@ -47,6 +50,8 @@ def test_inventory_diff_marks_forecast_stale_and_material_allocation_gate():
     assert diff.rebuild_combo(material_allocation_changed=False) is False
 
 
+@pytest.mark.spec("hermes-inventory::Inspector does not inspect")
+@pytest.mark.spec("hermes-inventory::Inspector output")
 def test_inspector_prompt_and_scope_no_secret_or_file_reads():
     inventory = normalize_command_inventory({"roles": [{"role": "r", "consumer_type": "webhook", "consumer": "w", "cadence": "observed", "calls_per_run": 3}]}, env={"HERMES_INVENTORY_COMMAND": "cmd"})
     prompt = assemble_inspector_prompt(inventory, changes=["cadence changed"], secrets={"HERMES_INVENTORY_TOKEN": "secret"})
@@ -57,6 +62,9 @@ def test_inspector_prompt_and_scope_no_secret_or_file_reads():
     assert forecast.quota_change is None
 
 
+@pytest.mark.spec("dynamic-role-lifecycle::Role disappears once")
+@pytest.mark.spec("dynamic-role-lifecycle::Role reappears within grace")
+@pytest.mark.spec("dynamic-role-lifecycle::Brand-new role")
 def test_reconcile_retire_grace_reactivate_and_new_role_bootstrap():
     now = datetime.now(timezone.utc)
     roles = {

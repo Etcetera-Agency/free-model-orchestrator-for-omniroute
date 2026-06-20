@@ -20,6 +20,12 @@ CREATE TABLE sync_runs (
   error_json jsonb
 );
 
+CREATE UNIQUE INDEX sync_runs_active_lock_name_idx
+  ON sync_runs (trigger)
+  WHERE run_type = 'lock'
+    AND status = 'held'
+    AND finished_at IS NULL;
+
 CREATE TABLE providers (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   omniroute_instance_id text NOT NULL,

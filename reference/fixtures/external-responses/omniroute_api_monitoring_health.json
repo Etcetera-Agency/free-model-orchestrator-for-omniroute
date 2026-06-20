@@ -1,0 +1,110 @@
+{
+  "captured_at": "2026-06-18T07:36:26.488Z",
+  "source": "omniroute-shlink-20129",
+  "name": "omniroute_api_monitoring_health",
+  "method": "GET",
+  "path": "/api/monitoring/health",
+  "status": 200,
+  "headers": {
+    "access-control-allow-headers": "[REDACTED]",
+    "access-control-allow-methods": "[REDACTED]",
+    "connection": "keep-alive",
+    "content-security-policy": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; media-src 'self' data: blob:; connect-src 'self' http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:* https: wss:; worker-src 'self' blob:; manifest-src 'self'",
+    "content-type": "application/json",
+    "date": "Thu, 18 Jun 2026 07:36:11 GMT",
+    "keep-alive": "timeout=5",
+    "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=()",
+    "referrer-policy": "strict-origin-when-cross-origin",
+    "strict-transport-security": "max-age=63072000; includeSubDomains; preload",
+    "transfer-encoding": "chunked",
+    "vary": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "DENY",
+    "x-omniroute-route-class": "PUBLIC",
+    "x-request-id": "[UUID]"
+  },
+  "body": {
+    "status": "healthy",
+    "timestamp": "2026-06-18T07:36:11.226Z",
+    "system": {
+      "version": "3.8.26",
+      "nodeVersion": "v24.16.0",
+      "uptime": 279.912611406,
+      "memoryUsage": {
+        "rss": 447021056,
+        "heapTotal": 277217280,
+        "heapUsed": 265279056,
+        "external": 4376443,
+        "arrayBuffers": 12992057
+      },
+      "pid": 13,
+      "platform": "linux"
+    },
+    "version": "3.8.26",
+    "uptime": 279.912611406,
+    "memoryUsage": {
+      "rss": 447021056,
+      "heapTotal": 277217280,
+      "heapUsed": 265279056,
+      "external": 4376443,
+      "arrayBuffers": 12992057
+    },
+    "activeConnections": 18,
+    "circuitBreakers": {
+      "open": 0,
+      "halfOpen": 0,
+      "degraded": 0,
+      "closed": 0,
+      "total": 0
+    },
+    "providerBreakers": [],
+    "providerHealth": {},
+    "providerSummary": {
+      "catalogCount": 235,
+      "configuredCount": 15,
+      "activeCount": 14,
+      "monitoredCount": 0
+    },
+    "localProviders": {},
+    "rateLimitStatus": {},
+    "learnedLimits": {},
+    "lockouts": [],
+    "quotaMonitor": {
+      "active": 0,
+      "alerting": 0,
+      "exhausted": 0,
+      "errors": 0,
+      "statusCounts": {
+        "starting": 0,
+        "idle": 0,
+        "healthy": 0,
+        "warning": 0,
+        "exhausted": 0,
+        "error": 0
+      },
+      "byProvider": {},
+      "monitors": []
+    },
+    "sessions": {
+      "activeCount": 0,
+      "stickyBoundCount": 0,
+      "byApiKey": {},
+      "top": []
+    },
+    "credentialHealth": {
+      "total": 0,
+      "healthy": 0,
+      "failed": 0,
+      "unknown": 0,
+      "stale": 0
+    },
+    "dedup": {
+      "inflightRequests": 0
+    },
+    "cryptography": {
+      "status": "healthy",
+      "provider": "aes-256-gcm"
+    },
+    "setupComplete": true
+  }
+}

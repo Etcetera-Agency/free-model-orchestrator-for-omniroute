@@ -1,0 +1,133 @@
+{
+  "captured_at": "2026-06-18T09:14:36.801Z",
+  "source": "omniroute web session health export with browser credentials redacted",
+  "request": {
+    "method": "GET",
+    "path": "/api/providers/web-cookie/sessions",
+    "headers": {
+      "authorization": "[REDACTED]",
+      "cookie": "[REDACTED]"
+    }
+  },
+  "body": {
+    "sessionSources": [
+      {
+        "source_id": "browser-chatgpt-default",
+        "endpoint_id": "chatgpt-web:gpt-4o-mini",
+        "provider_id": "chatgpt-web",
+        "model": "gpt-4o-mini",
+        "auth_type": "web_cookie",
+        "origin": "browser_profile",
+        "profile": "Default",
+        "primary_override": false,
+        "session": {
+          "cookie_names": ["__Secure-next-auth.session-token", "oai-did"],
+          "expires_at": "2026-06-18T21:08:44.000Z",
+          "expired": false,
+          "challenge": false,
+          "markers": ["authenticated", "csrf_present"]
+        }
+      },
+      {
+        "source_id": "browser-chatgpt-expired",
+        "endpoint_id": "chatgpt-web:gpt-4o",
+        "provider_id": "chatgpt-web",
+        "model": "gpt-4o",
+        "auth_type": "web_cookie",
+        "origin": "browser_profile",
+        "profile": "Default",
+        "primary_override": false,
+        "session": {
+          "cookie_names": ["__Secure-next-auth.session-token"],
+          "expires_at": "2026-06-18T06:59:10.000Z",
+          "expired": true,
+          "challenge": false,
+          "markers": ["session_expired"]
+        }
+      },
+      {
+        "source_id": "browser-claude-challenge",
+        "endpoint_id": "claude-web:claude-3-5-haiku",
+        "provider_id": "claude-web",
+        "model": "claude-3-5-haiku",
+        "auth_type": "web_cookie",
+        "origin": "browser_profile",
+        "profile": "Work",
+        "primary_override": false,
+        "session": {
+          "cookie_names": ["sessionKey", "activitySessionId"],
+          "expires_at": "2026-06-19T09:12:00.000Z",
+          "expired": false,
+          "challenge": true,
+          "markers": ["cf_challenge"]
+        }
+      },
+      {
+        "source_id": "manual-perplexity-login",
+        "endpoint_id": "perplexity-web:sonar",
+        "provider_id": "perplexity-web",
+        "model": "sonar",
+        "auth_type": "web_cookie",
+        "origin": "manual_cookie_file",
+        "profile": null,
+        "primary_override": false,
+        "session": {
+          "cookie_names": ["pplx.visitor-id"],
+          "expires_at": null,
+          "expired": false,
+          "challenge": false,
+          "markers": ["anonymous"]
+        }
+      },
+      {
+        "source_id": "connection-openai-api-key",
+        "endpoint_id": "openai:gpt-4o-mini",
+        "provider_id": "openai",
+        "model": "gpt-4o-mini",
+        "auth_type": "api_key",
+        "origin": "omniroute_connection",
+        "profile": null,
+        "primary_override": false,
+        "session": {
+          "cookie_names": [],
+          "expires_at": null,
+          "expired": false,
+          "challenge": false,
+          "markers": []
+        }
+      }
+    ],
+    "probeResponses": [
+      {
+        "endpoint_id": "chatgpt-web:gpt-4o-mini",
+        "http_status": 200,
+        "content_type": "text/event-stream",
+        "response_text": "The health probe succeeded. Short answer: Madrid."
+      },
+      {
+        "endpoint_id": "chatgpt-web:gpt-4o",
+        "http_status": 401,
+        "content_type": "application/json",
+        "response_text": "{\"error\":{\"code\":\"session_expired\",\"message\":\"Session expired\"}}"
+      },
+      {
+        "endpoint_id": "claude-web:claude-3-5-haiku",
+        "http_status": 403,
+        "content_type": "text/html",
+        "response_text": "<html><title>Just a moment...</title><body>challenge required</body></html>"
+      },
+      {
+        "endpoint_id": "perplexity-web:sonar",
+        "http_status": 200,
+        "content_type": "text/html",
+        "response_text": "<html><body>Please sign in to continue</body></html>"
+      },
+      {
+        "endpoint_id": "openai:gpt-4o-mini",
+        "http_status": 200,
+        "content_type": "application/json",
+        "response_text": "{\"object\":\"list\",\"data\":[]}"
+      }
+    ]
+  }
+}

@@ -11,6 +11,8 @@ from fmo.audit import audit_change, rollback_run
 from fmo.forecast import aggregate_demand, apply_historical_reserve, cold_start_demand, protected_demand
 
 
+@pytest.mark.spec("demand-forecast::Multiple agents and a shared role")
+@pytest.mark.spec("demand-forecast::Dependency cycle")
 def test_demand_aggregation_expands_shared_role_dag_and_rejects_cycle():
     demand = aggregate_demand(
         agent_runs={"a": 20, "b": 10, "c": 5},
@@ -24,6 +26,9 @@ def test_demand_aggregation_expands_shared_role_dag_and_rejects_cycle():
         aggregate_demand({"a": 1}, [("a", "fetch", 1)], [("fetch", "research_scout", 1), ("research_scout", "fetch", 1)])
 
 
+@pytest.mark.spec("demand-forecast::Reserve applied once")
+@pytest.mark.spec("demand-forecast::Unknown new role")
+@pytest.mark.spec("demand-forecast::Bursty weekly load")
 def test_protected_demand_reserve_once_and_cold_start_priority():
     assert protected_demand(expected=10, p95=25, peak_multiplier=2) == 25
     reserved = apply_historical_reserve(100, multiplier=1.2, already_applied=False)
@@ -33,6 +38,7 @@ def test_protected_demand_reserve_once_and_cold_start_priority():
     assert cold_start_demand(schedule=None, bootstrap=None, role_minimum=10, global_minimum=5).value == 10
 
 
+@pytest.mark.spec("allocator::Shared endpoint across roles")
 def test_global_allocation_shared_capacity_and_heavy_role_separation():
     plan = allocate_globally(
         roles=["research_scout", "health_reasoning", "routing_fast"],
@@ -46,6 +52,7 @@ def test_global_allocation_shared_capacity_and_heavy_role_separation():
     assert plan.pool_usage["pool-a"] <= 100
 
 
+@pytest.mark.spec("allocator::Combo output")
 def test_priority_combo_no_weights_oversubscription_and_degraded_modes():
     combo = build_priority_combo("research_scout", [{"id": "e1", "score": 2}, {"id": "e2", "score": 1}], per_pool_cap=2)
     blocked = validate_plan({"pool-a": {"usage": 120, "capacity": 100}})
@@ -58,6 +65,7 @@ def test_priority_combo_no_weights_oversubscription_and_degraded_modes():
     assert degraded.role_status == "unavailable"
 
 
+@pytest.mark.spec("allocator::Zero capacity pool")
 def test_validate_plan_zero_capacity_pool_is_oversubscribed():
     blocked = validate_plan({"pool-a": {"usage": 1, "capacity": 0}})
 
@@ -65,6 +73,7 @@ def test_validate_plan_zero_capacity_pool_is_oversubscribed():
     assert blocked.reason == "oversubscribed"
 
 
+@pytest.mark.spec("allocator::No endpoint with capacity")
 def test_allocation_omits_role_when_no_endpoint_has_capacity():
     plan = allocate_globally(
         roles=["routing_fast"],
@@ -78,6 +87,7 @@ def test_allocation_omits_role_when_no_endpoint_has_capacity():
     assert "routing_fast" not in plan.allocations
 
 
+@pytest.mark.spec("allocator::Heavy role same pool second primary")
 def test_heavy_role_priority_combo_skips_second_primary_in_same_pool():
     combo = build_priority_combo(
         "research_scout",
@@ -92,17 +102,25 @@ def test_heavy_role_priority_combo_skips_second_primary_in_same_pool():
     assert combo.endpoints == ["e1", "e3"]
 
 
+@pytest.mark.spec("role-scorer::Unchanged inputs")
 def test_stability_keeps_order_for_subthreshold_drift():
     current = ["e1", "e2"]
     assert keep_stable_order(current, {"e1": 1.0, "e2": 1.01}, threshold=0.05) == current
 
 
+@pytest.mark.spec("allocator::Missing score during stable order")
 def test_stability_tolerates_missing_score_for_previous_endpoint():
     current = ["e1", "e2"]
 
     assert keep_stable_order(current, {"e2": 1.0}, threshold=0.05) == current
 
 
+@pytest.mark.spec("combo-applier::Foreign combo")
+@pytest.mark.spec("combo-applier::State changed under us")
+@pytest.mark.spec("combo-applier::Smoke test fails")
+@pytest.mark.spec("combo-applier::Manual edit detected")
+@pytest.mark.spec("combo-applier::Failing guard input blocks apply")
+@pytest.mark.spec("combo-applier::Healthy guard inputs allow apply")
 def test_applier_manages_only_fmo_transaction_smoke_rollback_and_drift():
     applier = ComboApplier(current={"fmo-role": ["old"], "foreign": ["x"]})
     assert applier.managed_names() == ["fmo-role"]
@@ -115,6 +133,9 @@ def test_applier_manages_only_fmo_transaction_smoke_rollback_and_drift():
     assert applier.run_status == "failed"
 
 
+@pytest.mark.spec("audit-rollback::Combo change logged")
+@pytest.mark.spec("audit-rollback::Roll back a run")
+@pytest.mark.spec("audit-rollback::Inspect an assignment")
 def test_audit_change_log_and_rollback_run():
     log = []
     audit_change(log, run_id="r1", entity_type="combo", entity_id="fmo-role", before=["a"], after=["b"], reasons=["score"], sources=["plan"])

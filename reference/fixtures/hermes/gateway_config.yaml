@@ -1,0 +1,13 @@
+model: chat-combo
+provider: omniroute
+gateway:
+  platforms:
+    telegram:
+      enabled: true
+      model: chat-combo
+    slack:
+      enabled: false
+      model: research-combo
+    github:
+      enabled: true
+      model: coding-combo

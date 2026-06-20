@@ -1,0 +1,34 @@
+{
+  "profiles": [
+    {
+      "name": "default",
+      "path": "/opt/apps/hermes/data",
+      "is_default": true,
+      "gateway_running": true,
+      "model": "chat-combo",
+      "provider": null,
+      "has_env": true,
+      "skill_count": 12,
+      "distribution_name": null,
+      "distribution_version": null,
+      "distribution_source": null,
+      "description": "Primary interactive + gateway profile",
+      "description_auto": false
+    },
+    {
+      "name": "research",
+      "path": "/opt/apps/hermes/data/profiles/research",
+      "is_default": false,
+      "gateway_running": false,
+      "model": "research-combo",
+      "provider": null,
+      "has_env": true,
+      "skill_count": 4,
+      "distribution_name": null,
+      "distribution_version": null,
+      "distribution_source": null,
+      "description": "Manual research profile",
+      "description_auto": false
+    }
+  ]
+}

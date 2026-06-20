@@ -1,0 +1,53 @@
+{
+  "source": "OmniRoute open-sse/handlers/search.ts SearchResponse contract",
+  "captured_at": "2026-06-18T00:00:00Z",
+  "method": "POST",
+  "path": "/v1/search",
+  "status": 200,
+  "body": {
+    "provider": "gemini-grounded-search",
+    "query": "kilo free tier quota for kilo/free-model today 2026-06-18",
+    "results": [
+      {
+        "title": "Kilo AI Free Tier Limits",
+        "url": "https://docs.kilo.ai/free-tier",
+        "display_url": "docs.kilo.ai/free-tier",
+        "snippet": "Free tier includes 100 requests per day with provider-side hard stop.",
+        "position": 1,
+        "score": 0.97,
+        "published_at": "2026-06-01T00:00:00.000Z",
+        "favicon_url": null,
+        "content": null,
+        "metadata": {
+          "author": null,
+          "language": "en",
+          "source_type": "documentation",
+          "image_url": null
+        },
+        "citation": {
+          "provider": "gemini-grounded-search",
+          "retrieved_at": "2026-06-18T07:40:00.000Z",
+          "rank": 1
+        },
+        "provider_raw": null
+      }
+    ],
+    "answer": {
+      "source": "gemini-grounded-search",
+      "text": "Kilo free tier provides 100 requests per day for kilo/free-model with a hard stop enforced by the provider.",
+      "model": "gemini-2.5-flash"
+    },
+    "usage": {
+      "queries_used": 1,
+      "search_cost_usd": 0,
+      "llm_tokens": 418
+    },
+    "metrics": {
+      "response_time_ms": 842,
+      "upstream_latency_ms": 801,
+      "gateway_latency_ms": 41,
+      "total_results_available": 1
+    },
+    "errors": []
+  }
+}

@@ -1,10 +1,49 @@
 # Completion Review
 
-- Fixed HTTP inventory URL validation to reject missing host.
-- Fixed cron validation to reject empty fields instead of collapsing whitespace.
-- Fixed latency source selection to return unknown when all latency inputs are missing.
-- Fixed heavy-role priority combos to avoid selecting a second primary from same pool.
-- Fixed stable allocation ordering to tolerate missing current scores.
-- Fixed scanner false-removal guard to require newest successful omission older than five minutes.
-- Added models.dev and authenticated Artificial Analysis metadata fetchers with deterministic external dependency errors.
-- Made PostgreSQL-backed tests skip when local Postgres cannot initialize due host shared-memory limits.
+- Active implementation slices are archived: production pipeline composition,
+  metadata persistence, apply-precondition derivation, and scheduler service
+  entrypoint.
+- Production CLI dispatch now composes repository-backed pipeline stages and
+  diagnostics from validated startup config.
+- Metadata sync output is persisted through the repository; dry-run validates
+  without writes.
+- Apply fails closed from repository guard state and exits 5 when DB/snapshot,
+  desired state, quota safety, or probe/smoke evidence is missing or failing.
+- `serve` owns the scheduler cron path and routes scheduled/manual/event/urgent
+  triggers through persistent run locks.
+- Scanner and free-registry persistence now write provider/account/catalog,
+  endpoint, registry snapshot, and free-model rows through repository methods;
+  source regression tests reject embedded table SQL in those stage modules.
+- Production composition now dispatches `sync-free-registry` and
+  `scan-providers` through registry/scanner adapters, removes the shared
+  `_domain_stage_adapter` no-op, and requires explicit per-stage adapters for
+  canonical domain stages at the adapter-backed boundary.
+- Unwired canonical stages now fail closed with `not_implemented` (exit 3), and
+  the executable effect harness rejects `success` results that lack a declared
+  repository write, OmniRoute call, or idempotent no-change effect.
+- Remaining unwired stages are tracked by active OpenSpec slices:
+  none.
+- Production composition now wires `model-matching`, `quota-research`, and
+  `access-classification` to their domain modules. Matching writes canonical
+  endpoint bindings, quota research writes content-hashed summary snapshots and
+  capped rules, and access classification writes canonical attribution status
+  plus evidence. Missing quota payloads fail closed.
+- Production composition now wires `probing`, `telemetry-sync`, and
+  `quota-sync`. Probing is gated on confirmed access with remaining capacity and
+  persists probe rows, telemetry sync writes normalized health observations, and
+  quota sync writes live quota observations plus remaining-quota state.
+- Production composition now wires `role-scoring`, `allocation`, and `diff`.
+  Scoring persists per-role endpoint scores, allocation persists one planned
+  combo target set per role with constraint reports, and diff persists minimal
+  combo changes without mutating OmniRoute.
+- Production composition now wires `apply` and `audit` end to end. Apply checks
+  repository-backed preconditions, mutates only `fmo-` combos, runs the real
+  smoke path without `/api/combos/test`, rolls back on smoke failure, and
+  reports the real combo-test signal. Audit persists apply records and drift
+  detection.
+- Run-lock acquisition is now database-atomic through a partial unique index on
+  active held lock rows; repository tests cover two independent connections,
+  fresh schema installs, and migration installs.
+- Code Simplifier review cleaned the new scheduler tests by sharing the partial
+  index assertion and making concurrent-thread completion explicit.
+- Remaining deferred repo-level work: none discovered in this slice.

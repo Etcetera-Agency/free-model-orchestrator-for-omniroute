@@ -27,6 +27,8 @@ Implemented package modules live under `src/fmo/`:
 - Hermes inventory and dynamic role lifecycle.
 - Advisory smart combo review, Artificial Analysis index migration, LLM prompt safety.
 - Web-cookie candidate handling and CLI command surface.
+- Production CLI composition, repository-backed diagnostics, apply guard
+  preconditions, metadata persistence, and scheduler service entrypoint.
 
 OpenSpec living specs are in `openspec/specs/`. Historical/implementation changes
 are in `openspec/changes/`.
@@ -62,6 +64,16 @@ python3 -m venv .venv
 The test suite fixture starts an isolated temporary PostgreSQL instance using
 local `initdb`, `postgres`, and `createdb` binaries. No shared database is
 required for tests.
+
+On macOS, PostgreSQL `initdb` can fail after a laptop reboot if SysV shared
+memory limits reset to low defaults. If DB-backed tests skip with
+`could not create shared memory segment`, restore the local limits before
+running tests:
+
+```bash
+sudo sysctl -w kern.sysv.shmmax=268435456
+sudo sysctl -w kern.sysv.shmall=65536
+```
 
 ## Configuration
 
@@ -108,6 +120,7 @@ diff
 apply
 rollback
 full
+serve
 explain-endpoint
 explain-role
 aa-index status|analyze|proposal|approve|reject|rollout|rollback
@@ -116,7 +129,7 @@ aa-index status|analyze|proposal|approve|reject|rollout|rollback
 Common flags:
 
 ```text
---dry-run --provider --account --endpoint --role --run-id --force --json --verbose
+--dry-run --provider --account --endpoint --role --run-id --force --json --verbose --run-once
 ```
 
 Exit codes:
@@ -148,15 +161,34 @@ Run a targeted file:
 Validate OpenSpec:
 
 ```bash
-openspec validate --all --strict
+npx --yes @fission-ai/openspec@latest validate --all --strict
 ```
 
-Current expected validation after the edge-case coverage slice:
+### Executable-spec coverage gate
 
-```text
-144 passed
-31 OpenSpec items passed
+OpenSpec scenarios are executable: `tests/test_spec_coverage.py` statically
+cross-references every `#### Scenario:` in `openspec/specs/**` (and in active,
+non-archived `openspec/changes/**`) against `@pytest.mark.spec(...)` markers on
+the real tests, and runs as part of the normal `pytest` suite. It fails the
+build on drift in either direction:
+
+- a scenario with no test and not on the pending allowlist;
+- a marker pointing at a scenario that is neither shipped nor proposed;
+- a pending entry that is actually covered (the allowlist must shrink);
+- a pending entry referencing a scenario that no longer exists.
+
+Bind a test to a scenario, then drop the matching line from
+`tests/spec_coverage_pending.txt`:
+
+```python
+@pytest.mark.spec("data-model::Snapshot directly committed")
+def test_snapshot_cannot_commit():
+    ...
 ```
+
+The pending allowlist tracks scenarios not yet bound. It is currently empty and
+must not grow unless a new approved change explicitly carries uncovered
+scenarios during TDD.
 
 ## Safety Model
 
@@ -178,11 +210,12 @@ OpenSpec workflow:
 
 ```text
 proposal + tasks
-→ failing tests
+→ failing tests (bound to their scenarios with @pytest.mark.spec)
 → minimal implementation fixes
 → targeted pytest
-→ full pytest
-→ openspec validate --all --strict
+→ full pytest (includes the executable-spec coverage gate)
+→ remove the now-covered scenarios from tests/spec_coverage_pending.txt
+→ npx --yes @fission-ai/openspec@latest validate --all --strict
 → archive when approved
 ```
 

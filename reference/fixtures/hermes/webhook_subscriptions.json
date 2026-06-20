@@ -1,0 +1,21 @@
+{
+  "pr-review": {
+    "description": "Agent-created subscription: pr-review",
+    "events": ["pull_request"],
+    "secret": "<redacted>",
+    "prompt": "Review PR #{pull_request.number}: {pull_request.title}",
+    "skills": ["github-code-review"],
+    "deliver": "github_comment",
+    "created_at": "2026-03-19T11:00:00Z"
+  },
+  "alert-triage": {
+    "description": "Agent-created subscription: alert-triage",
+    "events": [],
+    "secret": "<redacted>",
+    "prompt": "Alert: {alert.name} — Severity: {alert.severity}. Find the owning service, investigate, and post a triage summary.",
+    "skills": [],
+    "deliver": "slack",
+    "created_at": "2026-04-02T16:30:00Z",
+    "deliver_only": false
+  }
+}

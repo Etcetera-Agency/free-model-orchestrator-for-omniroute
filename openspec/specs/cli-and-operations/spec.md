@@ -1,7 +1,8 @@
 # cli-and-operations Specification
 
 ## Purpose
-TBD - created by archiving change add-web-cookie-and-cli. Update Purpose after archive.
+Define operator command behavior, diagnostics, dry-run guarantees, and
+deterministic exit codes for Free Model Orchestrator CLI operations.
 ## Requirements
 ### Requirement: Operator command set
 
@@ -13,10 +14,41 @@ subcommands, and diagnostics (`explain-endpoint`, `explain-role`, `show-*`).
 Common flags include `--dry-run`, `--provider`, `--account`, `--endpoint`,
 `--role`, `--run-id`, `--force`, `--json`, `--verbose`.
 
+Each per-stage command SHALL execute its corresponding pipeline stage through the
+pipeline runner and return that stage's real outcome and exit code; commands
+SHALL NOT return an unconditional success. `apply` and `rollback` SHALL run
+through the runner's fail-closed gating. Diagnostics SHALL read persisted state.
+
+#### Scenario: Stage command invokes its stage
+- **WHEN** a per-stage command such as `allocate` or `scan-providers` runs
+- **THEN** the runner executes the matching pipeline stage
+- **AND** the command exit code reflects that stage's outcome, not an
+  unconditional success
+
+#### Scenario: Registry command uses registry sync
+- **WHEN** an operator runs `sync-free-registry`
+- **THEN** the free provider registry sync client fetches free-model and ranking
+  payloads
+- **AND** the registry outcome is persisted through the production persistence
+  path
+
+#### Scenario: Provider scan command uses catalog scanner
+- **WHEN** an operator runs `scan-providers`
+- **THEN** the OmniRoute provider/account catalog scanner fetches provider and
+  model payloads
+- **AND** provider accounts, catalog snapshots, and discovered endpoints are
+  written through the production persistence path
+
+#### Scenario: Apply surfaces gating outcomes
+- **WHEN** `apply` runs and a safety gate fails
+- **THEN** the command exits with 5 (unsafe), 6 (applied then rolled back) or
+  7 (rollback failed) according to the failure
+- **AND** nothing is changed when the outcome is unsafe
+
 #### Scenario: Explain an endpoint
-- GIVEN an endpoint id
-- WHEN `explain-endpoint` runs
-- THEN it prints why the endpoint was selected/rejected and its score components
+- **WHEN** `explain-endpoint` runs for an endpoint id
+- **THEN** it reads persisted state and prints why the endpoint was
+  selected/rejected and its real score components
 
 ### Requirement: Deterministic exit codes
 

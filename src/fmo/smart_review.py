@@ -1,4 +1,9 @@
+import json
 from dataclasses import dataclass
+
+from pydantic import BaseModel, Field
+
+from fmo.llm_runtime import LlmSiteConfig, complete_with_adapter
 
 
 ALLOWED_OPS = {"add", "remove", "move"}
@@ -12,16 +17,30 @@ class ComboReviewResult:
     combo_test_called: bool = False
 
 
+class ComboReviewResponse(BaseModel):
+    diffs: list[dict] = Field(default_factory=list)
+
+
 def run_combo_review(instructor_call, *, deterministic_combo: dict[str, list[str]], trigger: bool) -> ComboReviewResult:
     if not trigger:
         return ComboReviewResult(status="skipped_trigger", valid_diffs=[], rejected=[])
     try:
-        response = instructor_call({"combo": deterministic_combo})
+        response = complete_with_adapter(
+            instructor_call,
+            site=LlmSiteConfig(
+                name="smart-combo-reviewer",
+                model="omniroute/free-reviewer",
+                max_prompt_chars=5000,
+                advisory=True,
+            ),
+            context={"prompt": json.dumps({"combo": deterministic_combo}, sort_keys=True)},
+            response_model=ComboReviewResponse,
+        )
     except Exception:
         return ComboReviewResult(status="failed", valid_diffs=[], rejected=[])
     valid = []
     rejected = []
-    for diff in response.get("diffs", []):
+    for diff in response.diffs:
         if diff.get("op") not in ALLOWED_OPS:
             rejected.append({"diff": diff, "reason": "forbidden_op"})
         else:

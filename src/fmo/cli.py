@@ -1,7 +1,14 @@
 import argparse
+import os
+import sys
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime, timezone
 
+from fmo.bootstrap import bootstrap_and_dispatch
+from fmo.config import StartupConfig
+from fmo.composition import compose_runtime
 from fmo.external_metadata import ExternalMetadataError
 from fmo.metadata_sync import sync_external_metadata
 
@@ -23,6 +30,7 @@ COMMANDS = [
     "apply",
     "rollback",
     "full",
+    "serve",
     "explain-endpoint",
     "explain-role",
 ]
@@ -44,6 +52,30 @@ class CliResult:
     changed: bool
     combo_test_called: bool = False
     error_reason: str | None = None
+    output: str | None = None
+
+
+PipelineRunner = Callable[[str, argparse.Namespace], CliResult]
+DiagnosticsReader = Callable[[str, str], str]
+SchedulerRunner = Callable[[str], CliResult]
+
+
+PIPELINE_COMMANDS = {
+    "sync-free-registry",
+    "discover-accounts",
+    "scan-providers",
+    "research-quotas",
+    "classify-access",
+    "match-models",
+    "probe-models",
+    "sync-telemetry",
+    "sync-quotas",
+    "score-roles",
+    "allocate",
+    "diff",
+    "apply",
+    "rollback",
+}
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -58,23 +90,88 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def run_cli(argv: list[str], *, preconditions_ok: bool, metadata_sync: Callable[..., object] | None = None) -> CliResult:
+def run_cli(
+    argv: list[str],
+    *,
+    preconditions_ok: bool,
+    metadata_sync: Callable[..., object] | None = None,
+    pipeline_runner: PipelineRunner | None = None,
+    diagnostics_reader: DiagnosticsReader | None = None,
+    scheduler_runner: SchedulerRunner | None = None,
+) -> CliResult:
     args = parse_args(argv)
     if args.command == "apply" and not preconditions_ok:
         return CliResult(exit_code=EXIT_CODES["unsafe_to_apply"], changed=False)
-    if args.command in {"sync-metadata", "full"}:
+    if args.command == "serve":
+        return _run_scheduler(args, scheduler_runner)
+    if args.command in {"explain-endpoint", "explain-role"}:
+        return _run_diagnostics(args, diagnostics_reader)
+    if pipeline_runner is None and args.command in {"sync-metadata", "full"}:
         sync = metadata_sync or sync_external_metadata
         try:
             sync(dry_run=args.dry_run)
         except ExternalMetadataError as exc:
             return CliResult(exit_code=EXIT_CODES["external_dependency_failed"], changed=False, error_reason=exc.reason)
+        if args.command == "sync-metadata":
+            return CliResult(exit_code=EXIT_CODES["success"], changed=False)
     if args.dry_run:
         return CliResult(exit_code=EXIT_CODES["success"], changed=False, combo_test_called=False)
-    return CliResult(exit_code=EXIT_CODES["success"], changed=args.command == "apply")
+    if args.command in PIPELINE_COMMANDS or args.command == "full":
+        if pipeline_runner is None:
+            return CliResult(exit_code=EXIT_CODES["success"], changed=False)
+        return pipeline_runner(args.command, args)
+    return CliResult(exit_code=EXIT_CODES["success"], changed=False)
 
 
-def main() -> int:
-    return run_cli([], preconditions_ok=True).exit_code
+def main(
+    argv: list[str] | None = None,
+    *,
+    env: dict[str, str] | None = None,
+    health_check: Callable[[], dict] | None = None,
+    dispatcher: Callable[..., int] | None = None,
+) -> int:
+    args = list(sys.argv[1:] if argv is None else argv)
+    run = dispatcher or _dispatch_cli
+    return bootstrap_and_dispatch(args, env=env or os.environ, health_check=health_check, dispatcher=run)
+
+
+def _dispatch_cli(argv: list[str], preconditions_ok: bool, config: StartupConfig) -> int:
+    runtime = compose_runtime(config)
+    return run_cli(
+        argv,
+        preconditions_ok=preconditions_ok,
+        pipeline_runner=runtime.run_command,
+        diagnostics_reader=runtime.read_diagnostics,
+        scheduler_runner=runtime.run_scheduler_once,
+    ).exit_code
+
+
+def _run_diagnostics(args: argparse.Namespace, diagnostics_reader: DiagnosticsReader | None) -> CliResult:
+    if args.command == "explain-endpoint":
+        identifier = args.endpoint
+        kind = "endpoint"
+    else:
+        identifier = args.role
+        kind = "role"
+    if not identifier:
+        return CliResult(exit_code=EXIT_CODES["validation_failed"], changed=False, error_reason=f"{kind}_required")
+    if diagnostics_reader is None:
+        return CliResult(exit_code=EXIT_CODES["success"], changed=False, output=None)
+    return CliResult(exit_code=EXIT_CODES["success"], changed=False, output=diagnostics_reader(kind, identifier))
+
+
+def _run_scheduler(args: argparse.Namespace, scheduler_runner: SchedulerRunner | None) -> CliResult:
+    if scheduler_runner is None:
+        return CliResult(exit_code=EXIT_CODES["success"], changed=False)
+    while True:
+        result = scheduler_runner(_utc_timestamp())
+        if args.run_once:
+            return result
+        time.sleep(60)
+
+
+def _utc_timestamp() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def _add_common_flags(parser: argparse.ArgumentParser) -> None:
@@ -87,3 +184,4 @@ def _add_common_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--verbose", action="store_true")
+    parser.add_argument("--run-once", action="store_true")

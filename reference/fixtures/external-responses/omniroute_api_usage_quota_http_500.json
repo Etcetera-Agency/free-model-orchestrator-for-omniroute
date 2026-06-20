@@ -1,0 +1,10 @@
+{
+  "source": "OmniRoute src/app/api/usage/quota/route.ts GET catch block",
+  "captured_at": "2026-06-18T00:00:00Z",
+  "method": "GET",
+  "path": "/api/usage/quota",
+  "status": 500,
+  "body": {
+    "error": "Failed to fetch quota data"
+  }
+}

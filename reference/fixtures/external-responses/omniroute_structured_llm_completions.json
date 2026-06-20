@@ -1,0 +1,93 @@
+{
+  "captured_at": "2026-06-18T10:22:41.344Z",
+  "source": "OpenAI-compatible OmniRoute chat completions with response bodies redacted",
+  "request": {
+    "method": "POST",
+    "path": "/v1/chat/completions",
+    "headers": {
+      "authorization": "[REDACTED]",
+      "content-type": "application/json"
+    }
+  },
+  "body": {
+    "quota_research_inspector": {
+      "id": "chatcmpl-quota-001",
+      "object": "chat.completion",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": "{\"metric\":\"requests\",\"amount\":60,\"window\":\"minute\",\"evidence\":[\"https://ai.google.dev/gemini-api/docs/rate-limits\"],\"hard_stop\":true}"
+          },
+          "finish_reason": "stop"
+        }
+      ]
+    },
+    "hermes_inspector": {
+      "id": "chatcmpl-hermes-001",
+      "object": "chat.completion",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "tool_calls": [
+              {
+                "id": "call_forecast",
+                "type": "function",
+                "function": {
+                  "name": "InspectorForecast",
+                  "arguments": "{\"role\":\"research_scout\",\"expected_calls\":12,\"average_input_tokens\":1800,\"average_output_tokens\":420,\"confidence\":\"medium\"}"
+                }
+              }
+            ]
+          },
+          "finish_reason": "tool_calls"
+        }
+      ]
+    },
+    "smart_combo_reviewer": {
+      "id": "chatcmpl-review-001",
+      "object": "chat.completion",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": "Reviewed deterministic combo.\n{\"diffs\":[{\"op\":\"add\",\"role\":\"research_scout\",\"endpoint_id\":\"free:model-a\",\"position\":1},{\"op\":\"weight\",\"role\":\"research_scout\"}]}"
+          },
+          "finish_reason": "stop"
+        }
+      ]
+    },
+    "aa_index_migration": {
+      "id": "chatcmpl-aa-001",
+      "object": "chat.completion",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": "{\"index_version\":\"2026-06-18-aa-free\",\"roles\":{\"research_scout\":{\"metric\":\"intelligence_index\",\"threshold\":52}}}"
+          },
+          "finish_reason": "stop"
+        }
+      ]
+    },
+    "malformed_unrepairable": {
+      "id": "chatcmpl-bad-001",
+      "object": "chat.completion",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": "not json and no object"
+          },
+          "finish_reason": "stop"
+        }
+      ]
+    }
+  }
+}

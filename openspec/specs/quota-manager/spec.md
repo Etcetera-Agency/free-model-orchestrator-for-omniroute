@@ -19,6 +19,7 @@ effective remaining negative; that result SHALL be preserved.
 - GIVEN pending reservations plus safety buffer exceed remaining quota
 - WHEN effective remaining is computed
 - THEN the negative value is returned
+
 ### Requirement: Hard-stop gating
 
 The system SHALL require provider hard-stop semantics before treating free quota
@@ -33,6 +34,7 @@ as usable.
 - GIVEN `require_hard_stop(False)` is called
 - WHEN validation runs
 - THEN it raises `ValueError`
+
 ### Requirement: Reservation only for own probes
 
 The system SHALL reserve quota only for its own probes; production traffic flows
@@ -64,3 +66,24 @@ applied.
 - WHEN the manager validates it
 - THEN the record is rejected
 
+### Requirement: Live quota source fetch
+
+The system SHALL fetch live quota (limit, remaining, reset) during quota reset
+and reclassification from OmniRoute `GET /api/usage/quota` (or the configured
+provider's own quota surface), unless quota values are explicitly injected. The
+fetch SHALL use configured credentials with bounded retries and structured
+errors. When the quota source is unavailable or returns stale data (beyond the
+configured freshness window), the system SHALL fail closed — it SHALL NOT infer
+usable capacity from missing or stale quota.
+
+#### Scenario: Quota fetched at reset
+- GIVEN a quota reset window is reached and no quota values are injected
+- WHEN reclassification runs
+- THEN current quota is fetched from the configured source
+- AND effective-remaining is recomputed from the fetched values
+
+#### Scenario: Quota source unavailable
+- GIVEN the quota source is unavailable or returns stale data
+- WHEN reclassification runs
+- THEN no usable capacity is inferred
+- AND the endpoint is excluded or degraded rather than treated as free

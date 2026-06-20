@@ -1,4 +1,9 @@
+import json
 from dataclasses import dataclass
+
+from pydantic import BaseModel, Field
+
+from fmo.llm_runtime import LlmSiteConfig, complete_with_adapter
 
 
 @dataclass(frozen=True)
@@ -13,6 +18,11 @@ class MigrationRecord:
 class MigrationValidation:
     can_rollout: bool
     needs_approval: bool
+
+
+class MigrationProposalResponse(BaseModel):
+    index_version: str
+    roles: dict[str, dict] = Field(default_factory=dict)
 
 
 def detect_index_change(*, active_version: str, fetched_version: str, thresholds: dict, combos: dict[str, list[str]]) -> MigrationRecord:
@@ -35,7 +45,21 @@ def select_migration_model(candidates: list[dict]) -> dict | None:
 def run_migration_agent(instructor_call, selected_model: dict | None) -> dict:
     if selected_model is None:
         return {"status": "waiting_for_model"}
-    return instructor_call(selected_model)
+    try:
+        proposal = complete_with_adapter(
+            instructor_call,
+            site=LlmSiteConfig(
+                name="aa-index-migration",
+                model=selected_model.get("endpoint", "omniroute/free-migration"),
+                max_prompt_chars=4000,
+                advisory=True,
+            ),
+            context={"prompt": json.dumps(selected_model, sort_keys=True)},
+            response_model=MigrationProposalResponse,
+        )
+    except Exception:
+        return {"status": "advisory_unavailable"}
+    return proposal.model_dump()
 
 
 def validate_migration_proposal(proposal: dict, *, new_version: str, role_capacity: dict[str, dict], approved: bool) -> MigrationValidation:

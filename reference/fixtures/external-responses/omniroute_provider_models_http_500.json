@@ -1,0 +1,13 @@
+{
+  "source": "OmniRoute src/app/api/provider-models/route.ts GET catch block",
+  "captured_at": "2026-06-18T00:00:00Z",
+  "method": "GET",
+  "path": "/api/provider-models",
+  "status": 500,
+  "body": {
+    "error": {
+      "message": "Failed to fetch provider models",
+      "type": "server_error"
+    }
+  }
+}

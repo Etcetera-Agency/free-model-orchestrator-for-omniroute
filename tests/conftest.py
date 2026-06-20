@@ -39,7 +39,10 @@ def postgres_url(tmp_path_factory):
     )
     if initdb.returncode != 0:
         shutil.rmtree(socket_dir, ignore_errors=True)
-        pytest.skip(f"PostgreSQL initdb unavailable: {initdb.stderr.strip().splitlines()[-1]}")
+        stderr = initdb.stderr.strip()
+        reason_lines = [line for line in stderr.splitlines() if "FATAL:" in line or "DETAIL:" in line]
+        reason = "; ".join(reason_lines) if reason_lines else (stderr.splitlines()[-1] if stderr else "no stderr")
+        pytest.skip(f"PostgreSQL initdb failed: {reason}")
     proc = subprocess.Popen(
         [
             "postgres",

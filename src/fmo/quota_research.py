@@ -1,6 +1,13 @@
 import hashlib
+import re
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
+
+from pydantic import BaseModel, Field
+
+from fmo.llm_runtime import LlmSiteConfig, complete_with_adapter
+from fmo.omniroute import OmniRouteRequestError
 
 
 VALID_METRICS = {"requests", "tokens"}
@@ -33,6 +40,28 @@ class ActiveQuotaRule:
     safe_mode: bool
 
 
+@dataclass(frozen=True)
+class QuotaResearchError(Exception):
+    source: str
+    reason: str
+    status_code: int | None = None
+
+
+@dataclass(frozen=True)
+class QuotaResearchResult:
+    snapshot: SearchSnapshot | None
+    rule: ActiveQuotaRule | None
+    error: QuotaResearchError | None = None
+
+
+class QuotaClaimResponse(BaseModel):
+    metric: str
+    amount: float
+    window: str
+    evidence: list[str] = Field(default_factory=list)
+    hard_stop: bool = False
+
+
 def build_quota_query(provider: str, model_id: str, *, today: datetime) -> str:
     return f"{provider} free tier quota for {model_id} today {today:%Y-%m-%d}"
 
@@ -48,6 +77,71 @@ def run_quota_search(client, *, provider: str, model_id: str, query: str) -> Sea
     return SearchSnapshot(query=query, answer_text=answer_text, evidence_urls=urls, content_hash=content_hash)
 
 
+def research_quota_rule(
+    client: Any,
+    *,
+    provider: str,
+    model_id: str,
+    today: datetime,
+    summary_confidence_cap: float,
+    previous_limit: float | None = None,
+) -> QuotaResearchResult:
+    query = build_quota_query(provider, model_id, today=today)
+    try:
+        snapshot = run_quota_search(client, provider=provider, model_id=model_id, query=query)
+        claim = extract_summary_claim(snapshot)
+        rule = activate_summary_rule(
+            claim,
+            summary_confidence_cap=summary_confidence_cap,
+            previous_limit=previous_limit,
+        )
+    except QuotaResearchError as exc:
+        return QuotaResearchResult(snapshot=None, rule=None, error=exc)
+    except OmniRouteRequestError as exc:
+        error = QuotaResearchError("quota_research", "http_error", exc.status_code)
+        return QuotaResearchResult(snapshot=None, rule=None, error=error)
+    except Exception:
+        error = QuotaResearchError("quota_research", "extraction_error")
+        return QuotaResearchResult(snapshot=None, rule=None, error=error)
+    return QuotaResearchResult(snapshot=snapshot, rule=rule)
+
+
+def extract_summary_claim(snapshot: SearchSnapshot) -> QuotaClaim:
+    amount = _extract_amount(snapshot.answer_text)
+    window = _extract_window(snapshot.answer_text)
+    hard_stop = "hard stop" in snapshot.answer_text.lower()
+    claim = QuotaClaim(
+        metric="requests",
+        amount=amount,
+        window=window,
+        evidence=list(snapshot.evidence_urls) or ["summary"],
+        hard_stop=hard_stop,
+    )
+    return validate_claim(claim)
+
+
+def run_quota_inspector(call_instructor, prompt: str) -> QuotaClaim:
+    response = complete_with_adapter(
+        call_instructor,
+        site=LlmSiteConfig(
+            name="quota-research-inspector",
+            model="omniroute/free-quota-inspector",
+            max_prompt_chars=7000,
+        ),
+        context={"prompt": prompt},
+        response_model=QuotaClaimResponse,
+    )
+    return validate_claim(
+        QuotaClaim(
+            metric=response.metric,
+            amount=response.amount,
+            window=response.window,
+            evidence=response.evidence,
+            hard_stop=response.hard_stop,
+        )
+    )
+
+
 def validate_claim(claim: QuotaClaim) -> QuotaClaim:
     if claim.metric not in VALID_METRICS:
         raise ValueError("invalid quota metric")
@@ -58,6 +152,21 @@ def validate_claim(claim: QuotaClaim) -> QuotaClaim:
     if not claim.evidence:
         raise ValueError("quota claim requires evidence")
     return claim
+
+
+def _extract_amount(text: str) -> float:
+    match = re.search(r"\b(\d+(?:\.\d+)?)\s+requests?\b", text, re.IGNORECASE)
+    if not match:
+        raise QuotaResearchError("quota_research", "missing_amount")
+    return float(match.group(1))
+
+
+def _extract_window(text: str) -> str:
+    lowered = text.lower()
+    for window in ("minute", "hour", "day", "month"):
+        if f"per {window}" in lowered or f"/{window}" in lowered:
+            return window
+    raise QuotaResearchError("quota_research", "missing_window")
 
 
 def activate_summary_rule(claim: QuotaClaim, *, summary_confidence_cap: float, previous_limit: float | None = None) -> ActiveQuotaRule:

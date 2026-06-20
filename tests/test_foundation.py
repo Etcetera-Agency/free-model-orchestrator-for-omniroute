@@ -45,6 +45,7 @@ class FakeResponse:
         return self._payload
 
 
+@pytest.mark.spec("data-model::Fresh install")
 def test_schema_sql_applies_on_real_postgres(postgres_url):
     runner = MigrationRunner(postgres_url)
     runner.apply_schema(Path("reference/db/schema.sql"))
@@ -54,6 +55,7 @@ def test_schema_sql_applies_on_real_postgres(postgres_url):
     assert "quota_attribution_groups" in tables
 
 
+@pytest.mark.spec("omniroute-client::429 with Retry-After")
 def test_omniroute_client_auth_request_id_and_retry_after():
     transport = FakeTransport(
         [
@@ -77,6 +79,7 @@ def test_omniroute_client_auth_request_id_and_retry_after():
     assert first["headers"]["X-Request-Id"]
 
 
+@pytest.mark.spec("omniroute-client::429 with Retry-After")
 def test_omniroute_client_does_not_retry_post_apply():
     transport = FakeTransport([FakeResponse(429, {"error": "slow"}, {"Retry-After": "1"})])
     client = OmniRouteClient(base_url="https://omniroute.test", transport=transport)
@@ -87,6 +90,7 @@ def test_omniroute_client_does_not_retry_post_apply():
     assert len(transport.requests) == 1
 
 
+@pytest.mark.spec("omniroute-client::GET 429 retries exhausted")
 def test_omniroute_client_get_429_retry_exhaustion_raises_runtime_error():
     transport = FakeTransport(
         [
@@ -107,6 +111,7 @@ def test_omniroute_client_get_429_retry_exhaustion_raises_runtime_error():
     assert len(transport.requests) == 2
 
 
+@pytest.mark.spec("omniroute-client::GET non-retriable error")
 @pytest.mark.parametrize("status_code", [400, 404, 500, 503])
 def test_omniroute_client_get_non_retry_errors_raise_without_retry(status_code):
     transport = FakeTransport([FakeResponse(status_code, {"error": "bad"})])
@@ -122,11 +127,13 @@ def test_omniroute_client_get_non_retry_errors_raise_without_retry(status_code):
     assert len(transport.requests) == 1
 
 
+@pytest.mark.spec("omniroute-client::Invalid Retry-After")
 @pytest.mark.parametrize("value", ["", "abc", "-2", None])
 def test_retry_after_invalid_empty_nonnumeric_or_negative_is_zero(value):
     assert _retry_after_seconds(value) == 0.0
 
 
+@pytest.mark.spec("omniroute-client::Leading slash path")
 def test_omniroute_client_leading_slash_path_stays_under_base_path():
     transport = FakeTransport([FakeResponse(200, {"ok": True})])
     client = OmniRouteClient(base_url="https://omniroute.test/api", transport=transport)
@@ -136,6 +143,7 @@ def test_omniroute_client_leading_slash_path_stays_under_base_path():
     assert transport.requests[0]["url"] == "https://omniroute.test/api/providers"
 
 
+@pytest.mark.spec("omniroute-client::Unknown OmniRoute version")
 def test_unknown_omniroute_version_read_only_forbids_apply():
     known = OmniRouteVersionGate({"1.4.0"})
     assert known.evaluate("1.4.0").can_apply is True
@@ -144,6 +152,8 @@ def test_unknown_omniroute_version_read_only_forbids_apply():
     assert unknown.can_apply is False
 
 
+@pytest.mark.spec("runtime-bootstrap::Invalid environment fails before running")
+@pytest.mark.spec("environment-and-connections::Secret in repo config")
 def test_startup_validation_fails_before_model_endpoint_call(monkeypatch):
     calls = []
 
@@ -185,34 +195,40 @@ def valid_startup_config(**overrides):
     return StartupConfig(**values)
 
 
+@pytest.mark.spec("environment-and-connections::Bad OmniRoute URL")
 @pytest.mark.parametrize("omniroute_url", ["", "ftp://omniroute.test"])
 def test_static_config_rejects_bad_omniroute_url_scheme_or_empty(omniroute_url):
     with pytest.raises(ValueError, match="OMNIROUTE_URL"):
         validate_static_config(valid_startup_config(omniroute_url=omniroute_url))
 
 
+@pytest.mark.spec("environment-and-connections::Missing database URL")
 def test_static_config_rejects_missing_database_url():
     with pytest.raises(ValueError, match="DATABASE_URL"):
         validate_static_config(valid_startup_config(database_url=None))
 
 
+@pytest.mark.spec("environment-and-connections::Invalid inventory mode")
 def test_static_config_rejects_invalid_inventory_mode():
     with pytest.raises(ValueError, match="HERMES_INVENTORY_MODE"):
         validate_static_config(valid_startup_config(hermes_inventory_mode="invalid"))
 
 
+@pytest.mark.spec("environment-and-connections::Bad inventory cron")
 @pytest.mark.parametrize("cron", ["0 4 * *", "0 4  * * *", ""])
 def test_static_config_rejects_bad_inventory_cron(cron):
     with pytest.raises(ValueError, match="HERMES_INVENTORY_CRON"):
         validate_static_config(valid_startup_config(hermes_inventory_cron=cron))
 
 
+@pytest.mark.spec("environment-and-connections::Missing filesystem inventory path")
 @pytest.mark.parametrize("missing_path", ["hermes_home", "hermes_agents_path", "hermes_routines_path"])
 def test_static_config_rejects_filesystem_mode_missing_any_path(missing_path):
     with pytest.raises(ValueError, match="missing filesystem"):
         validate_static_config(valid_startup_config(**{missing_path: None}))
 
 
+@pytest.mark.spec("environment-and-connections::Missing command inventory command")
 def test_static_config_rejects_command_mode_missing_command():
     with pytest.raises(ValueError, match="HERMES_INVENTORY_COMMAND"):
         validate_static_config(
@@ -225,6 +241,7 @@ def test_static_config_rejects_command_mode_missing_command():
         )
 
 
+@pytest.mark.spec("environment-and-connections::Bad HTTP inventory URL")
 @pytest.mark.parametrize("inventory_url", ["", "ftp://inventory.test", "https://"])
 def test_static_config_rejects_http_mode_bad_inventory_url(inventory_url):
     with pytest.raises(ValueError, match="HERMES_INVENTORY_URL"):
@@ -239,11 +256,13 @@ def test_static_config_rejects_http_mode_bad_inventory_url(inventory_url):
         )
 
 
+@pytest.mark.spec("environment-and-connections::Health check payload is not an object")
 def test_startup_validation_rejects_non_object_health_payload():
     with pytest.raises(ValueError, match="non-object"):
         validate_startup(valid_startup_config(), health_check=lambda: ["ok"])
 
 
+@pytest.mark.spec("system-architecture::Reactivate exhausted endpoint too early")
 @pytest.mark.parametrize(
     ("state", "target"),
     [
@@ -257,6 +276,7 @@ def test_forbidden_endpoint_transitions_rejected(state, target):
         transition_endpoint(state, target)
 
 
+@pytest.mark.spec("system-architecture::Missing snapshot blocks apply")
 def test_planned_combo_cannot_apply_without_snapshot():
     with pytest.raises(ValueError):
         transition_combo(ComboState.PLANNED, ComboState.APPLIED)
@@ -272,11 +292,15 @@ def test_planned_combo_cannot_apply_without_snapshot():
         (ComboState.VALIDATED, ComboState.PLANNED),
     ],
 )
+@pytest.mark.spec("data-model::Snapshot directly committed")
+@pytest.mark.spec("data-model::Applied directly committed")
+@pytest.mark.spec("data-model::Backward combo transition")
 def test_forbidden_combo_transitions_rejected(state, target):
     with pytest.raises(ValueError):
         transition_combo(state, target)
 
 
+@pytest.mark.spec("system-architecture::Missing snapshot blocks apply")
 def test_apply_refused_when_any_precondition_fails():
     preconditions = ApplyPreconditions(
         db_available=True,
@@ -290,6 +314,7 @@ def test_apply_refused_when_any_precondition_fails():
         check_apply_preconditions(preconditions)
 
 
+@pytest.mark.spec("system-architecture::Re-run with unchanged inputs")
 def test_stable_hash_makes_unchanged_inputs_skip_changes():
     left = stable_hash({"models": ["b", "a"], "role": "coder"})
     right = stable_hash({"role": "coder", "models": ["b", "a"]})
@@ -299,6 +324,8 @@ def test_stable_hash_makes_unchanged_inputs_skip_changes():
     assert left != changed
 
 
+@pytest.mark.spec("environment-and-connections::Building an LLM prompt")
+@pytest.mark.spec("llm-runtime::Edit one prompt")
 def test_llm_prompt_loads_external_file_and_redacts_secrets(tmp_path):
     prompt_file = tmp_path / "prompt.md"
     prompt_file.write_text("Use endpoint {{ endpoint_id }} with {{ OMNIROUTE_API_KEY }}", encoding="utf-8")
@@ -310,6 +337,7 @@ def test_llm_prompt_loads_external_file_and_redacts_secrets(tmp_path):
     assert "OMNIROUTE_API_KEY" not in prompt
 
 
+@pytest.mark.spec("llm-runtime::PostgreSQL URL redaction")
 def test_redact_secrets_removes_database_credentials_and_tokens():
     text = "postgresql://user:pass@db:5432/app Bearer abc123 cookie=session"
     redacted = redact_secrets(text)
@@ -319,6 +347,8 @@ def test_redact_secrets_removes_database_credentials_and_tokens():
     assert "session" not in redacted
 
 
+@pytest.mark.spec("llm-runtime::Bearer token redaction")
+@pytest.mark.spec("llm-runtime::Cookie assignment redaction")
 @pytest.mark.parametrize(
     ("text", "secret"),
     [
@@ -337,6 +367,7 @@ def test_redact_secrets_handles_each_secret_pattern(text, secret):
     assert "[REDACTED]" in redacted
 
 
+@pytest.mark.spec("llm-runtime::Secret-like key removal")
 def test_llm_prompt_omits_secret_like_context_keys_and_database_url(tmp_path):
     prompt_file = tmp_path / "prompt.md"
     prompt_file.write_text(
@@ -359,6 +390,7 @@ def test_llm_prompt_omits_secret_like_context_keys_and_database_url(tmp_path):
     assert prompt.strip() == "visible"
 
 
+@pytest.mark.spec("llm-runtime::Unresolved placeholder cleanup")
 def test_llm_prompt_removes_unresolved_placeholders(tmp_path):
     prompt_file = tmp_path / "prompt.md"
     prompt_file.write_text("Use {{ endpoint_id }} {{ missing }}", encoding="utf-8")

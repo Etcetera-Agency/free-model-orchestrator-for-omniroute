@@ -2,6 +2,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import psycopg
+import pytest
+import pytest
 
 from fmo.accounts import group_quota_pools, usable_capacity
 from fmo.candidates import build_free_candidates
@@ -9,6 +11,7 @@ from fmo.db import MigrationRunner
 from fmo.matcher import MatchMethod, effective_context, match_model
 from fmo.models_dev import MODELS_DEV_API_URL, ExternalMetadataError, fetch_models_dev_catalog, sync_models_dev_candidates
 from fmo.registry import sync_free_registry
+from fmo.persistence import Database, Repository
 from fmo.scanner import CatalogScanner, CatalogSnapshot, diff_catalogs, should_mark_removed
 
 
@@ -37,6 +40,7 @@ class FakeHttpClient:
         return self.response
 
 
+@pytest.mark.spec("free-candidate-discovery::Fetch models.dev api catalog")
 def test_models_dev_fetches_api_json_and_syncs_candidates():
     payload = {"providers": {"p": {"models": {"m/free": {"cost": {"input": 0, "output": 0}}}}}}
     client = FakeHttpClient(FakeResponse(200, payload))
@@ -49,6 +53,36 @@ def test_models_dev_fetches_api_json_and_syncs_candidates():
     assert candidates[("p", "m/free")].reasons == ("multiple_signals",)
 
 
+@pytest.mark.spec("free-candidate-discovery::models.dev real top-level provider-keyed body")
+def test_models_dev_fetches_real_top_level_provider_keyed_catalog():
+    from _fixtures import fixture_body
+
+    body = fixture_body("models_dev_api_json")
+    assert "providers" not in body  # real api.json has no wrapper
+    client = FakeHttpClient(FakeResponse(200, body))
+
+    catalog = fetch_models_dev_catalog(client=client)
+    candidates = build_free_candidates(catalog)
+
+    assert set(catalog) == {"providers"}
+    assert catalog["providers"] is body
+    assert ("alibaba-cn", "deepseek-r1-distill-qwen-1-5b") in candidates
+    assert "zero_cost" in candidates[("alibaba-cn", "deepseek-r1-distill-qwen-1-5b")].reasons
+
+
+@pytest.mark.spec("free-candidate-discovery::models.dev invalid payload")
+def test_models_dev_rejects_error_body_without_provider_object():
+    client = FakeHttpClient(FakeResponse(200, {"error": "rate_limited"}))
+
+    try:
+        fetch_models_dev_catalog(client=client)
+    except ExternalMetadataError as exc:
+        assert exc.reason == "invalid_payload"
+    else:
+        raise AssertionError("error body must be rejected as invalid payload")
+
+
+@pytest.mark.spec("free-candidate-discovery::models.dev non-200")
 def test_models_dev_fetcher_rejects_network_http_json_and_payload_errors():
     cases = [
         FakeHttpClient(error=TimeoutError("timeout")),
@@ -67,6 +101,11 @@ def test_models_dev_fetcher_rejects_network_http_json_and_payload_errors():
             raise AssertionError("models.dev fetch should fail")
 
 
+@pytest.mark.spec("free-candidate-discovery::Zero-cost provider offering")
+@pytest.mark.spec("free-candidate-discovery::Free token in model id")
+@pytest.mark.spec("free-candidate-discovery::Missing cost is not free")
+@pytest.mark.spec("free-candidate-discovery::Name match stays unconfirmed")
+@pytest.mark.spec("provider-scanner::Non-candidate model")
 def test_candidate_filter_uses_zero_cost_and_standalone_free_only():
     catalog = {
         "providers": {
@@ -87,6 +126,8 @@ def test_candidate_filter_uses_zero_cost_and_standalone_free_only():
     assert ("false", "carefree-chat") not in candidates
 
 
+@pytest.mark.spec("free-candidate-discovery::Same model differs by provider")
+@pytest.mark.spec("system-architecture::Same model on two providers")
 def test_candidate_cost_is_read_per_provider():
     catalog = {
         "providers": {
@@ -102,6 +143,7 @@ def test_candidate_cost_is_read_per_provider():
     assert ("paid", "same") not in candidates
 
 
+@pytest.mark.spec("free-candidate-discovery::False free token")
 def test_candidate_free_token_rejects_unrelated_words_and_platform_names():
     catalog = {
         "providers": {
@@ -118,6 +160,8 @@ def test_candidate_free_token_rejects_unrelated_words_and_platform_names():
     assert build_free_candidates(catalog) == {}
 
 
+@pytest.mark.spec("free-candidate-discovery::Cost is not an object")
+@pytest.mark.spec("free-candidate-discovery::Only input cost is zero")
 def test_candidate_cost_non_dict_or_partial_zero_is_not_zero_cost():
     catalog = {
         "providers": {
@@ -133,6 +177,7 @@ def test_candidate_cost_non_dict_or_partial_zero_is_not_zero_cost():
     assert build_free_candidates(catalog) == {}
 
 
+@pytest.mark.spec("free-candidate-discovery::Multiple signals collapse")
 def test_candidate_multiple_signals_are_collapsed():
     catalog = {"providers": {"p": {"models": {"vendor/free-chat": {"cost": {"input": 0, "output": 0}}}}}}
 
@@ -141,9 +186,11 @@ def test_candidate_multiple_signals_are_collapsed():
     assert candidates[("p", "vendor/free-chat")].reasons == ("multiple_signals",)
 
 
+@pytest.mark.spec("provider-scanner::Catalog fetched before scan")
+@pytest.mark.spec("provider-scanner::Fewer than two snapshots")
 def test_scanner_snapshots_by_hash_and_skips_unchanged_diff(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
-    scanner = CatalogScanner(postgres_url)
+    scanner = CatalogScanner(Repository(Database(postgres_url)))
     provider_id, account_id = scanner.upsert_provider_account(
         omniroute_instance_id="local",
         provider_slug="provider-a",
@@ -167,6 +214,9 @@ def test_scanner_snapshots_by_hash_and_skips_unchanged_diff(postgres_url):
     assert scanner.upsert_endpoint(account_id, "m1").access_status == "access_pending"
 
 
+@pytest.mark.spec("provider-scanner::New model discovered")
+@pytest.mark.spec("provider-scanner::Omission too young")
+@pytest.mark.spec("provider-scanner::Fewer than two snapshots")
 def test_diff_emits_events_and_false_removal_guard():
     previous = [{"id": "old", "name": "Old"}, {"id": "same", "name": "Same"}]
     current = [{"id": "same", "name": "Same"}, {"id": "new", "name": "New"}]
@@ -181,9 +231,11 @@ def test_diff_emits_events_and_false_removal_guard():
     assert should_mark_removed([CatalogSnapshot(True, now - timedelta(minutes=10)), CatalogSnapshot(True, now - timedelta(minutes=6))], now)
 
 
+@pytest.mark.spec("provider-scanner::Failed snapshot not previous")
+@pytest.mark.spec("provider-scanner::Not both snapshots successful")
 def test_scanner_failed_snapshot_is_not_previous_for_unchanged_detection(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
-    scanner = CatalogScanner(postgres_url)
+    scanner = CatalogScanner(Repository(Database(postgres_url)))
     provider_id, _account_id = scanner.upsert_provider_account(
         omniroute_instance_id="local",
         provider_slug="provider-a",
@@ -198,6 +250,8 @@ def test_scanner_failed_snapshot_is_not_previous_for_unchanged_detection(postgre
     assert repeated.is_unchanged is False
 
 
+@pytest.mark.spec("account-discovery::Shared upstream account")
+@pytest.mark.spec("account-discovery::Independent accounts")
 def test_quota_grouping_counts_only_confirmed_independent_capacity():
     connections = [
         {"id": "a", "provider": "p", "upstream_account_id": "shared", "quota": 100, "status": "confirmed"},
@@ -213,6 +267,7 @@ def test_quota_grouping_counts_only_confirmed_independent_capacity():
     assert pools["d"].independence_status == "assumed_shared"
 
 
+@pytest.mark.spec("account-discovery::Conflicting pool statuses")
 def test_quota_grouping_conflicting_statuses_merge_to_unknown():
     pools = group_quota_pools(
         [
@@ -224,6 +279,7 @@ def test_quota_grouping_conflicting_statuses_merge_to_unknown():
     assert pools["shared"].independence_status == "unknown"
 
 
+@pytest.mark.spec("account-discovery::Rate limits unavailable")
 def test_quota_grouping_rate_limits_unavailable_reuses_previous_pool_key():
     pools = group_quota_pools(
         [{"id": "a", "provider": "p", "upstream_account_id": "new", "quota": 100, "status": "confirmed"}],
@@ -234,6 +290,7 @@ def test_quota_grouping_rate_limits_unavailable_reuses_previous_pool_key():
     assert pools["a"].pool_key == "previous"
 
 
+@pytest.mark.spec("account-discovery::Non-confirmed and duplicate capacity")
 def test_usable_capacity_ignores_non_confirmed_and_duplicate_connection_ids():
     pools = group_quota_pools(
         [
@@ -246,6 +303,10 @@ def test_usable_capacity_ignores_non_confirmed_and_duplicate_connection_ids():
     assert usable_capacity(pools) == 100
 
 
+@pytest.mark.spec("free-provider-registry-sync::Shared pool across models")
+@pytest.mark.spec("free-provider-registry-sync::No-auth provider has no connection")
+@pytest.mark.spec("free-provider-registry-sync::Web-cookie provider in registry")
+@pytest.mark.spec("free-provider-registry-sync::Unscored provider")
 def test_free_registry_deduplicates_pool_key_and_excludes_web_cookie():
     payload = {
         "models": [
@@ -262,6 +323,10 @@ def test_free_registry_deduplicates_pool_key_and_excludes_web_cookie():
     assert ("rank-only", None) not in registry.models
 
 
+@pytest.mark.spec("model-matcher::Exact slug match")
+@pytest.mark.spec("model-matcher::Base vs instruct")
+@pytest.mark.spec("model-matcher::Low-confidence match")
+@pytest.mark.spec("model-matcher::Smaller provider context")
 def test_matcher_order_forbidden_merges_confidence_and_context_override():
     exact = match_model("openai/gpt-4.1", canonical_slugs={"gpt-4.1"}, provider_catalog_ids=set())
     low = match_model("gpt-4.1-preview", canonical_slugs={"gpt-4.1"}, provider_catalog_ids=set())
