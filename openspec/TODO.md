@@ -4,9 +4,6 @@ No deferred review follow-up work discovered.
 
 ## Active stage-wiring follow-up
 
-- Implement and archive `wire-probe-telemetry-stages`: wire `probing`,
-  `telemetry-sync`, and `quota-sync`; replace the probe/telemetry xfail
-  placeholders with real effect assertions.
 - Implement and archive `wire-scoring-allocation-stages`: wire `role-scoring`,
   `allocation`, and `diff`; replace the scoring/allocation xfail placeholders
   with real effect assertions.

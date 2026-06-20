@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -72,6 +73,49 @@ class QuotaSearchClient:
         }
 
 
+class PipelineOpsClient(QuotaSearchClient):
+    def __init__(self, *, probe_status=200):
+        super().__init__()
+        self.probe_status = probe_status
+        self.get_calls = []
+
+    def post(self, path, payload, headers=None):
+        if path == "/v1/search":
+            return super().post(path, payload)
+        self.calls.append((path, payload, headers))
+        return {"status_code": self.probe_status, "content": "ok" if self.probe_status == 200 else ""}
+
+    def get(self, path):
+        self.get_calls.append(path)
+        if path == "/api/usage/analytics":
+            return {
+                "byProvider": [{"provider": "provider-a", "requests": 10, "successRatePct": 90, "avgLatencyMs": 120}],
+                "byModel": [
+                    {
+                        "provider": "provider-a",
+                        "model": "free-chat",
+                        "requests": 5,
+                        "successRatePct": 100,
+                        "avgLatencyMs": 80,
+                    }
+                ],
+            }
+        if path == "/api/usage/quota":
+            return {
+                "meta": {"generatedAt": datetime.now(timezone.utc).isoformat()},
+                "providers": [
+                    {
+                        "provider": "provider-a",
+                        "connectionId": "conn-provider-a",
+                        "quotaTotal": 100,
+                        "quotaUsed": 40,
+                        "resetAt": "2026-06-21T00:00:00+00:00",
+                    }
+                ],
+            }
+        raise AssertionError(f"unexpected GET {path}")
+
+
 def seed_endpoint(repository, *, model_id="free-chat"):
     with repository.database.transaction() as transaction:
         provider = repository.providers.upsert(
@@ -97,7 +141,7 @@ def seed_endpoint(repository, *, model_id="free-chat"):
 
 
 def run_composed_stage(repository, stage_name, *, client=None):
-    dependencies = StageDependencies(repository=repository, omniroute_client=client or QuotaSearchClient())
+    dependencies = StageDependencies(repository=repository, omniroute_client=client or PipelineOpsClient())
     stages = build_canonical_stages(dependencies=dependencies, metadata_sync=lambda **_kwargs: None)
     selected = stages_for_command(_command_for_stage(stage_name), stages)
     return PipelineRunner(repository, stages=selected).run(trigger=stage_name, run_type=stage_name)
@@ -108,8 +152,18 @@ def _command_for_stage(stage_name):
         "model-matching": "match-models",
         "quota-research": "research-quotas",
         "access-classification": "classify-access",
+        "probing": "probe-models",
+        "telemetry-sync": "sync-telemetry",
+        "quota-sync": "sync-quotas",
     }
     return commands[stage_name]
+
+
+def prepare_confirmed_endpoint(repository, *, client=None):
+    seed_endpoint(repository)
+    run_composed_stage(repository, "model-matching", client=client)
+    run_composed_stage(repository, "quota-research", client=client)
+    run_composed_stage(repository, "access-classification", client=client)
 
 
 @pytest.mark.spec("pipeline-orchestration::Matching writes endpoint bindings")
@@ -193,11 +247,11 @@ def test_quota_research_missing_external_payload_fails_closed(postgres_url):
 
 
 @pytest.mark.spec("pipeline-orchestration::Full run calls production adapters")
-def test_full_pipeline_advances_past_matching_access_and_stops_at_probe(postgres_url):
+def test_full_pipeline_advances_past_probe_telemetry_and_stops_at_scoring(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     repository = Repository(Database(postgres_url))
     seed_endpoint(repository)
-    dependencies = StageDependencies(repository=repository, omniroute_client=QuotaSearchClient())
+    dependencies = StageDependencies(repository=repository, omniroute_client=PipelineOpsClient())
     adapters = StageAdapters(
         registry_sync=empty_stage_adapters().registry_sync,
         catalog_scan=empty_stage_adapters().catalog_scan,
@@ -218,8 +272,76 @@ def test_full_pipeline_advances_past_matching_access_and_stops_at_probe(postgres
         "quota-research",
         "access-classification",
         "probing",
+        "telemetry-sync",
+        "quota-sync",
+        "role-scoring",
     ]
     assert result.stage_results[-1]["status"] == "not_implemented"
+
+
+@pytest.mark.spec("pipeline-orchestration::Probe respects confirmed free capacity")
+@pytest.mark.spec("pipeline-orchestration::Probe persists results and excludes failures")
+def test_probe_stage_gates_on_confirmed_capacity_and_persists_results(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    client = PipelineOpsClient()
+    prepare_confirmed_endpoint(repository, client=client)
+
+    result = run_composed_stage(repository, "probing", client=client)
+
+    with repository.database.transaction() as transaction:
+        probe = transaction.execute("SELECT passed, details FROM endpoint_probes").fetchone()
+        endpoint = transaction.execute("SELECT probe_status FROM provider_endpoints").fetchone()
+    assert result.exit_code == 0
+    assert result.stage_results[0]["details"]["effect"] == "repository_write"
+    assert client.calls[-1][0] == "/v1/providers/provider-a/chat/completions"
+    assert client.calls[-1][2] == {"X-OmniRoute-No-Cache": "true"}
+    assert probe["passed"] is True
+    assert probe["details"]["reserved_capacity"] is True
+    assert endpoint["probe_status"] == "passed"
+
+
+@pytest.mark.spec("pipeline-orchestration::Telemetry sync writes normalized rows")
+def test_telemetry_sync_stage_writes_normalized_health_rows(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    client = PipelineOpsClient()
+    prepare_confirmed_endpoint(repository, client=client)
+
+    result = run_composed_stage(repository, "telemetry-sync", client=client)
+
+    with repository.database.transaction() as transaction:
+        rows = transaction.execute(
+            "SELECT granularity, sample_count, latency_p50_ms FROM endpoint_health_observations ORDER BY endpoint_id NULLS FIRST"
+        ).fetchall()
+    assert result.exit_code == 0
+    assert result.stage_results[0]["details"]["effect"] == "repository_write"
+    assert client.get_calls[-1] == "/api/usage/analytics"
+    assert [(row["granularity"], row["sample_count"], row["latency_p50_ms"]) for row in rows] == [
+        ("provider", 10, 120),
+        ("provider", 5, 80),
+    ]
+
+
+@pytest.mark.spec("pipeline-orchestration::Quota sync writes remaining-quota state")
+def test_quota_sync_stage_writes_remaining_quota_state(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    client = PipelineOpsClient()
+    prepare_confirmed_endpoint(repository, client=client)
+
+    result = run_composed_stage(repository, "quota-sync", client=client)
+
+    with repository.database.transaction() as transaction:
+        observation = transaction.execute("SELECT limit_value, used_value, remaining_value FROM quota_observations").fetchone()
+        access = transaction.execute("SELECT effective_remaining FROM endpoint_access_states").fetchone()
+    assert result.exit_code == 0
+    assert result.stage_results[0]["details"]["effect"] == "repository_write"
+    assert client.get_calls[-1] == "/api/usage/quota"
+    assert float(observation["limit_value"]) == 100.0
+    assert float(observation["used_value"]) == 40.0
+    assert float(observation["remaining_value"]) == 60.0
+    assert access["effective_remaining"]["requests"] == 60.0
 
 
 @pytest.mark.spec("runtime-bootstrap::Production dispatch executes a real stage")

@@ -17,10 +17,13 @@ from fmo.metadata_sync import sync_external_metadata
 from fmo.omniroute import OmniRouteClient
 from fmo.persistence import Database, Repository
 from fmo.pipeline import CANONICAL_STAGE_NAMES, PipelineContext, PipelineRunner, PipelineRunResult, Stage, StageResult
+from fmo.probes import probe_endpoint
+from fmo.quota_manager import QuotaFetchError, fetch_live_quota_snapshot
 from fmo.quota_research import research_quota_rule
 from fmo.registry import RegistryFetchError, persist_free_registry_outcome, sync_live_free_registry
 from fmo.scanner import CatalogFetchError, CatalogScanner, scan_live_omniroute_catalogs
 from fmo.scheduler import Scheduler
+from fmo.telemetry import sync_live_telemetry
 
 
 @dataclass(frozen=True)
@@ -224,6 +227,9 @@ def _production_stage_adapters() -> dict[str, StageAdapter]:
         "model-matching": _model_matching_stage,
         "quota-research": _quota_research_stage,
         "access-classification": _access_classification_stage,
+        "probing": _probing_stage,
+        "telemetry-sync": _telemetry_sync_stage,
+        "quota-sync": _quota_sync_stage,
     }
 
 
@@ -463,6 +469,244 @@ def _access_classification_stage(_dependencies: StageDependencies, context: Pipe
     return _effect_result("access-classification", changed=written > 0)
 
 
+def _probing_stage(dependencies: StageDependencies, context: PipelineContext) -> StageResult:
+    if dependencies.omniroute_client is None:
+        return StageResult(status="external_dependency_failed", reason="omniroute_client_required")
+    with context.repository.database.transaction() as transaction:
+        rows = transaction.execute(
+            """
+            SELECT pe.id, pe.provider_model_id, pe.capabilities, p.omniroute_provider_id,
+                   eas.status, eas.effective_remaining
+            FROM provider_endpoints pe
+            JOIN provider_accounts pa ON pa.id = pe.provider_account_id
+            JOIN providers p ON p.id = pa.provider_id
+            JOIN endpoint_access_states eas ON eas.endpoint_id = pe.id
+            WHERE eas.status = 'confirmed'
+            ORDER BY pe.provider_model_id
+            """
+        ).fetchall()
+    written = 0
+    for row in rows:
+        if _remaining_requests(row["effective_remaining"]) <= 0:
+            continue
+        started_at = datetime.now(timezone.utc)
+        result = probe_endpoint(
+            dependencies.omniroute_client,
+            provider=row["omniroute_provider_id"],
+            model=row["provider_model_id"],
+            capabilities=dict(row["capabilities"] or {}),
+        )
+        finished_at = datetime.now(timezone.utc)
+        request_hash = _hash_parts(str(row["id"]), started_at.date().isoformat(), "basic")
+        with context.repository.database.transaction() as transaction:
+            context.repository.probes.record(
+                transaction,
+                endpoint_id=row["id"],
+                suite_version="production-v1",
+                probe_type="basic",
+                request_hash=request_hash,
+                passed=result.passed,
+                http_status=200 if result.passed else 500,
+                started_at=started_at,
+                finished_at=finished_at,
+                details={"suites": list(result.suites), "reserved_capacity": True},
+            )
+            transaction.execute(
+                "UPDATE provider_endpoints SET probe_status = %(status)s WHERE id = %(endpoint_id)s",
+                {"status": "passed" if result.passed else "failed", "endpoint_id": row["id"]},
+            )
+        written += 1
+    return _effect_result("probing", changed=written > 0)
+
+
+def _telemetry_sync_stage(dependencies: StageDependencies, context: PipelineContext) -> StageResult:
+    if dependencies.omniroute_client is None:
+        return StageResult(status="external_dependency_failed", reason="omniroute_client_required")
+    snapshot = sync_live_telemetry(dependencies.omniroute_client)
+    if snapshot.errors:
+        return StageResult(status="external_dependency_failed", reason=snapshot.errors[0].reason)
+    observed_at = datetime.now(timezone.utc)
+    written = 0
+    with context.repository.database.transaction() as transaction:
+        for provider_id, metric in snapshot.provider_metrics.items():
+            provider = transaction.execute(
+                "SELECT id FROM providers WHERE omniroute_provider_id = %(provider_id)s LIMIT 1",
+                {"provider_id": provider_id},
+            ).fetchone()
+            if provider is None:
+                continue
+            _insert_health_observation(
+                transaction,
+                provider_id=provider["id"],
+                endpoint_id=None,
+                status="active",
+                metric=metric,
+                observed_at=observed_at,
+            )
+            written += 1
+        for (provider_id, model_id), metric in snapshot.model_metrics.items():
+            endpoint = transaction.execute(
+                """
+                SELECT pe.id
+                FROM provider_endpoints pe
+                JOIN provider_accounts pa ON pa.id = pe.provider_account_id
+                JOIN providers p ON p.id = pa.provider_id
+                WHERE p.omniroute_provider_id = %(provider_id)s
+                  AND pe.provider_model_id = %(model_id)s
+                LIMIT 1
+                """,
+                {"provider_id": provider_id, "model_id": model_id},
+            ).fetchone()
+            if endpoint is None:
+                continue
+            _insert_health_observation(
+                transaction,
+                provider_id=None,
+                endpoint_id=endpoint["id"],
+                status="active" if metric.failure_count == 0 else "degraded",
+                metric=metric,
+                observed_at=observed_at,
+            )
+            written += 1
+    return _effect_result("telemetry-sync", changed=written > 0)
+
+
+def _quota_sync_stage(dependencies: StageDependencies, context: PipelineContext) -> StageResult:
+    if dependencies.omniroute_client is None:
+        return StageResult(status="external_dependency_failed", reason="omniroute_client_required")
+    try:
+        snapshot = fetch_live_quota_snapshot(dependencies.omniroute_client)
+    except QuotaFetchError as exc:
+        return StageResult(status="partial_stale", reason=exc.reason)
+    written = 0
+    with context.repository.database.transaction() as transaction:
+        for quota in snapshot.quotas.values():
+            account = transaction.execute(
+                """
+                SELECT pa.id, pa.quota_pool_id, p.omniroute_provider_id
+                FROM provider_accounts pa
+                JOIN providers p ON p.id = pa.provider_id
+                WHERE p.omniroute_provider_id = %(provider_id)s
+                  AND pa.omniroute_connection_id = %(connection_id)s
+                LIMIT 1
+                """,
+                {"provider_id": quota.provider, "connection_id": quota.connection_id},
+            ).fetchone()
+            if account is None:
+                continue
+            quota_pool_id = account["quota_pool_id"] or _ensure_quota_pool(
+                transaction,
+                quota.provider,
+                quota.connection_id,
+                account["id"],
+            )
+            used = None if quota.limit is None or quota.remaining is None else quota.limit - quota.remaining
+            transaction.execute(
+                """
+                INSERT INTO quota_observations (
+                  quota_pool_id, provider_account_id, source, metric, limit_value,
+                  used_value, remaining_value, reset_at, raw_payload, observed_at
+                )
+                VALUES (
+                  %(quota_pool_id)s, %(provider_account_id)s, 'omniroute', 'requests',
+                  %(limit_value)s, %(used_value)s, %(remaining_value)s, %(reset_at)s,
+                  %(raw_payload)s, %(observed_at)s
+                )
+                """,
+                {
+                    "quota_pool_id": quota_pool_id,
+                    "provider_account_id": account["id"],
+                    "limit_value": quota.limit,
+                    "used_value": used,
+                    "remaining_value": quota.remaining,
+                    "reset_at": quota.reset_at,
+                    "raw_payload": Jsonb({"provider": quota.provider, "connectionId": quota.connection_id}),
+                    "observed_at": snapshot.observed_at,
+                },
+            )
+            transaction.execute(
+                """
+                UPDATE endpoint_access_states eas
+                SET effective_remaining = %(effective_remaining)s,
+                    reset_at = %(reset_at)s,
+                    classified_at = now()
+                FROM provider_endpoints pe
+                WHERE eas.endpoint_id = pe.id
+                  AND pe.provider_account_id = %(provider_account_id)s
+                """,
+                {
+                    "effective_remaining": Jsonb({"requests": quota.remaining}),
+                    "reset_at": quota.reset_at,
+                    "provider_account_id": account["id"],
+                },
+            )
+            written += 1
+    return _effect_result("quota-sync", changed=written > 0)
+
+
+def _insert_health_observation(
+    transaction: Any,
+    *,
+    provider_id: Any | None,
+    endpoint_id: Any | None,
+    status: str,
+    metric: Any,
+    observed_at: datetime,
+) -> None:
+    success_rate = None
+    error_rate = None
+    if metric.requests:
+        error_rate = metric.failure_count / metric.requests
+        success_rate = 1 - error_rate
+    transaction.execute(
+        """
+        INSERT INTO endpoint_health_observations (
+          endpoint_id, provider_id, granularity, status, success_rate, error_rate,
+          latency_p50_ms, latency_p95_ms, sample_count, observed_at
+        )
+        VALUES (
+          %(endpoint_id)s, %(provider_id)s, %(granularity)s, %(status)s,
+          %(success_rate)s, %(error_rate)s, %(latency_p50_ms)s, %(latency_p95_ms)s,
+          %(sample_count)s, %(observed_at)s
+        )
+        """,
+        {
+            "endpoint_id": endpoint_id,
+            "provider_id": provider_id,
+            "granularity": metric.latency_granularity,
+            "status": status,
+            "success_rate": success_rate,
+            "error_rate": error_rate,
+            "latency_p50_ms": metric.avg_latency_ms,
+            "latency_p95_ms": metric.p95_ms,
+            "sample_count": metric.requests,
+            "observed_at": observed_at,
+        },
+    )
+
+
+def _ensure_quota_pool(transaction: Any, provider_id: str, connection_id: str, account_id: Any) -> Any:
+    pool = transaction.execute(
+        """
+        INSERT INTO quota_pools (name, provider_group, reset_policy)
+        VALUES (%(name)s, %(provider_group)s, %(reset_policy)s)
+        ON CONFLICT (name)
+        DO UPDATE SET provider_group = EXCLUDED.provider_group
+        RETURNING id
+        """,
+        {
+            "name": f"{provider_id}:{connection_id}:requests",
+            "provider_group": provider_id,
+            "reset_policy": Jsonb({"source": "omniroute"}),
+        },
+    ).fetchone()
+    transaction.execute(
+        "UPDATE provider_accounts SET quota_pool_id = %(quota_pool_id)s WHERE id = %(account_id)s",
+        {"quota_pool_id": pool["id"], "account_id": account_id},
+    )
+    return pool["id"]
+
+
 def _effect_result(stage_name: str, *, changed: bool) -> StageResult:
     effect = "repository_write" if changed else "idempotent_no_change"
     return StageResult(
@@ -487,6 +731,14 @@ def _quota_limit(limits: Any) -> float:
     else:
         value = limits["requests"]
     return float(value)
+
+
+def _remaining_requests(effective_remaining: Any) -> float:
+    if isinstance(effective_remaining, dict):
+        value = effective_remaining.get("requests", 0)
+    else:
+        value = effective_remaining["requests"]
+    return float(value or 0)
 
 
 def _canonical_access_status(access_status: str) -> str:
