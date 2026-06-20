@@ -19,7 +19,9 @@ from fmo.composition import (
     select_llm_model,
     stages_for_command,
 )
+from fmo.composition_stages import _smoke_combo
 from fmo.db import MigrationRunner
+from fmo.omniroute import OmniRouteRequestError
 from fmo.aa_migration import MigrationProposalResponse
 from fmo.hermes_inventory import Consumer, Inventory, InspectorForecastResponse
 from fmo.metadata_sync import MetadataSyncResult
@@ -29,6 +31,20 @@ from fmo.quota_research import QuotaClaimResponse
 from fmo.registry import FreeRegistry, FreeRegistrySyncOutcome
 from fmo.smart_review import ComboReviewResponse
 from tests._stage_effects import assert_success_has_declared_effect, effectful_success
+
+
+OPENAI_CHAT_COMPLETION_BODY = {
+    "id": "chatcmpl-fmo-smoke",
+    "object": "chat.completion",
+    "choices": [{"index": 0, "message": {"role": "assistant", "content": "ok"}, "finish_reason": "stop"}],
+}
+
+
+EMPTY_OPENAI_CHAT_COMPLETION_BODY = {
+    "id": "chatcmpl-fmo-smoke-empty",
+    "object": "chat.completion",
+    "choices": [{"index": 0, "message": {"role": "assistant", "content": ""}, "finish_reason": "stop"}],
+}
 
 
 def valid_env(**overrides):
@@ -125,7 +141,11 @@ class PipelineOpsClient(QuotaSearchClient):
             return {"ok": True}
         if path == "/v1/chat/completions":
             self.calls.append((path, payload, headers))
-            return {"status_code": self.smoke_status, "content": "ok" if self.smoke_status == 200 else ""}
+            if self.smoke_status >= 400:
+                raise OmniRouteRequestError("POST", path, self.smoke_status)
+            if self.smoke_status == 204:
+                return EMPTY_OPENAI_CHAT_COMPLETION_BODY
+            return OPENAI_CHAT_COMPLETION_BODY
         self.calls.append((path, payload, headers))
         return {"status_code": self.probe_status, "content": "ok" if self.probe_status == 200 else ""}
 
@@ -184,8 +204,9 @@ class MultiComboOpsClient(PipelineOpsClient):
         if path == "/v1/chat/completions":
             combo_id = payload["model"]
             self.calls.append((path, payload, headers))
-            passed = combo_id not in self.fail_smoke_for
-            return {"status_code": 200 if passed else 500, "content": "ok" if passed else ""}
+            if combo_id in self.fail_smoke_for:
+                return EMPTY_OPENAI_CHAT_COMPLETION_BODY
+            return OPENAI_CHAT_COMPLETION_BODY
         return super().post(path, payload, headers)
 
     def _applied_record_exists(self, combo_id):
@@ -968,9 +989,35 @@ def test_diff_stage_skips_reviewer_when_site_limit_disabled(postgres_url):
     assert snapshot["state_json"]["advisory_review"]["status"] == "skipped_trigger"
 
 
+@pytest.mark.spec("combo-applier::Smoke pass derived from OpenAI-compatible body")
+def test_smoke_combo_accepts_openai_chat_completion_without_body_status_code():
+    client = PipelineOpsClient()
+
+    assert _smoke_combo(client, "fmo-routing_fast") is True
+
+    smoke_call = client.calls[-1]
+    assert smoke_call[0] == "/v1/chat/completions"
+    assert "status_code" not in OPENAI_CHAT_COMPLETION_BODY
+
+
+@pytest.mark.spec("combo-applier::Empty completion is a smoke failure")
+def test_smoke_combo_rejects_empty_openai_chat_completion():
+    client = PipelineOpsClient(smoke_status=204)
+
+    assert _smoke_combo(client, "fmo-routing_fast") is False
+
+
+@pytest.mark.spec("combo-applier::Non-2xx smoke response is a smoke failure")
+def test_smoke_combo_maps_non_2xx_response_to_failure():
+    client = PipelineOpsClient(smoke_status=500)
+
+    assert _smoke_combo(client, "fmo-routing_fast") is False
+
+
 @pytest.mark.spec("pipeline-orchestration::Production apply runs the real smoke test")
 @pytest.mark.spec("combo-applier::Production apply smoke-tests applied combos")
 @pytest.mark.spec("combo-applier::Fabricated smoke signal rejected")
+@pytest.mark.spec("combo-applier::Smoke pass derived from OpenAI-compatible body")
 def test_apply_stage_mutates_fmo_combo_and_reports_real_smoke_signal(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     repository = Repository(Database(postgres_url))
@@ -1053,6 +1100,7 @@ def test_apply_stage_blocks_mutation_without_current_probe_success(postgres_url)
 
 @pytest.mark.spec("combo-applier::Confirmed safety allows the apply stage")
 @pytest.mark.spec("pipeline-orchestration::Smoke failure rolls back")
+@pytest.mark.spec("combo-applier::Non-2xx smoke response is a smoke failure")
 def test_apply_stage_smoke_failure_rolls_back_and_maps_failures(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     repository = Repository(Database(postgres_url))
@@ -1072,6 +1120,23 @@ def test_apply_stage_smoke_failure_rolls_back_and_maps_failures(postgres_url):
     rollback_repository = Repository(Database(postgres_url))
     rollback_result = run_composed_stage(rollback_repository, "apply", client=rollback_client)
     assert rollback_result.exit_code == 7
+
+
+@pytest.mark.spec("combo-applier::Empty completion is a smoke failure")
+def test_apply_stage_empty_smoke_completion_rolls_back(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    client = PipelineOpsClient(smoke_status=204)
+    prepare_scored_endpoint(repository, client=client)
+    run_composed_stage(repository, "role-scoring", client=client)
+    run_composed_stage(repository, "demand-forecast", client=client)
+    run_composed_stage(repository, "allocation", client=client)
+    run_composed_stage(repository, "diff", client=client)
+
+    result = run_composed_stage(repository, "apply", client=client)
+
+    assert result.exit_code == 6
+    assert client.combos["fmo-routing_fast"] == ["old-endpoint"]
 
 
 @pytest.mark.spec("combo-applier::Live state diverged from diff-time before")

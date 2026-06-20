@@ -4,7 +4,29 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_ACTIVE_PENDING = set()
+# Active proposal slices awaiting TDD implementation. Each entry is dropped from
+# tests/spec_coverage_pending.txt (and here) when its test lands. Slices are
+# listed in openspec/TODO.md and openspec/changes/<id>/.
+EXPECTED_ACTIVE_PENDING = {
+    # wire-account-discovery-stage
+    "pipeline-orchestration::Account discovery persists quota pools",
+    "pipeline-orchestration::Account discovery ordered before allocation inputs",
+    "pipeline-orchestration::Unavailable rate-limit data stays conservative",
+    "cli-and-operations::Discover-accounts command uses account discovery",
+    # integrate-quality-and-context-gates
+    "role-scorer::Below context minimum rejected in scoring",
+    "role-scorer::Below quality gate rejected in scoring",
+    "pipeline-orchestration::Scoring stage drops below-context endpoint",
+    "pipeline-orchestration::Scoring stage drops below-gate endpoint",
+    "pipeline-orchestration::Index-version mismatch keeps current combo",
+    # fix-cli-dry-run-pipeline-preview
+    "cli-and-operations::Dry-run runs the stage, not an unconditional success",
+    "cli-and-operations::Apply dry-run previews without mutating",
+    # harden-omniroute-retry-and-idempotency
+    "omniroute-client::GET transient 5xx retried",
+    "omniroute-client::GET network error retried",
+    "omniroute-client::POST carries idempotency key and is not retried",
+}
 
 
 @pytest.mark.spec("runtime-documentation::Active docs state")

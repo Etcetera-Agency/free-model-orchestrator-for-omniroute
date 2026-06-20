@@ -32,7 +32,7 @@ from fmo.hermes_inventory import (
 from fmo.llm_runtime import LlmProviderConfig, SharedInstructorRuntime, build_instructor_runtime
 from fmo.matcher import match_model
 from fmo.metadata_sync import sync_external_metadata
-from fmo.omniroute import OmniRouteClient
+from fmo.omniroute import OmniRouteClient, OmniRouteRequestError
 from fmo.persistence import Database, Repository
 from fmo.pipeline import CANONICAL_STAGE_NAMES, PipelineContext, PipelineRunner, PipelineRunResult, Stage, StageResult
 from fmo.probes import probe_endpoint
@@ -1269,11 +1269,20 @@ def _audit_stage(dependencies: StageDependencies, context: PipelineContext) -> S
 
 
 def _smoke_combo(client: Any, combo_id: str) -> bool:
-    response = client.post(
-        "/v1/chat/completions",
-        {"model": combo_id, "messages": [{"role": "user", "content": "Return ok"}]},
-    )
-    return response.get("status_code") == 200 and bool(response.get("content", "ok"))
+    try:
+        response = client.post(
+            "/v1/chat/completions",
+            {"model": combo_id, "messages": [{"role": "user", "content": "Return ok"}]},
+        )
+    except OmniRouteRequestError:
+        return False
+    choices = response.get("choices", []) if isinstance(response, dict) else []
+    if not choices or not isinstance(choices[0], dict):
+        return False
+    message = choices[0].get("message")
+    if not isinstance(message, dict):
+        return False
+    return bool(str(message.get("content") or "").strip())
 
 
 def _read_current_combos(client: Any | None) -> dict[str, list[str]]:

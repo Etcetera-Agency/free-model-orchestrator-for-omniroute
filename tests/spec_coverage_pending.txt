@@ -2,3 +2,28 @@
 # Remove a line once a test carries @pytest.mark.spec("<that id>").
 # This file must shrink over time; the coverage gate forbids leaving a
 # scenario both here and already covered.
+#
+# Active proposal slices awaiting TDD implementation (see openspec/TODO.md and
+# openspec/changes/<id>/). Each line is dropped when its test lands.
+
+# wire-account-discovery-stage
+pipeline-orchestration::Account discovery persists quota pools
+pipeline-orchestration::Account discovery ordered before allocation inputs
+pipeline-orchestration::Unavailable rate-limit data stays conservative
+cli-and-operations::Discover-accounts command uses account discovery
+
+# integrate-quality-and-context-gates
+role-scorer::Below context minimum rejected in scoring
+role-scorer::Below quality gate rejected in scoring
+pipeline-orchestration::Scoring stage drops below-context endpoint
+pipeline-orchestration::Scoring stage drops below-gate endpoint
+pipeline-orchestration::Index-version mismatch keeps current combo
+
+# fix-cli-dry-run-pipeline-preview
+cli-and-operations::Dry-run runs the stage, not an unconditional success
+cli-and-operations::Apply dry-run previews without mutating
+
+# harden-omniroute-retry-and-idempotency
+omniroute-client::GET transient 5xx retried
+omniroute-client::GET network error retried
+omniroute-client::POST carries idempotency key and is not retried
