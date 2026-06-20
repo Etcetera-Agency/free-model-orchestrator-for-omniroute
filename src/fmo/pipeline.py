@@ -27,6 +27,7 @@ CANONICAL_STAGE_NAMES = [
     "probing",
     "telemetry-sync",
     "quota-sync",
+    "hermes-inventory",
     "role-scoring",
     "allocation",
     "diff",

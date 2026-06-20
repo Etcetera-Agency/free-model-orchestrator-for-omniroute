@@ -5,6 +5,7 @@ import hashlib
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any
 from urllib.parse import urljoin
 
@@ -16,6 +17,16 @@ from fmo.applier import ComboApplier
 from fmo.apply_guard import ApplyPreconditions, check_apply_preconditions
 from fmo.config import StartupConfig
 from fmo.external_metadata import ExternalMetadataError
+from fmo.hermes_inventory import (
+    HermesInventoryError,
+    Inventory,
+    assemble_inspector_prompt,
+    build_hermes_inventory,
+    read_hermes_command_sources,
+    read_hermes_home,
+    read_hermes_http_sources,
+    run_inspector,
+)
 from fmo.llm_runtime import LlmProviderConfig, SharedInstructorRuntime, build_instructor_runtime
 from fmo.matcher import match_model
 from fmo.metadata_sync import sync_external_metadata
@@ -87,6 +98,7 @@ MetadataSync = Callable[..., object]
 RegistrySync = Callable[[Any], object]
 CatalogScan = Callable[[CatalogScanner, Any, str], object]
 StageAdapter = Callable[["StageDependencies", PipelineContext], StageResult]
+HermesInventoryAdapter = Callable[[StartupConfig], object]
 
 
 @dataclass(frozen=True)
@@ -95,6 +107,7 @@ class StageDependencies:
     omniroute_client: OmniRouteClient | None
     config: StartupConfig | None = None
     llm_runtime: SharedInstructorRuntime | None = None
+    hermes_inventory_adapter: HermesInventoryAdapter | None = None
 
 
 @dataclass(frozen=True)
@@ -102,6 +115,7 @@ class StageAdapters:
     registry_sync: RegistrySync = sync_live_free_registry
     catalog_scan: CatalogScan = field(default_factory=lambda: _scan_catalogs)
     stage_adapters: dict[str, StageAdapter] = field(default_factory=lambda: _production_stage_adapters())
+    hermes_inventory: HermesInventoryAdapter | None = None
     instructor_from_openai: Any | None = None
     openai_client_factory: Any | None = None
 
@@ -120,7 +134,13 @@ def compose_runtime(
     repository = Repository(Database(config.database_url))
     client = OmniRouteClient(base_url=config.omniroute_url, api_key=config.omniroute_api_key)
     llm_runtime = build_production_llm_runtime(config, repository, adapters=selected_adapters)
-    dependencies = StageDependencies(repository=repository, omniroute_client=client, config=config, llm_runtime=llm_runtime)
+    dependencies = StageDependencies(
+        repository=repository,
+        omniroute_client=client,
+        config=config,
+        llm_runtime=llm_runtime,
+        hermes_inventory_adapter=selected_adapters.hermes_inventory,
+    )
     return ComposedRuntime(
         repository=repository,
         omniroute_client=client,
@@ -199,6 +219,14 @@ def build_canonical_stages(
     sync = metadata_sync or sync_external_metadata
     deps = dependencies or StageDependencies(repository=None, omniroute_client=None)
     stage_adapters = adapters or StageAdapters()
+    if deps.hermes_inventory_adapter is None and stage_adapters.hermes_inventory is not None:
+        deps = StageDependencies(
+            repository=deps.repository,
+            omniroute_client=deps.omniroute_client,
+            config=deps.config,
+            llm_runtime=deps.llm_runtime,
+            hermes_inventory_adapter=stage_adapters.hermes_inventory,
+        )
     stage_by_name = {
         "external-metadata-sync": Stage("external-metadata-sync", _metadata_stage(sync)),
         "free-candidate-discovery": Stage("free-candidate-discovery", _free_candidate_stage(deps, stage_adapters)),
@@ -208,6 +236,7 @@ def build_canonical_stages(
         "probing": Stage("probing", _adapter_stage("probing", deps, stage_adapters)),
         "telemetry-sync": Stage("telemetry-sync", _adapter_stage("telemetry-sync", deps, stage_adapters)),
         "quota-sync": Stage("quota-sync", _adapter_stage("quota-sync", deps, stage_adapters)),
+        "hermes-inventory": Stage("hermes-inventory", _adapter_stage("hermes-inventory", deps, stage_adapters)),
         "role-scoring": Stage("role-scoring", _adapter_stage("role-scoring", deps, stage_adapters)),
         "allocation": Stage("allocation", _adapter_stage("allocation", deps, stage_adapters)),
         "diff": Stage("diff", _adapter_stage("diff", deps, stage_adapters)),
@@ -305,6 +334,7 @@ def _production_stage_adapters() -> dict[str, StageAdapter]:
         "probing": _probing_stage,
         "telemetry-sync": _telemetry_sync_stage,
         "quota-sync": _quota_sync_stage,
+        "hermes-inventory": _hermes_inventory_stage,
         "role-scoring": _role_scoring_stage,
         "allocation": _allocation_stage,
         "diff": _diff_stage,
@@ -725,6 +755,108 @@ def _quota_sync_stage(dependencies: StageDependencies, context: PipelineContext)
     return _effect_result("quota-sync", changed=written > 0)
 
 
+def _hermes_inventory_stage(dependencies: StageDependencies, context: PipelineContext) -> StageResult:
+    if dependencies.config is None:
+        return StageResult(status="validation_failed", reason="startup_config_required")
+    try:
+        inventory = _read_hermes_inventory(dependencies)
+    except (ValueError, HermesInventoryError) as exc:
+        return StageResult(status="validation_failed", reason=str(exc))
+    source_hash = _hash_parts(
+        dependencies.config.hermes_inventory_mode,
+        *[
+            _hash_parts(consumer.role_id, consumer.consumer_type, consumer.consumer, consumer.cadence, str(consumer.calls_per_run))
+            for consumer in inventory.consumers
+        ],
+    )
+    forecast = _run_hermes_inspector(dependencies, inventory)
+    by_role: dict[str, float] = {}
+    for consumer in inventory.consumers:
+        by_role[consumer.role_id] = by_role.get(consumer.role_id, 0.0) + float(consumer.calls_per_run)
+    if forecast is not None:
+        by_role[forecast.role] = max(by_role.get(forecast.role, 0.0), float(forecast.expected_calls))
+    with context.repository.database.transaction() as transaction:
+        inventory_run = context.repository.role_consumers.start_inventory_run(
+            transaction,
+            source_mode=dependencies.config.hermes_inventory_mode,
+            trigger_type="manual" if context.config.get("command") == "sync-hermes-inventory" else "daily",
+            source_hash=source_hash,
+        )
+        for role_id, calls in by_role.items():
+            existing_role = transaction.execute(
+                "SELECT 1 FROM roles WHERE id = %(role_id)s",
+                {"role_id": role_id},
+            ).fetchone()
+            context.repository.roles.upsert(
+                transaction,
+                role_id=role_id,
+                requirements={"capabilities": []},
+                expected_load={"requests": calls},
+                criticality=1,
+            )
+            if existing_role is None:
+                transaction.execute(
+                    """
+                    UPDATE roles
+                    SET role_lifecycle_status = 'bootstrap_pending'
+                    WHERE id = %(role_id)s
+                    """,
+                    {"role_id": role_id},
+                )
+        for consumer in inventory.consumers:
+            context.repository.role_consumers.upsert(
+                transaction,
+                role_id=consumer.role_id,
+                consumer_type=consumer.consumer_type,
+                consumer_key=consumer.consumer,
+                cadence=consumer.cadence,
+                calls_per_run=consumer.calls_per_run,
+                source_hash=source_hash,
+            )
+        context.repository.role_consumers.complete_inventory_run(
+            transaction,
+            run_id=inventory_run["id"],
+            roles_found=len(by_role),
+            consumers_found=len(inventory.consumers),
+        )
+    if not inventory.consumers:
+        return StageResult(status="partial_stale", reason="hermes_inventory_empty")
+    return _effect_result("hermes-inventory", changed=True)
+
+
+def _read_hermes_inventory(dependencies: StageDependencies) -> Inventory:
+    if dependencies.config is None:
+        raise ValueError("startup_config_required")
+    mode = dependencies.config.hermes_inventory_mode
+    if dependencies.hermes_inventory_adapter is not None:
+        return dependencies.hermes_inventory_adapter(dependencies.config)
+    if mode == "filesystem":
+        if not dependencies.config.hermes_home:
+            raise ValueError("HERMES_HOME is required")
+        return read_hermes_home(Path(dependencies.config.hermes_home or ""))
+    if mode == "command":
+        if not dependencies.config.hermes_inventory_command:
+            raise ValueError("HERMES_INVENTORY_COMMAND is required")
+        sources = read_hermes_command_sources(str(dependencies.config.hermes_inventory_command or "").split())
+        return build_hermes_inventory(**sources)
+    if mode == "http":
+        if not dependencies.config.hermes_inventory_url:
+            raise ValueError("HERMES_INVENTORY_URL is required")
+        sources = read_hermes_http_sources(str(dependencies.config.hermes_inventory_url or ""))
+        return build_hermes_inventory(**sources)
+    raise ValueError("HERMES_INVENTORY_MODE is invalid")
+
+
+def _run_hermes_inspector(dependencies: StageDependencies, inventory):
+    if dependencies.llm_runtime is None:
+        return None
+    prompt = assemble_inspector_prompt(inventory, changes=[], secrets={})
+    try:
+        return run_inspector(dependencies.llm_runtime, prompt)
+    except Exception:
+        return None
+
+
 def _role_scoring_stage(_dependencies: StageDependencies, context: PipelineContext) -> StageResult:
     with context.repository.database.transaction() as transaction:
         roles = transaction.execute("SELECT id, requirements FROM roles ORDER BY id").fetchall()
@@ -794,7 +926,21 @@ def _allocation_stage(_dependencies: StageDependencies, context: PipelineContext
             ORDER BY rs.role_id, rs.endpoint_id, rs.calculated_at DESC
             """
         ).fetchall()
-        demand = {role["id"]: float((role["expected_load"] or {}).get("requests", 1)) for role in roles}
+        consumer_demand = {
+            row["role_id"]: float(row["calls"])
+            for row in transaction.execute(
+                """
+                SELECT role_id, SUM(calls_per_run) AS calls
+                FROM role_consumers
+                WHERE active = true
+                GROUP BY role_id
+                """
+            ).fetchall()
+        }
+        demand = {
+            role["id"]: consumer_demand.get(role["id"], float((role["expected_load"] or {}).get("requests", 1)))
+            for role in roles
+        }
         endpoints = [
             {
                 "id": str(row["endpoint_id"]),
@@ -1179,6 +1325,7 @@ _COMMAND_STAGE_NAMES = {
     "probe-models": "probing",
     "sync-telemetry": "telemetry-sync",
     "sync-quotas": "quota-sync",
+    "sync-hermes-inventory": "hermes-inventory",
     "score-roles": "role-scoring",
     "allocate": "allocation",
     "diff": "diff",

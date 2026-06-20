@@ -18,6 +18,7 @@ from fmo.composition import (
     stages_for_command,
 )
 from fmo.db import MigrationRunner
+from fmo.hermes_inventory import Consumer, Inventory, InspectorForecastResponse
 from fmo.metadata_sync import MetadataSyncResult
 from fmo.persistence import Database, Repository
 from fmo.pipeline import CANONICAL_STAGE_NAMES, PipelineRunner
@@ -63,6 +64,20 @@ def empty_adapters_with_stage_effects():
         registry_sync=adapters.registry_sync,
         catalog_scan=adapters.catalog_scan,
         stage_adapters=effectful_stage_adapters(*CANONICAL_STAGE_NAMES[2:]),
+    )
+
+
+def hermes_inventory_fixture():
+    return Inventory(
+        consumers=[
+            Consumer(
+                role_id="routing_fast",
+                consumer_type="cron_job",
+                consumer="daily-routing",
+                cadence="0 4 * * *",
+                calls_per_run=12,
+            )
+        ]
     )
 
 
@@ -165,6 +180,14 @@ class RecordingLlmRuntime:
             )
         if response_model is ComboReviewResponse:
             return response_model(diffs=self.review_diffs)
+        if response_model is InspectorForecastResponse:
+            return response_model(
+                role="routing_fast",
+                expected_calls=25,
+                average_input_tokens=100,
+                average_output_tokens=50,
+                confidence="medium",
+            )
         raise AssertionError(f"unexpected response model {response_model}")
 
 
@@ -233,6 +256,7 @@ def _command_for_stage(stage_name):
         "probing": "probe-models",
         "telemetry-sync": "sync-telemetry",
         "quota-sync": "sync-quotas",
+        "hermes-inventory": "sync-hermes-inventory",
         "role-scoring": "score-roles",
         "allocation": "allocate",
         "diff": "diff",
@@ -451,10 +475,15 @@ def test_full_pipeline_runs_through_apply_and_audit(postgres_url):
             expected_load={"requests": 10},
             criticality=1,
         )
-    dependencies = StageDependencies(repository=repository, omniroute_client=PipelineOpsClient())
+    dependencies = StageDependencies(
+        repository=repository,
+        omniroute_client=PipelineOpsClient(),
+        config=build_startup_config(valid_env(DATABASE_URL=postgres_url)),
+    )
     adapters = StageAdapters(
         registry_sync=empty_stage_adapters().registry_sync,
         catalog_scan=empty_stage_adapters().catalog_scan,
+        hermes_inventory=lambda _config: hermes_inventory_fixture(),
     )
     stages = build_canonical_stages(
         dependencies=dependencies,
@@ -474,6 +503,7 @@ def test_full_pipeline_runs_through_apply_and_audit(postgres_url):
         "probing",
         "telemetry-sync",
         "quota-sync",
+        "hermes-inventory",
         "role-scoring",
         "allocation",
         "diff",
@@ -548,6 +578,76 @@ def test_quota_sync_stage_writes_remaining_quota_state(postgres_url):
     assert access["effective_remaining"]["requests"] == 60.0
 
 
+@pytest.mark.spec("hermes-inventory::Inventory persisted from the selected mode")
+@pytest.mark.spec("hermes-inventory::Inspector is prompt-only")
+@pytest.mark.spec("pipeline-orchestration::Inventory precedes scoring")
+@pytest.mark.spec("pipeline-orchestration::Schedule change refreshes forecast inputs")
+def test_hermes_inventory_stage_uses_selected_adapter_and_persists_prompt_only_forecast(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    config = build_startup_config(valid_env(DATABASE_URL=postgres_url, HERMES_INVENTORY_MODE="command", HERMES_INVENTORY_COMMAND="inventory"))
+    llm_runtime = RecordingLlmRuntime()
+    dependencies = StageDependencies(
+        repository=repository,
+        omniroute_client=PipelineOpsClient(),
+        config=config,
+        llm_runtime=llm_runtime,
+        hermes_inventory_adapter=lambda received: hermes_inventory_fixture() if received.hermes_inventory_mode == "command" else None,
+    )
+
+    result = run_composed_stage_with_dependencies(repository, "hermes-inventory", dependencies)
+
+    with repository.database.transaction() as transaction:
+        role = transaction.execute("SELECT id, expected_load, role_lifecycle_status FROM roles WHERE id = 'routing_fast'").fetchone()
+        consumer = transaction.execute("SELECT consumer_key, calls_per_run FROM role_consumers").fetchone()
+        inventory_run = transaction.execute("SELECT source_mode, status, roles_found, routines_found FROM hermes_inventory_runs").fetchone()
+    assert result.exit_code == 0
+    assert result.stage_results[0]["details"]["effect"] == "repository_write"
+    assert role["expected_load"]["requests"] == 25
+    assert role["role_lifecycle_status"] == "bootstrap_pending"
+    assert consumer["consumer_key"] == "daily-routing"
+    assert float(consumer["calls_per_run"]) == 12.0
+    assert inventory_run["source_mode"] == "command"
+    assert inventory_run["status"] == "completed"
+    assert inventory_run["roles_found"] == 1
+    assert inventory_run["routines_found"] == 1
+    assert llm_runtime.calls == [
+        {
+            "site": "hermes-inspector",
+            "context": {
+                "prompt": (
+                    "Hermes inventory forecast request\n"
+                    "Changes:\n"
+                    "Consumers:\n"
+                    "routing_fast cron_job daily-routing 0 4 * * * 12"
+                )
+            },
+            "response_model": "InspectorForecastResponse",
+        }
+    ]
+
+
+@pytest.mark.spec("hermes-inventory::Missing Hermes env fails closed")
+def test_hermes_inventory_stage_missing_env_fails_closed(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    config = build_startup_config(
+        valid_env(
+            DATABASE_URL=postgres_url,
+            HERMES_INVENTORY_MODE="command",
+            HERMES_INVENTORY_COMMAND="",
+        )
+    )
+    dependencies = StageDependencies(repository=repository, omniroute_client=PipelineOpsClient(), config=config)
+
+    result = run_composed_stage_with_dependencies(repository, "hermes-inventory", dependencies)
+
+    with repository.database.transaction() as transaction:
+        role_count = transaction.execute("SELECT count(*) AS total FROM roles").fetchone()["total"]
+    assert result.exit_code == 3
+    assert role_count == 0
+
+
 @pytest.mark.spec("pipeline-orchestration::Scoring persists per-role scores")
 def test_role_scoring_stage_persists_per_role_scores(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
@@ -568,12 +668,23 @@ def test_role_scoring_stage_persists_per_role_scores(postgres_url):
 
 @pytest.mark.spec("pipeline-orchestration::Allocation persists one combo plan per role")
 @pytest.mark.spec("pipeline-orchestration::Oversubscription gate blocks zero-capacity pool")
+@pytest.mark.spec("pipeline-orchestration::Inventory precedes scoring")
 def test_allocation_stage_persists_plan_and_constraint_report(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     repository = Repository(Database(postgres_url))
     client = PipelineOpsClient()
     prepare_scored_endpoint(repository, client=client)
     run_composed_stage(repository, "role-scoring", client=client)
+    with repository.database.transaction() as transaction:
+        repository.role_consumers.upsert(
+            transaction,
+            role_id="routing_fast",
+            consumer_type="cron_job",
+            consumer_key="demand-source",
+            cadence="0 4 * * *",
+            calls_per_run=33,
+            source_hash="test",
+        )
 
     result = run_composed_stage(repository, "allocation", client=client)
 
@@ -585,6 +696,7 @@ def test_allocation_stage_persists_plan_and_constraint_report(postgres_url):
     assert plan["status"] == "planned"
     assert len(plan["targets"]) == 1
     assert plan["constraint_report"]["apply"] is True
+    assert plan["constraint_report"]["pool_reports"][next(iter(plan["constraint_report"]["pool_reports"]))]["usage"] == 33.0
 
 
 @pytest.mark.spec("pipeline-orchestration::Diff is computed without mutating OmniRoute")
@@ -1101,6 +1213,7 @@ def test_full_runtime_invokes_every_production_adapter_in_order(postgres_url):
         "probing",
         "telemetry-sync",
         "quota-sync",
+        "hermes-inventory",
         "role-scoring",
         "allocation",
         "diff",

@@ -12,9 +12,4 @@ demand-forecast::Demand comes from the forecast
 dynamic-role-lifecycle::New role bootstrapped
 dynamic-role-lifecycle::Removed role enters grace
 dynamic-role-lifecycle::Role reactivated within grace
-hermes-inventory::Inspector is prompt-only
-hermes-inventory::Inventory persisted from the selected mode
-hermes-inventory::Missing Hermes env fails closed
-pipeline-orchestration::Inventory precedes scoring
 pipeline-orchestration::Reconcile and forecast precede allocation
-pipeline-orchestration::Schedule change refreshes forecast inputs

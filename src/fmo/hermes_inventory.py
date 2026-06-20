@@ -101,16 +101,20 @@ def assemble_inspector_prompt(inventory: Inventory, *, changes: list[str], secre
 
 
 def run_inspector(call_instructor, prompt: str) -> InspectorForecast:
-    payload = complete_with_adapter(
-        call_instructor,
-        site=LlmSiteConfig(
-            name="hermes-inspector",
-            model="omniroute/free-inspector",
-            max_prompt_chars=6000,
-        ),
-        context={"prompt": prompt},
-        response_model=InspectorForecastResponse,
+    site = LlmSiteConfig(
+        name="hermes-inspector",
+        model="omniroute/free-inspector",
+        max_prompt_chars=6000,
     )
+    if hasattr(call_instructor, "complete"):
+        payload = call_instructor.complete(site=site, context={"prompt": prompt}, response_model=InspectorForecastResponse)
+    else:
+        payload = complete_with_adapter(
+            call_instructor,
+            site=site,
+            context={"prompt": prompt},
+            response_model=InspectorForecastResponse,
+        )
     return InspectorForecast(
         role=payload.role,
         expected_calls=payload.expected_calls,

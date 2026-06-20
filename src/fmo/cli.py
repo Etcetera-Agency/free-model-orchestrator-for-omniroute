@@ -24,6 +24,7 @@ COMMANDS = [
     "probe-models",
     "sync-telemetry",
     "sync-quotas",
+    "sync-hermes-inventory",
     "score-roles",
     "allocate",
     "diff",

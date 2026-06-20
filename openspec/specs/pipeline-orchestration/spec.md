@@ -94,6 +94,7 @@ fail, the runner SHALL report the most severe outcome.
 #### Scenario: External dependency failure outcome
 - **WHEN** a required external fetch fails
 - **THEN** the run exits with code 4
+
 ### Requirement: Matching and access stages produce real effects
 
 The composed runtime SHALL drive the `model-matching`, `quota-research`, and
@@ -212,3 +213,19 @@ snapshots. Outcomes SHALL map to exit codes `unsafe_to_apply` (5),
 - **WHEN** the `audit` stage runs after apply
 - **THEN** audit records and snapshots are persisted through the repository
 - **AND** an adapter returning success without writing audit records fails the suite
+
+### Requirement: Hermes inventory feeds the pipeline before allocation
+
+The canonical stage order SHALL include `hermes-inventory` ahead of
+`role-scoring`, and downstream demand SHALL be derived from the gathered Hermes
+inventory rather than only static `expected_load`. A schedule change in Hermes
+SHALL trigger a forecast-input refresh on the next run.
+
+#### Scenario: Inventory precedes scoring
+- **WHEN** a `full` run executes
+- **THEN** `hermes-inventory` runs before `role-scoring`
+- **AND** allocation demand reflects the gathered Hermes cadence
+
+#### Scenario: Schedule change refreshes forecast inputs
+- **WHEN** a Hermes schedule changes between runs
+- **THEN** the next run refreshes the affected forecast inputs

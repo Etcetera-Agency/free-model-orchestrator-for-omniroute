@@ -23,7 +23,6 @@ def test_runtime_docs_record_executable_scenario_policy_and_pending_allowlist():
     assert "@pytest.mark." + "spec(" in agents
     assert "<capability>::<Scenario name>" in agents
     assert pending_lines
-    assert "wire-hermes-inventory-source" in todo
     assert "wire-aa-index-cli-dispatch" in todo
     assert "wire-demand-forecast-and-role-lifecycle" in todo
     assert "repository methods" in completion_review

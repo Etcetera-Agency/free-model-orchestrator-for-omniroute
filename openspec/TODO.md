@@ -2,9 +2,6 @@
 
 ## Active Slice Backlog
 
-- `wire-hermes-inventory-source`: implement and bind executable coverage for
-  Hermes inventory production source selection, prompt-only inspector use,
-  missing-env fail-closed behavior, and inventory-before-scoring ordering.
 - `wire-aa-index-cli-dispatch`: implement and bind executable coverage for
   `aa-index` CLI dispatch, failure exit mapping, advisory proposal generation,
   deterministic approval/rollout, and AA-unavailable freeze behavior.
