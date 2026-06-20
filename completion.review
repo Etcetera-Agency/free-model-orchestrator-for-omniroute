@@ -22,9 +22,13 @@
   the executable effect harness rejects `success` results that lack a declared
   repository write, OmniRoute call, or idempotent no-change effect.
 - Remaining unwired stages are tracked by active OpenSpec slices:
-  model-matching/quota-research/access-classification,
   probing/telemetry-sync/quota-sync, role-scoring/allocation/diff, and
   apply/audit.
+- Production composition now wires `model-matching`, `quota-research`, and
+  `access-classification` to their domain modules. Matching writes canonical
+  endpoint bindings, quota research writes content-hashed summary snapshots and
+  capped rules, and access classification writes canonical attribution status
+  plus evidence. Missing quota payloads fail closed.
 - Run-lock acquisition is now database-atomic through a partial unique index on
   active held lock rows; repository tests cover two independent connections,
   fresh schema installs, and migration installs.

@@ -4,9 +4,6 @@ No deferred review follow-up work discovered.
 
 ## Active stage-wiring follow-up
 
-- Implement and archive `wire-matching-access-stages`: wire
-  `model-matching`, `quota-research`, and `access-classification`; replace the
-  matching/access xfail placeholders with real effect assertions.
 - Implement and archive `wire-probe-telemetry-stages`: wire `probing`,
   `telemetry-sync`, and `quota-sync`; replace the probe/telemetry xfail
   placeholders with real effect assertions.

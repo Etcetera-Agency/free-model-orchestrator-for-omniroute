@@ -1,16 +1,23 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from psycopg.types.json import Jsonb
+
+from fmo.access import classify_access
 from fmo.config import StartupConfig
 from fmo.external_metadata import ExternalMetadataError
+from fmo.matcher import match_model
 from fmo.metadata_sync import sync_external_metadata
 from fmo.omniroute import OmniRouteClient
 from fmo.persistence import Database, Repository
 from fmo.pipeline import CANONICAL_STAGE_NAMES, PipelineContext, PipelineRunner, PipelineRunResult, Stage, StageResult
+from fmo.quota_research import research_quota_rule
 from fmo.registry import RegistryFetchError, persist_free_registry_outcome, sync_live_free_registry
 from fmo.scanner import CatalogFetchError, CatalogScanner, scan_live_omniroute_catalogs
 from fmo.scheduler import Scheduler
@@ -83,7 +90,7 @@ class StageDependencies:
 class StageAdapters:
     registry_sync: RegistrySync = sync_live_free_registry
     catalog_scan: CatalogScan = field(default_factory=lambda: _scan_catalogs)
-    stage_adapters: dict[str, StageAdapter] = field(default_factory=dict)
+    stage_adapters: dict[str, StageAdapter] = field(default_factory=lambda: _production_stage_adapters())
 
 
 def compose_runtime(
@@ -210,6 +217,292 @@ def _not_implemented_stage(name: str) -> StageAdapter:
         )
 
     return run
+
+
+def _production_stage_adapters() -> dict[str, StageAdapter]:
+    return {
+        "model-matching": _model_matching_stage,
+        "quota-research": _quota_research_stage,
+        "access-classification": _access_classification_stage,
+    }
+
+
+def _model_matching_stage(_dependencies: StageDependencies, context: PipelineContext) -> StageResult:
+    with context.repository.database.transaction() as transaction:
+        endpoints = transaction.execute(
+            """
+            SELECT pe.id, pe.provider_model_id
+            FROM provider_endpoints pe
+            WHERE pe.removed_at IS NULL
+            ORDER BY pe.provider_model_id
+            """
+        ).fetchall()
+        canonical_slugs = {
+            row["canonical_slug"]
+            for row in transaction.execute("SELECT canonical_slug FROM canonical_models").fetchall()
+        }
+        provider_catalog_ids = {row["provider_model_id"] for row in endpoints}
+        matched = 0
+        for endpoint in endpoints:
+            result = match_model(
+                endpoint["provider_model_id"],
+                canonical_slugs=canonical_slugs,
+                provider_catalog_ids=provider_catalog_ids,
+            )
+            status = "auto_use" if result.auto_use else "review_required"
+            canonical_id = None
+            if result.auto_use:
+                slug = _canonical_slug(endpoint["provider_model_id"])
+                model = context.repository.canonical_models.upsert(transaction, canonical_slug=slug)
+                canonical_slugs.add(slug)
+                canonical_id = model["id"]
+                matched += 1
+                transaction.execute(
+                    "UPDATE provider_endpoints SET canonical_model_id = %(model_id)s WHERE id = %(endpoint_id)s",
+                    {"model_id": canonical_id, "endpoint_id": endpoint["id"]},
+                )
+            transaction.execute(
+                """
+                INSERT INTO model_match_candidates (
+                  endpoint_id, canonical_model_id, method, confidence, status, evidence
+                )
+                VALUES (
+                  %(endpoint_id)s, %(canonical_model_id)s, %(method)s,
+                  %(confidence)s, %(status)s, %(evidence)s
+                )
+                """,
+                {
+                    "endpoint_id": endpoint["id"],
+                    "canonical_model_id": canonical_id,
+                    "method": result.method.value,
+                    "confidence": result.confidence,
+                    "status": status,
+                    "evidence": Jsonb({"provider_model_id": endpoint["provider_model_id"]}),
+                },
+            )
+    if endpoints and matched == 0:
+        return StageResult(status="validation_failed", reason="no_model_matches", details={"adapter": "model-matching", "effect": None})
+    return _effect_result("model-matching", changed=matched > 0)
+
+
+def _quota_research_stage(dependencies: StageDependencies, context: PipelineContext) -> StageResult:
+    if dependencies.omniroute_client is None:
+        return StageResult(status="external_dependency_failed", reason="omniroute_client_required")
+    with context.repository.database.transaction() as transaction:
+        endpoints = transaction.execute(
+            """
+            SELECT pe.id, pe.provider_model_id, pa.id AS account_id, p.id AS provider_id,
+                   p.omniroute_provider_id
+            FROM provider_endpoints pe
+            JOIN provider_accounts pa ON pa.id = pe.provider_account_id
+            JOIN providers p ON p.id = pa.provider_id
+            WHERE pe.canonical_model_id IS NOT NULL
+            ORDER BY pe.provider_model_id
+            """
+        ).fetchall()
+    written = 0
+    today = datetime.now(timezone.utc)
+    for endpoint in endpoints:
+        result = research_quota_rule(
+            dependencies.omniroute_client,
+            provider=endpoint["omniroute_provider_id"],
+            model_id=endpoint["provider_model_id"],
+            today=today,
+            summary_confidence_cap=0.70,
+        )
+        if result.error is not None:
+            return StageResult(status="external_dependency_failed", reason=result.error.reason)
+        if result.snapshot is None or result.rule is None:
+            return StageResult(status="partial_stale", reason="quota_rule_missing")
+        rule = result.rule
+        claim = rule.claim
+        with context.repository.database.transaction() as transaction:
+            snapshot = context.repository.snapshots.store_quota_source(
+                transaction,
+                source_url=result.snapshot.evidence_urls[0] if result.snapshot.evidence_urls else result.snapshot.query,
+                source_type="summary",
+                payload={
+                    "query": result.snapshot.query,
+                    "answer_text": result.snapshot.answer_text,
+                    "evidence_urls": list(result.snapshot.evidence_urls),
+                },
+            )
+            context.repository.quota_rules.upsert(
+                transaction,
+                provider_id=endpoint["provider_id"],
+                provider_account_id=endpoint["account_id"],
+                source_snapshot_id=snapshot["id"],
+                model_pattern=endpoint["provider_model_id"],
+                access_type="free_quota",
+                limits={claim.metric: claim.amount, "window": claim.window},
+                reset_policy={"window": claim.window},
+                hard_stop_capable=claim.hard_stop,
+                confidence=rule.confidence,
+                status="active",
+                rule_hash=_hash_parts(str(endpoint["id"]), snapshot["content_hash"], str(rule.confidence)),
+            )
+        written += 1
+    return _effect_result("quota-research", changed=written > 0)
+
+
+def _access_classification_stage(_dependencies: StageDependencies, context: PipelineContext) -> StageResult:
+    with context.repository.database.transaction() as transaction:
+        rows = transaction.execute(
+            """
+            SELECT DISTINCT ON (pe.id)
+                   pe.id AS endpoint_id, pe.provider_account_id, pe.provider_model_id,
+                   p.omniroute_provider_id, qr.id AS quota_rule_id, qr.limits,
+                   qr.reset_policy, qr.hard_stop_capable, qr.confidence
+            FROM provider_endpoints pe
+            JOIN provider_accounts pa ON pa.id = pe.provider_account_id
+            JOIN providers p ON p.id = pa.provider_id
+            LEFT JOIN quota_rules qr
+              ON qr.provider_id = p.id
+             AND qr.model_pattern = pe.provider_model_id
+             AND qr.status = 'active'
+            WHERE pe.canonical_model_id IS NOT NULL
+            ORDER BY pe.id, qr.created_at DESC NULLS LAST
+            """
+        ).fetchall()
+        if any(row["quota_rule_id"] is None for row in rows):
+            return StageResult(status="partial_stale", reason="quota_rule_missing")
+        written = 0
+        for row in rows:
+            limit = _quota_limit(row["limits"])
+            reset_at = datetime.now(timezone.utc) + timedelta(days=1)
+            evidence = {
+                "quota_rule": True,
+                "limit": limit,
+                "remaining": limit,
+                "reset_at": reset_at.isoformat(),
+                "hard_stop": row["hard_stop_capable"],
+                "confidence": float(row["confidence"]),
+            }
+            decision = classify_access(evidence)
+            status = _canonical_access_status(decision.status)
+            transaction.execute(
+                """
+                INSERT INTO endpoint_access_states (
+                  endpoint_id, quota_rule_id, status, reason_code, effective_remaining,
+                  reset_at, hard_stop_capable, evidence
+                )
+                VALUES (
+                  %(endpoint_id)s, %(quota_rule_id)s, %(status)s, %(reason_code)s,
+                  %(effective_remaining)s, %(reset_at)s, %(hard_stop_capable)s, %(evidence)s
+                )
+                ON CONFLICT (endpoint_id)
+                DO UPDATE SET
+                  quota_rule_id = EXCLUDED.quota_rule_id,
+                  status = EXCLUDED.status,
+                  reason_code = EXCLUDED.reason_code,
+                  effective_remaining = EXCLUDED.effective_remaining,
+                  reset_at = EXCLUDED.reset_at,
+                  hard_stop_capable = EXCLUDED.hard_stop_capable,
+                  evidence = EXCLUDED.evidence,
+                  classified_at = now()
+                """,
+                {
+                    "endpoint_id": row["endpoint_id"],
+                    "quota_rule_id": row["quota_rule_id"],
+                    "status": status,
+                    "reason_code": decision.reason_code,
+                    "effective_remaining": Jsonb({"requests": limit}),
+                    "reset_at": reset_at,
+                    "hard_stop_capable": row["hard_stop_capable"],
+                    "evidence": Jsonb({**evidence, "free_access": status == "confirmed"}),
+                },
+            )
+            group = transaction.execute(
+                """
+                INSERT INTO quota_attribution_groups (
+                  provider_id, scope_type, scope_key, status, source, limit_type,
+                  request_limit, reset_rule_json, confidence, capacity_weight, evidence_json
+                )
+                VALUES (
+                  %(provider_id)s, 'account', %(scope_key)s, %(status)s, 'quota-research',
+                  'requests', %(request_limit)s, %(reset_rule_json)s, %(confidence)s,
+                  %(capacity_weight)s, %(evidence_json)s
+                )
+                RETURNING *
+                """,
+                {
+                    "provider_id": row["omniroute_provider_id"],
+                    "scope_key": str(row["provider_account_id"]),
+                    "status": status,
+                    "request_limit": limit,
+                    "reset_rule_json": Jsonb(row["reset_policy"]),
+                    "confidence": row["confidence"],
+                    "capacity_weight": _capacity_weight(status),
+                    "evidence_json": Jsonb([evidence]),
+                },
+            ).fetchone()
+            transaction.execute(
+                """
+                INSERT INTO endpoint_quota_attribution (
+                  endpoint_id, account_or_connection_id, quota_attribution_group_id,
+                  attribution_status, evidence_json
+                )
+                VALUES (
+                  %(endpoint_id)s, %(account_id)s, %(group_id)s,
+                  %(status)s, %(evidence_json)s
+                )
+                """,
+                {
+                    "endpoint_id": row["endpoint_id"],
+                    "account_id": str(row["provider_account_id"]),
+                    "group_id": group["id"],
+                    "status": status,
+                    "evidence_json": Jsonb([evidence]),
+                },
+            )
+            transaction.execute(
+                "UPDATE provider_endpoints SET access_status = %(status)s WHERE id = %(endpoint_id)s",
+                {"status": status, "endpoint_id": row["endpoint_id"]},
+            )
+            written += 1
+    return _effect_result("access-classification", changed=written > 0)
+
+
+def _effect_result(stage_name: str, *, changed: bool) -> StageResult:
+    effect = "repository_write" if changed else "idempotent_no_change"
+    return StageResult(
+        status="success",
+        changed=changed,
+        idempotency_key=f"{stage_name}:production",
+        details={"adapter": stage_name, "effect": effect},
+    )
+
+
+def _canonical_slug(provider_model_id: str) -> str:
+    return provider_model_id.lower().split("/")[-1].replace("_", "-")
+
+
+def _hash_parts(*parts: str) -> str:
+    return hashlib.sha256(":".join(parts).encode("utf-8")).hexdigest()
+
+
+def _quota_limit(limits: Any) -> float:
+    if isinstance(limits, dict):
+        value = limits.get("requests", 0)
+    else:
+        value = limits["requests"]
+    return float(value)
+
+
+def _canonical_access_status(access_status: str) -> str:
+    if access_status in {"free_unlimited", "free_quota_available"}:
+        return "confirmed"
+    if access_status == "free_promotional_available":
+        return "inferred"
+    return "unknown"
+
+
+def _capacity_weight(status: str) -> float:
+    if status == "confirmed":
+        return 1.0
+    if status == "inferred":
+        return 0.5
+    return 0.0
 
 
 def _scan_catalogs(scanner: CatalogScanner, client: Any, omniroute_instance_id: str) -> object:

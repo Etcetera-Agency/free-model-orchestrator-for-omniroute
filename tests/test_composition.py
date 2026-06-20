@@ -5,11 +5,11 @@ import pytest
 from fmo.artificial_analysis import AAModelMetrics, AASnapshot
 from fmo.bootstrap import build_startup_config
 from fmo.candidates import FreeCandidate
-from fmo.composition import StageAdapters, build_canonical_stages, compose_runtime
+from fmo.composition import StageAdapters, StageDependencies, build_canonical_stages, compose_runtime, stages_for_command
 from fmo.db import MigrationRunner
 from fmo.metadata_sync import MetadataSyncResult
 from fmo.persistence import Database, Repository
-from fmo.pipeline import CANONICAL_STAGE_NAMES
+from fmo.pipeline import CANONICAL_STAGE_NAMES, PipelineRunner
 from fmo.registry import FreeRegistry, FreeRegistrySyncOutcome
 from tests._stage_effects import assert_success_has_declared_effect, effectful_success
 
@@ -39,6 +39,7 @@ def empty_stage_adapters():
             errors=[],
         ),
         catalog_scan=lambda _scanner, _client, _omniroute_instance_id: {},
+        stage_adapters={},
     )
 
 
@@ -56,6 +57,169 @@ def effectful_stage_adapters(*stage_names):
         name: (lambda _deps, _context, stage_name=name: effectful_success(stage_name, "idempotent_no_change"))
         for name in stage_names
     }
+
+
+class QuotaSearchClient:
+    def __init__(self, answer="Provider gives 100 requests per day with hard stop."):
+        self.answer = answer
+        self.calls = []
+
+    def post(self, path, payload):
+        self.calls.append((path, payload))
+        return {
+            "answer": {"text": self.answer},
+            "results": [{"title": "Docs", "url": "https://provider.example/free"}],
+        }
+
+
+def seed_endpoint(repository, *, model_id="free-chat"):
+    with repository.database.transaction() as transaction:
+        provider = repository.providers.upsert(
+            transaction,
+            omniroute_instance_id="local",
+            omniroute_provider_id="provider-a",
+            provider_type="api",
+        )
+        account = repository.provider_accounts.upsert(
+            transaction,
+            provider_id=provider["id"],
+            omniroute_connection_id="conn-provider-a",
+        )
+        endpoint = repository.provider_endpoints.upsert(
+            transaction,
+            provider_account_id=account["id"],
+            provider_model_id=model_id,
+            lifecycle_status="discovered",
+            access_status="access_pending",
+            metadata_hash=f"{model_id}:hash",
+        )
+    return endpoint
+
+
+def run_composed_stage(repository, stage_name, *, client=None):
+    dependencies = StageDependencies(repository=repository, omniroute_client=client or QuotaSearchClient())
+    stages = build_canonical_stages(dependencies=dependencies, metadata_sync=lambda **_kwargs: None)
+    selected = stages_for_command(_command_for_stage(stage_name), stages)
+    return PipelineRunner(repository, stages=selected).run(trigger=stage_name, run_type=stage_name)
+
+
+def _command_for_stage(stage_name):
+    commands = {
+        "model-matching": "match-models",
+        "quota-research": "research-quotas",
+        "access-classification": "classify-access",
+    }
+    return commands[stage_name]
+
+
+@pytest.mark.spec("pipeline-orchestration::Matching writes endpoint bindings")
+def test_model_matching_stage_writes_endpoint_binding(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    endpoint = seed_endpoint(repository)
+
+    result = run_composed_stage(repository, "model-matching")
+
+    with repository.database.transaction() as transaction:
+        stored = repository.provider_endpoints.get(transaction, endpoint["id"])
+        match_count = transaction.execute("SELECT count(*) AS total FROM model_match_candidates").fetchone()["total"]
+    assert result.exit_code == 0
+    assert result.stage_results[0]["details"]["effect"] == "repository_write"
+    assert stored["canonical_model_id"] is not None
+    assert match_count == 1
+
+
+@pytest.mark.spec("pipeline-orchestration::Quota research persists capped rules")
+def test_quota_research_stage_persists_snapshot_and_capped_rule(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    seed_endpoint(repository)
+    run_composed_stage(repository, "model-matching")
+    client = QuotaSearchClient()
+
+    result = run_composed_stage(repository, "quota-research", client=client)
+
+    with repository.database.transaction() as transaction:
+        snapshot_count = transaction.execute("SELECT count(*) AS total FROM quota_source_snapshots").fetchone()["total"]
+        rule = transaction.execute("SELECT confidence, limits FROM quota_rules").fetchone()
+    assert result.exit_code == 0
+    assert result.stage_results[0]["details"]["effect"] == "repository_write"
+    assert client.calls[0][0] == "/v1/search"
+    assert snapshot_count == 1
+    assert float(rule["confidence"]) == 0.70
+    assert rule["limits"]["requests"] == 100.0
+
+
+@pytest.mark.spec("pipeline-orchestration::Access classification persists status")
+def test_access_classification_stage_persists_canonical_status_and_evidence(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    endpoint = seed_endpoint(repository)
+    run_composed_stage(repository, "model-matching")
+    run_composed_stage(repository, "quota-research")
+
+    result = run_composed_stage(repository, "access-classification")
+
+    with repository.database.transaction() as transaction:
+        access = transaction.execute(
+            "SELECT status, evidence FROM endpoint_access_states WHERE endpoint_id = %(endpoint_id)s",
+            {"endpoint_id": endpoint["id"]},
+        ).fetchone()
+        attribution = transaction.execute(
+            "SELECT attribution_status, evidence_json FROM endpoint_quota_attribution WHERE endpoint_id = %(endpoint_id)s",
+            {"endpoint_id": endpoint["id"]},
+        ).fetchone()
+        stored = repository.provider_endpoints.get(transaction, endpoint["id"])
+    assert result.exit_code == 0
+    assert result.stage_results[0]["details"]["effect"] == "repository_write"
+    assert access["status"] == "confirmed"
+    assert access["evidence"]["free_access"] is True
+    assert attribution["attribution_status"] == "confirmed"
+    assert stored["access_status"] == "confirmed"
+
+
+@pytest.mark.spec("pipeline-orchestration::External payload missing fails closed")
+def test_quota_research_missing_external_payload_fails_closed(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    seed_endpoint(repository)
+    run_composed_stage(repository, "model-matching")
+
+    result = run_composed_stage(repository, "quota-research", client=QuotaSearchClient(answer="No quota found."))
+
+    assert result.exit_code == 4
+    assert result.status == "external_dependency_failed"
+    assert result.stage_results[0]["reason"] == "missing_amount"
+
+
+@pytest.mark.spec("pipeline-orchestration::Full run calls production adapters")
+def test_full_pipeline_advances_past_matching_access_and_stops_at_probe(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    seed_endpoint(repository)
+    dependencies = StageDependencies(repository=repository, omniroute_client=QuotaSearchClient())
+    adapters = StageAdapters(
+        registry_sync=empty_stage_adapters().registry_sync,
+        catalog_scan=empty_stage_adapters().catalog_scan,
+    )
+    stages = build_canonical_stages(
+        dependencies=dependencies,
+        metadata_sync=lambda **_kwargs: MetadataSyncResult(candidates={}, aa_snapshot=AASnapshot(index_version="4.1", models=())),
+        adapters=adapters,
+    )
+
+    result = PipelineRunner(repository, stages=stages).run(trigger="manual", run_type="full")
+
+    assert result.exit_code == 3
+    assert [record["name"] for record in result.stage_results] == [
+        "external-metadata-sync",
+        "free-candidate-discovery",
+        "model-matching",
+        "quota-research",
+        "access-classification",
+        "probing",
+    ]
+    assert result.stage_results[-1]["status"] == "not_implemented"
 
 
 @pytest.mark.spec("runtime-bootstrap::Production dispatch executes a real stage")
