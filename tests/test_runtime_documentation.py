@@ -19,10 +19,6 @@ EXPECTED_ACTIVE_PENDING = {
     "pipeline-orchestration::Scoring stage drops below-context endpoint",
     "pipeline-orchestration::Scoring stage drops below-gate endpoint",
     "pipeline-orchestration::Index-version mismatch keeps current combo",
-    # harden-omniroute-retry-and-idempotency
-    "omniroute-client::GET transient 5xx retried",
-    "omniroute-client::GET network error retried",
-    "omniroute-client::POST carries idempotency key and is not retried",
 }
 
 

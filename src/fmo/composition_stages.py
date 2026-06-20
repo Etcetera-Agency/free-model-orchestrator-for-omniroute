@@ -1016,7 +1016,11 @@ def _apply_stage(dependencies: StageDependencies, context: PipelineContext) -> S
         if dry_run:
             continue
         expected_hash = applier.state_hash(combo_id)
-        dependencies.omniroute_client.post(f"/api/combos/{combo_id}", {"models": desired})
+        dependencies.omniroute_client.post(
+            f"/api/combos/{combo_id}",
+            {"models": desired},
+            idempotency_key=expected_hash,
+        )
         smoke_ok = _smoke_combo(dependencies.omniroute_client, combo_id)
         combo_test_called = True
         applier.apply(combo_id, desired, expected_hash=expected_hash, smoke_ok=smoke_ok)

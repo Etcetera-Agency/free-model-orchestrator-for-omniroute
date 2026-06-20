@@ -129,24 +129,24 @@ class PipelineOpsClient(QuotaSearchClient):
         self.get_calls = []
         self.combos = {"fmo-routing_fast": ["old-endpoint"]}
 
-    def post(self, path, payload, headers=None):
+    def post(self, path, payload, headers=None, idempotency_key=None):
         if path == "/v1/search":
             return super().post(path, payload)
         if path.startswith("/api/combos/"):
             combo_id = path.rsplit("/", 1)[-1]
             if self.rollback_fails and payload.get("models") == ["old-endpoint"]:
                 raise RuntimeError("rollback failed")
-            self.calls.append((path, payload, headers))
+            self.calls.append((path, payload, headers, idempotency_key))
             self.combos[combo_id] = list(payload["models"])
             return {"ok": True}
         if path == "/v1/chat/completions":
-            self.calls.append((path, payload, headers))
+            self.calls.append((path, payload, headers, idempotency_key))
             if self.smoke_status >= 400:
                 raise OmniRouteRequestError("POST", path, self.smoke_status)
             if self.smoke_status == 204:
                 return EMPTY_OPENAI_CHAT_COMPLETION_BODY
             return OPENAI_CHAT_COMPLETION_BODY
-        self.calls.append((path, payload, headers))
+        self.calls.append((path, payload, headers, idempotency_key))
         return {"status_code": self.probe_status, "content": "ok" if self.probe_status == 200 else ""}
 
     def get(self, path):
@@ -194,7 +194,7 @@ class MultiComboOpsClient(PipelineOpsClient):
         }
         self.applied_record_seen_before_second_mutation = False
 
-    def post(self, path, payload, headers=None):
+    def post(self, path, payload, headers=None, idempotency_key=None):
         if path.startswith("/api/combos/"):
             combo_id = path.rsplit("/", 1)[-1]
             if combo_id == "fmo-b" and payload.get("models") != self._before_models(combo_id):
@@ -203,11 +203,11 @@ class MultiComboOpsClient(PipelineOpsClient):
                 raise RuntimeError("restore failed")
         if path == "/v1/chat/completions":
             combo_id = payload["model"]
-            self.calls.append((path, payload, headers))
+            self.calls.append((path, payload, headers, idempotency_key))
             if combo_id in self.fail_smoke_for:
                 return EMPTY_OPENAI_CHAT_COMPLETION_BODY
             return OPENAI_CHAT_COMPLETION_BODY
-        return super().post(path, payload, headers)
+        return super().post(path, payload, headers, idempotency_key)
 
     def _applied_record_exists(self, combo_id):
         with self.repository.database.transaction() as transaction:
@@ -1062,6 +1062,7 @@ def test_apply_stage_mutates_fmo_combo_and_reports_real_smoke_signal(postgres_ur
     assert _cli_result(result).combo_test_called is True
     assert any(call[0] == "/v1/chat/completions" for call in client.calls)
     assert not any(call[0] == "/api/combos/test" for call in client.calls)
+    assert next(call for call in client.calls if call[0].startswith("/api/combos/"))[3]
     assert client.combos["fmo-routing_fast"] != ["old-endpoint"]
 
 

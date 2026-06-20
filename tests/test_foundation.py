@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 
+import httpx
 import pytest
 
 from fmo.apply_guard import ApplyPreconditions, check_apply_preconditions
@@ -111,8 +112,58 @@ def test_omniroute_client_get_429_retry_exhaustion_raises_runtime_error():
     assert len(transport.requests) == 2
 
 
+@pytest.mark.spec("omniroute-client::GET transient 5xx retried")
+def test_omniroute_client_get_transient_5xx_retries_then_succeeds():
+    sleeps = []
+    transport = FakeTransport([FakeResponse(503, {"error": "busy"}), FakeResponse(200, {"ok": True})])
+    client = OmniRouteClient(
+        base_url="https://omniroute.test/api",
+        transport=transport,
+        max_get_retries=1,
+        sleep=sleeps.append,
+    )
+
+    assert client.get("/providers") == {"ok": True}
+
+    assert len(transport.requests) == 2
+    assert sleeps == [0.1]
+    assert transport.requests[0]["headers"]["X-Request-Id"] != transport.requests[1]["headers"]["X-Request-Id"]
+
+
+@pytest.mark.spec("omniroute-client::GET network error retried")
+def test_omniroute_client_get_network_error_retries_then_succeeds():
+    transport = FakeTransport([httpx.ConnectError("temporary"), FakeResponse(200, {"ok": True})])
+    client = OmniRouteClient(
+        base_url="https://omniroute.test/api",
+        transport=transport,
+        max_get_retries=1,
+        sleep=lambda _seconds: None,
+    )
+
+    assert client.get("/providers") == {"ok": True}
+    assert len(transport.requests) == 2
+
+
+@pytest.mark.spec("omniroute-client::GET network error retried")
+def test_omniroute_client_get_network_error_retry_exhaustion_is_bounded():
+    sleeps = []
+    transport = FakeTransport([httpx.TimeoutException("timeout"), httpx.ConnectError("still down")])
+    client = OmniRouteClient(
+        base_url="https://omniroute.test/api",
+        transport=transport,
+        max_get_retries=1,
+        sleep=sleeps.append,
+    )
+
+    with pytest.raises(RuntimeError, match="HTTP 0"):
+        client.get("/providers")
+
+    assert len(transport.requests) == 2
+    assert sleeps == [0.1]
+
+
 @pytest.mark.spec("omniroute-client::GET non-retriable error")
-@pytest.mark.parametrize("status_code", [400, 404, 500, 503])
+@pytest.mark.parametrize("status_code", [400, 404, 500, 501])
 def test_omniroute_client_get_non_retry_errors_raise_without_retry(status_code):
     transport = FakeTransport([FakeResponse(status_code, {"error": "bad"})])
     client = OmniRouteClient(
@@ -125,6 +176,20 @@ def test_omniroute_client_get_non_retry_errors_raise_without_retry(status_code):
         client.get("/providers")
 
     assert len(transport.requests) == 1
+
+
+@pytest.mark.spec("omniroute-client::POST carries idempotency key and is not retried")
+def test_omniroute_client_post_carries_idempotency_key_and_is_not_retried():
+    transport = FakeTransport([FakeResponse(503, {"error": "busy"})])
+    client = OmniRouteClient(base_url="https://omniroute.test/api", transport=transport, max_get_retries=3)
+
+    with pytest.raises(RuntimeError, match="HTTP 503"):
+        client.post("/combos/fmo-role", {"models": []}, idempotency_key="apply:fmo-role:abc")
+
+    assert len(transport.requests) == 1
+    headers = transport.requests[0]["headers"]
+    assert headers["Idempotency-Key"] == "apply:fmo-role:abc"
+    assert headers["X-Request-Id"]
 
 
 @pytest.mark.spec("omniroute-client::Invalid Retry-After")

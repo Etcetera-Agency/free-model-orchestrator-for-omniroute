@@ -57,34 +57,60 @@ class OmniRouteClient:
     def get(self, path: str) -> dict:
         return self._request("GET", path)
 
-    def post(self, path: str, payload: dict) -> dict:
-        return self._request("POST", path, payload)
+    def post(self, path: str, payload: dict, *, idempotency_key: str | None = None) -> dict:
+        return self._request("POST", path, payload, idempotency_key=idempotency_key)
 
-    def _request(self, method: str, path: str, payload: dict | None = None) -> dict:
+    def _request(
+        self,
+        method: str,
+        path: str,
+        payload: dict | None = None,
+        *,
+        idempotency_key: str | None = None,
+    ) -> dict:
         attempts = self.max_get_retries + 1 if method == "GET" else 1
         last_response = None
         for attempt in range(attempts):
-            response = self.transport.request(
-                method,
-                urljoin(self.base_url, path.lstrip("/")),
-                headers=self._headers(),
-                json=payload,
-                timeout=self.timeout,
-            )
+            try:
+                response = self.transport.request(
+                    method,
+                    urljoin(self.base_url, path.lstrip("/")),
+                    headers=self._headers(idempotency_key=idempotency_key),
+                    json=payload,
+                    timeout=self.timeout,
+                )
+            except httpx.TransportError as exc:
+                if method == "GET" and attempt + 1 < attempts:
+                    self.sleep(_transient_backoff_seconds(attempt))
+                    continue
+                raise OmniRouteRequestError(method, path, 0) from exc
             last_response = response
             if response.status_code == 429 and method == "GET" and attempt + 1 < attempts:
                 self.sleep(_retry_after_seconds(response.headers.get("Retry-After")))
+                continue
+            if _is_transient_get_status(method, response.status_code) and attempt + 1 < attempts:
+                self.sleep(_transient_backoff_seconds(attempt))
                 continue
             if 200 <= response.status_code < 300:
                 return response.json()
             break
         raise OmniRouteRequestError(method, path, last_response.status_code)
 
-    def _headers(self) -> dict[str, str]:
+    def _headers(self, *, idempotency_key: str | None = None) -> dict[str, str]:
         headers = {"X-Request-Id": str(uuid.uuid4())}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
+        if idempotency_key:
+            headers["Idempotency-Key"] = idempotency_key
         return headers
+
+
+def _is_transient_get_status(method: str, status_code: int) -> bool:
+    return method == "GET" and status_code in {502, 503, 504}
+
+
+def _transient_backoff_seconds(attempt: int) -> float:
+    return min(1.0, 0.1 * (2**attempt))
 
 
 def _retry_after_seconds(value: str | None) -> float:

@@ -96,4 +96,8 @@
 - CLI dry-run now executes selected pipeline stages instead of returning
   unconditional success. `apply --dry-run` runs guard/drift validation, reports
   unsafe gates, and skips combo mutation, smoke calls, and `/api/combos/test`.
+- OmniRoute GET calls now retry bounded transient `502/503/504` and transport
+  failures with per-attempt request ids. POST remains non-retriable and carries
+  caller-supplied `Idempotency-Key`; apply combo writes pass their idempotency
+  hash through that header.
 - Remaining deferred repo-level work: none discovered in this batch.

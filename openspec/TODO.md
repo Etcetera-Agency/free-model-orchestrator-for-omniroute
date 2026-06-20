@@ -13,8 +13,6 @@ archive when implemented.
 - `integrate-quality-and-context-gates` — `quality-gate` and
   `context-window-eligibility` hard filters are not applied in production
   scoring.
-- `harden-omniroute-retry-and-idempotency` — GET has no transient 5xx/network
-  retry; POST carries no idempotency key.
 
 ## Dropped (not needed for project essence)
 
