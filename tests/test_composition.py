@@ -1,3 +1,4 @@
+import argparse
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -8,6 +9,7 @@ from fmo.artificial_analysis import AAModelMetrics, AASnapshot
 from fmo.bootstrap import build_startup_config
 from fmo.candidates import FreeCandidate
 from fmo.composition import (
+    ComposedRuntime,
     StageAdapters,
     StageDependencies,
     _cli_result,
@@ -301,6 +303,26 @@ def run_composed_stage_with_dependencies(repository, stage_name, dependencies):
     stages = build_canonical_stages(dependencies=dependencies, metadata_sync=lambda **_kwargs: None)
     selected = stages_for_command(_command_for_stage(stage_name), stages)
     return PipelineRunner(repository, stages=selected).run(trigger=stage_name, run_type=stage_name)
+
+
+def run_runtime_command(repository, client, command, **args):
+    dependencies = StageDependencies(repository=repository, omniroute_client=client)
+    runtime = ComposedRuntime(
+        repository=repository,
+        omniroute_client=client,
+        stages=build_canonical_stages(dependencies=dependencies, metadata_sync=lambda **_kwargs: None),
+        cron="0 4 * * *",
+        llm_runtime=None,
+        config=build_startup_config(valid_env()),
+    )
+    values = {
+        "dry_run": False,
+        "run_id": None,
+        "endpoint": None,
+        "role": None,
+    }
+    values.update(args)
+    return runtime.run_command(command, argparse.Namespace(**values))
 
 
 def _command_for_stage(stage_name):
@@ -1100,6 +1122,68 @@ def test_multi_combo_apply_reports_rollback_failed_when_earlier_restore_fails(po
     client = MultiComboOpsClient(repository, fail_smoke_for={"fmo-b"}, restore_fail_for={"fmo-a"})
 
     result = run_composed_stage(repository, "apply", client=client)
+
+    assert result.exit_code == 7
+
+
+@pytest.mark.spec("audit-rollback::rollback command reverts combos, not AA-index")
+@pytest.mark.spec("audit-rollback::Roll back a run")
+def test_rollback_command_reverts_run_combos_and_records_audit_without_touching_aa_index(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    seed_apply_ready_diff(repository, role_id="a", combo_id="fmo-a", before=["old-a"], after_model_id="free-a")
+    seed_apply_ready_diff(repository, role_id="b", combo_id="fmo-b", before=["old-b"], after_model_id="free-b")
+    client = MultiComboOpsClient(repository)
+    apply_result = run_composed_stage(repository, "apply", client=client)
+    with repository.database.transaction() as transaction:
+        transaction.execute(
+            """
+            INSERT INTO artificial_analysis_index_migrations (
+              new_index_version, change_type, status, baseline_snapshot_json, threshold_proposal_json
+            )
+            VALUES ('9.9', 'major', 'rolled_out', '{}'::jsonb, '{}'::jsonb)
+            """
+        )
+
+    result = run_runtime_command(repository, client, "rollback", run_id=apply_result.run_id)
+
+    with repository.database.transaction() as transaction:
+        audit_count = transaction.execute(
+            "SELECT count(*) AS total FROM change_log WHERE action = 'rollback_reverted'"
+        ).fetchone()["total"]
+        migration = transaction.execute("SELECT status FROM artificial_analysis_index_migrations").fetchone()
+    assert result.exit_code == 0
+    assert client.combos["fmo-a"] == ["old-a"]
+    assert client.combos["fmo-b"] == ["old-b"]
+    assert audit_count == 2
+    assert migration["status"] == "rolled_out"
+
+
+@pytest.mark.spec("audit-rollback::rollback command reverts combos, not AA-index")
+def test_rollback_command_reverts_single_role_combo(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    seed_apply_ready_diff(repository, role_id="a", combo_id="fmo-a", before=["old-a"], after_model_id="free-a")
+    seed_apply_ready_diff(repository, role_id="b", combo_id="fmo-b", before=["old-b"], after_model_id="free-b")
+    client = MultiComboOpsClient(repository)
+    run_composed_stage(repository, "apply", client=client)
+
+    result = run_runtime_command(repository, client, "rollback", role="a")
+
+    assert result.exit_code == 0
+    assert client.combos["fmo-a"] == ["old-a"]
+    assert client.combos["fmo-b"] != ["old-b"]
+
+
+@pytest.mark.spec("audit-rollback::rollback restore failure exits 7")
+def test_rollback_command_restore_failure_exits_7(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    seed_apply_ready_diff(repository, role_id="a", combo_id="fmo-a", before=["old-a"], after_model_id="free-a")
+    client = MultiComboOpsClient(repository, restore_fail_for={"fmo-a"})
+    apply_result = run_composed_stage(repository, "apply", client=client)
+
+    result = run_runtime_command(repository, client, "rollback", run_id=apply_result.run_id)
 
     assert result.exit_code == 7
 

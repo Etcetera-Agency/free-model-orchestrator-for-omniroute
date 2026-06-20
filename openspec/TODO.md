@@ -2,7 +2,6 @@
 
 ## Active slice queue
 
-- [ ] `route-rollback-command-to-combo-revert`
 - [ ] `refactor-composition-into-stage-modules`
 
 No deferred review follow-up work discovered outside the active slice queue.

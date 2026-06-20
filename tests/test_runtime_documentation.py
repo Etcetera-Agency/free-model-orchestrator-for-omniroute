@@ -5,8 +5,6 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_ACTIVE_PENDING = {
-    "audit-rollback::rollback command reverts combos, not AA-index",
-    "audit-rollback::rollback restore failure exits 7",
     "system-architecture::Refactor preserves behavior",
     "system-architecture::Stage domains live in separate modules",
 }
@@ -32,7 +30,6 @@ def test_runtime_docs_record_executable_scenario_policy_and_pending_allowlist():
     assert "repository methods" in completion_review
     assert "adapter-backed boundary" in completion_review
     for change_id in (
-        "route-rollback-command-to-combo-revert",
         "refactor-composition-into-stage-modules",
     ):
         assert change_id in todo

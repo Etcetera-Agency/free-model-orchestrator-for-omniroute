@@ -68,11 +68,28 @@ class ComposedRuntime:
     config: StartupConfig
 
     def run_command(self, command: str, args: argparse.Namespace) -> RuntimeCliResult:
-        selected_stages = stages_for_command(command, self.stages)
+        if command == "rollback":
+            selected_stages = [
+                Stage(
+                    "rollback",
+                    lambda context: _rollback_stage(
+                        StageDependencies(repository=self.repository, omniroute_client=self.omniroute_client),
+                        context,
+                    ),
+                )
+            ]
+        else:
+            selected_stages = stages_for_command(command, self.stages)
         result = PipelineRunner(
             self.repository,
             stages=selected_stages,
-            config={"command": command, "dry_run": getattr(args, "dry_run", False)},
+            config={
+                "command": command,
+                "dry_run": getattr(args, "dry_run", False),
+                "run_id": getattr(args, "run_id", None),
+                "endpoint": getattr(args, "endpoint", None),
+                "role": getattr(args, "role", None),
+            },
         ).run(trigger=command, run_type=_run_type(command))
         return _cli_result(result)
 
@@ -1338,6 +1355,95 @@ def _desired_endpoints_have_current_probe_success(transaction: Any, endpoint_ids
         return False
     oldest_allowed = datetime.now(timezone.utc) - APPLY_STAGE_EVIDENCE_MAX_AGE
     return all(row["passed"] is True and row["finished_at"] >= oldest_allowed for row in rows)
+
+
+def _rollback_stage(dependencies: StageDependencies, context: PipelineContext) -> StageResult:
+    if dependencies.omniroute_client is None:
+        return StageResult(status="external_dependency_failed", reason="omniroute_client_required")
+    with context.repository.database.transaction() as transaction:
+        snapshots = _rollback_targets(transaction, context.config)
+    if snapshots is None:
+        return StageResult(status="validation_failed", reason="rollback_target_required")
+    rollback_failed = False
+    restored = []
+    for snapshot in snapshots:
+        combo_id = snapshot["omniroute_combo_id"]
+        before = list(snapshot["state_json"].get("before", []))
+        try:
+            dependencies.omniroute_client.post(f"/api/combos/{combo_id}", {"models": before})
+        except Exception:
+            rollback_failed = True
+            continue
+        restored.append((snapshot, before))
+    if rollback_failed:
+        return StageResult(status="rollback_failed", reason="rollback_failed")
+    with context.repository.database.transaction() as transaction:
+        for snapshot, before in restored:
+            context.repository.audit.record(
+                transaction,
+                run_id=context.run_id,
+                entity_type="combo",
+                entity_id=snapshot["omniroute_combo_id"],
+                action="rollback_reverted",
+                before_json={"applied": snapshot["state_json"].get("after", [])},
+                after_json={"restored": before},
+                reason_codes=["rollback_reverted"],
+                source_refs=[
+                    {
+                        "source": "rollback-command",
+                        "source_run_id": str(snapshot["run_id"]),
+                        "role_id": snapshot["role_id"],
+                    }
+                ],
+            )
+    result = _effect_result("rollback", changed=bool(restored))
+    return StageResult(
+        status=result.status,
+        idempotency_key=result.idempotency_key,
+        changed=result.changed,
+        details={**result.details, "restored": len(restored)},
+    )
+
+
+def _rollback_targets(transaction: Any, config: dict[str, Any]) -> list[Any] | None:
+    run_id = config.get("run_id")
+    endpoint = config.get("endpoint")
+    role = config.get("role")
+    if run_id:
+        return transaction.execute(
+            """
+            SELECT DISTINCT ON (omniroute_combo_id)
+                   id, run_id, role_id, omniroute_combo_id, state_json
+            FROM combo_snapshots
+            WHERE phase = 'applied'
+              AND run_id = %(run_id)s
+              AND omniroute_combo_id LIKE 'fmo-%'
+            ORDER BY omniroute_combo_id, created_at DESC
+            """,
+            {"run_id": run_id},
+        ).fetchall()
+    combo_id = _rollback_combo_id(endpoint=endpoint, role=role)
+    if combo_id is None:
+        return None
+    return transaction.execute(
+        """
+        SELECT DISTINCT ON (omniroute_combo_id)
+               id, run_id, role_id, omniroute_combo_id, state_json
+        FROM combo_snapshots
+        WHERE phase = 'applied'
+          AND omniroute_combo_id = %(combo_id)s
+        ORDER BY omniroute_combo_id, created_at DESC
+        """,
+        {"combo_id": combo_id},
+    ).fetchall()
+
+
+def _rollback_combo_id(*, endpoint: str | None, role: str | None) -> str | None:
+    if role:
+        return role if role.startswith("fmo-") else f"fmo-{role}"
+    if endpoint:
+        return endpoint if endpoint.startswith("fmo-") else f"fmo-{endpoint}"
+    return None
 
 
 def _audit_stage(dependencies: StageDependencies, context: PipelineContext) -> StageResult:

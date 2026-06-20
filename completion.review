@@ -81,4 +81,9 @@
   diff-time `before` state before mutating. Divergence returns
   `unsafe_to_apply` without overwriting manual/live changes, and rollback uses
   the live pre-mutation baseline.
+- Top-level `rollback` now runs a dedicated combo revert path for `--run-id`,
+  `--role`, or `--endpoint`, restores persisted `applied` snapshots to their
+  pre-change combo state, records `rollback_reverted` audit entries, returns
+  exit 7 on restore failure, and leaves `aa-index rollback` as the only AA
+  threshold rollback path.
 - Remaining deferred repo-level work: none discovered in this batch.
