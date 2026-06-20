@@ -13,12 +13,6 @@ EXPECTED_ACTIVE_PENDING = {
     "pipeline-orchestration::Account discovery ordered before allocation inputs",
     "pipeline-orchestration::Unavailable rate-limit data stays conservative",
     "cli-and-operations::Discover-accounts command uses account discovery",
-    # integrate-quality-and-context-gates
-    "role-scorer::Below context minimum rejected in scoring",
-    "role-scorer::Below quality gate rejected in scoring",
-    "pipeline-orchestration::Scoring stage drops below-context endpoint",
-    "pipeline-orchestration::Scoring stage drops below-gate endpoint",
-    "pipeline-orchestration::Index-version mismatch keeps current combo",
 }
 
 

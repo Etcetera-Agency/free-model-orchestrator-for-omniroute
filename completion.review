@@ -100,4 +100,8 @@
   failures with per-attempt request ids. POST remains non-retriable and carries
   caller-supplied `Idempotency-Key`; apply combo writes pass their idempotency
   hash through that header.
+- Production role scoring now applies context-window and quality-gate hard
+  filters before weighted scoring, persists context/quality rejection reasons,
+  surfaces endpoint rejection diagnostics, and skips new allocation plans while
+  a role quality gate needs AA index recalibration.
 - Remaining deferred repo-level work: none discovered in this batch.

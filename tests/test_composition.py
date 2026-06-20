@@ -388,7 +388,18 @@ def prepare_scored_endpoint(repository, *, client=None):
         )
 
 
-def seed_confirmed_llm_candidate(repository, *, model_id, intelligence_index, remaining=100, health_status="active"):
+def seed_confirmed_llm_candidate(
+    repository,
+    *,
+    model_id,
+    intelligence_index,
+    remaining=100,
+    health_status="active",
+    context_window=32768,
+    coding_index=None,
+    agentic_index=None,
+    aa_index_version="4.1",
+):
     with repository.database.transaction() as transaction:
         canonical = repository.canonical_models.upsert(transaction, canonical_slug=model_id)
         provider = repository.providers.upsert(
@@ -408,11 +419,20 @@ def seed_confirmed_llm_candidate(repository, *, model_id, intelligence_index, re
             provider_model_id=model_id,
             lifecycle_status="active",
             access_status="confirmed",
+            probe_status="passed",
             metadata_hash=f"{model_id}:hash",
         )
         transaction.execute(
-            "UPDATE provider_endpoints SET canonical_model_id = %(model_id)s WHERE id = %(endpoint_id)s",
-            {"model_id": canonical["id"], "endpoint_id": endpoint["id"]},
+            """
+            UPDATE provider_endpoints
+            SET canonical_model_id = %(model_id)s,
+                advertised_context_window = %(context_window)s,
+                provider_context_window = %(context_window)s,
+                probed_context_window = %(context_window)s,
+                effective_context_window = %(context_window)s
+            WHERE id = %(endpoint_id)s
+            """,
+            {"model_id": canonical["id"], "endpoint_id": endpoint["id"], "context_window": context_window},
         )
         transaction.execute(
             """
@@ -441,11 +461,22 @@ def seed_confirmed_llm_candidate(repository, *, model_id, intelligence_index, re
         transaction.execute(
             """
             INSERT INTO artificial_analysis_model_metrics (
-              canonical_model_id, intelligence_index, source_payload_hash, stale_after
+              canonical_model_id, intelligence_index, coding_index, agentic_index,
+              index_version, source_payload_hash, stale_after
             )
-            VALUES (%(model_id)s, %(index)s, %(hash)s, now() + interval '1 day')
+            VALUES (
+              %(model_id)s, %(index)s, %(coding_index)s, %(agentic_index)s,
+              %(index_version)s, %(hash)s, now() + interval '1 day'
+            )
             """,
-            {"model_id": canonical["id"], "index": intelligence_index, "hash": f"{model_id}:aa"},
+            {
+                "model_id": canonical["id"],
+                "index": intelligence_index,
+                "coding_index": coding_index,
+                "agentic_index": agentic_index,
+                "index_version": aa_index_version,
+                "hash": f"{model_id}:aa",
+            },
         )
         transaction.execute(
             """
@@ -927,6 +958,201 @@ def test_role_scoring_stage_persists_per_role_scores(postgres_url):
     assert score["role_id"] == "routing_fast"
     assert score["eligibility"] is True
     assert float(score["total_score"]) > 0
+
+
+@pytest.mark.spec("role-scorer::Below context minimum rejected in scoring")
+@pytest.mark.spec("context-window-eligibility::Below minimum")
+@pytest.mark.spec("pipeline-orchestration::Scoring stage drops below-context endpoint")
+def test_role_scoring_stage_rejects_below_context_endpoint(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    endpoint = seed_confirmed_llm_candidate(repository, model_id="tiny-context", intelligence_index=80, context_window=4096)
+    with repository.database.transaction() as transaction:
+        repository.roles.upsert(
+            transaction,
+            role_id="long_context",
+            requirements={"capabilities": [], "minimum_context_window": 8192},
+            expected_load={"requests": 1},
+            criticality=1,
+        )
+
+    result = run_composed_stage(repository, "role-scoring")
+
+    with repository.database.transaction() as transaction:
+        score = transaction.execute("SELECT eligibility, rejection_reasons FROM role_scores").fetchone()
+    assert result.exit_code == 0
+    assert score["eligibility"] is False
+    assert score["rejection_reasons"] == ["context"]
+    assert endpoint["id"]
+
+
+@pytest.mark.spec("context-window-eligibility::Unknown context, no override")
+def test_role_scoring_stage_rejects_unknown_context_unless_role_overrides(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    seed_confirmed_llm_candidate(repository, model_id="unknown-context", intelligence_index=80, context_window=None)
+    with repository.database.transaction() as transaction:
+        repository.roles.upsert(
+            transaction,
+            role_id="strict_context",
+            requirements={"capabilities": [], "minimum_context_window": 8192},
+            expected_load={"requests": 1},
+            criticality=1,
+        )
+        repository.roles.upsert(
+            transaction,
+            role_id="override_context",
+            requirements={"capabilities": [], "minimum_context_window": 8192, "manual_context_override": True},
+            expected_load={"requests": 1},
+            criticality=1,
+        )
+
+    run_composed_stage(repository, "role-scoring")
+
+    with repository.database.transaction() as transaction:
+        scores = {
+            row["role_id"]: (row["eligibility"], row["rejection_reasons"])
+            for row in transaction.execute("SELECT role_id, eligibility, rejection_reasons FROM role_scores").fetchall()
+        }
+    assert scores["strict_context"] == (False, ["context"])
+    assert scores["override_context"][0] is True
+
+
+@pytest.mark.spec("role-scorer::Below quality gate rejected in scoring")
+@pytest.mark.spec("quality-gate::Below the gate")
+@pytest.mark.spec("pipeline-orchestration::Scoring stage drops below-gate endpoint")
+def test_role_scoring_stage_rejects_endpoint_below_quality_gate(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    seed_confirmed_llm_candidate(repository, model_id="low-quality", intelligence_index=40)
+    with repository.database.transaction() as transaction:
+        repository.roles.upsert(
+            transaction,
+            role_id="quality_role",
+            requirements={"capabilities": []},
+            expected_load={"requests": 1},
+            criticality=1,
+        )
+        transaction.execute(
+            """
+            UPDATE roles
+            SET minimum_quality_metric = 'intelligence_index',
+                minimum_quality_value = 80,
+                quality_gate_index_version = '4.1'
+            WHERE id = 'quality_role'
+            """
+        )
+
+    run_composed_stage(repository, "role-scoring")
+
+    with repository.database.transaction() as transaction:
+        score = transaction.execute("SELECT eligibility, rejection_reasons FROM role_scores").fetchone()
+    assert score["eligibility"] is False
+    assert score["rejection_reasons"] == ["quality_gate:below_gate"]
+
+
+@pytest.mark.spec("quality-gate::Missing gate metric")
+def test_role_scoring_stage_rejects_unverifiable_quality_unless_role_allows(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    seed_confirmed_llm_candidate(repository, model_id="missing-coding", intelligence_index=90, coding_index=None)
+    with repository.database.transaction() as transaction:
+        for role_id, requirements in [
+            ("strict_quality", {"capabilities": []}),
+            ("allow_unverified", {"capabilities": [], "allow_unverified_quality_gate": True}),
+        ]:
+            repository.roles.upsert(transaction, role_id=role_id, requirements=requirements, expected_load={"requests": 1}, criticality=1)
+        transaction.execute(
+            """
+            UPDATE roles
+            SET minimum_quality_metric = 'coding_index',
+                minimum_quality_value = 50,
+                quality_gate_index_version = '4.1'
+            """
+        )
+
+    run_composed_stage(repository, "role-scoring")
+
+    with repository.database.transaction() as transaction:
+        scores = {
+            row["role_id"]: (row["eligibility"], row["rejection_reasons"])
+            for row in transaction.execute("SELECT role_id, eligibility, rejection_reasons FROM role_scores").fetchall()
+        }
+    assert scores["strict_quality"] == (False, ["quality_gate:unverifiable"])
+    assert scores["allow_unverified"][0] is True
+
+
+@pytest.mark.spec("quality-gate::Major index change")
+@pytest.mark.spec("pipeline-orchestration::Index-version mismatch keeps current combo")
+def test_quality_gate_index_version_mismatch_skips_new_allocation_plan(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    seed_confirmed_llm_candidate(repository, model_id="stale-index", intelligence_index=90, aa_index_version="4.1")
+    with repository.database.transaction() as transaction:
+        repository.roles.upsert(
+            transaction,
+            role_id="stale_gate",
+            requirements={"capabilities": []},
+            expected_load={"requests": 1},
+            criticality=1,
+        )
+        transaction.execute(
+            """
+            UPDATE roles
+            SET minimum_quality_metric = 'intelligence_index',
+                minimum_quality_value = 80,
+                quality_gate_index_version = '5.0'
+            WHERE id = 'stale_gate'
+            """
+        )
+
+    run_composed_stage(repository, "role-scoring")
+    allocation = run_composed_stage(repository, "allocation")
+
+    with repository.database.transaction() as transaction:
+        score = transaction.execute("SELECT eligibility, rejection_reasons FROM role_scores").fetchone()
+        plan_count = transaction.execute("SELECT count(*) AS total FROM allocation_plans WHERE role_id = 'stale_gate'").fetchone()["total"]
+    assert score["eligibility"] is False
+    assert score["rejection_reasons"] == ["quality_gate:needs_recalibration"]
+    assert allocation.exit_code == 0
+    assert plan_count == 0
+
+
+@pytest.mark.spec("pipeline-orchestration::Scoring stage drops below-gate endpoint")
+def test_explain_endpoint_reports_quality_gate_rejection(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    endpoint = seed_confirmed_llm_candidate(repository, model_id="diagnostic-low-quality", intelligence_index=40)
+    with repository.database.transaction() as transaction:
+        repository.roles.upsert(
+            transaction,
+            role_id="quality_role",
+            requirements={"capabilities": []},
+            expected_load={"requests": 1},
+            criticality=1,
+        )
+        transaction.execute(
+            """
+            UPDATE roles
+            SET minimum_quality_metric = 'intelligence_index',
+                minimum_quality_value = 80,
+                quality_gate_index_version = '4.1'
+            WHERE id = 'quality_role'
+            """
+        )
+    run_composed_stage(repository, "role-scoring")
+    runtime = ComposedRuntime(
+        repository=repository,
+        omniroute_client=PipelineOpsClient(),
+        stages=[],
+        cron="0 4 * * *",
+        llm_runtime=None,
+        config=build_startup_config(valid_env(DATABASE_URL=postgres_url)),
+    )
+
+    output = runtime.read_diagnostics("endpoint", str(endpoint["id"]))
+
+    assert "rejection=quality_gate:below_gate" in output
 
 
 @pytest.mark.spec("pipeline-orchestration::Allocation persists one combo plan per role")

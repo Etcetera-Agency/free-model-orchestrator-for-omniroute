@@ -10,9 +10,6 @@ archive when implemented.
 
 - `wire-account-discovery-stage` — `account-discovery` module is unit-tested but
   never wired into the pipeline; `discover-accounts` runs a catalog scan.
-- `integrate-quality-and-context-gates` — `quality-gate` and
-  `context-window-eligibility` hard filters are not applied in production
-  scoring.
 
 ## Dropped (not needed for project essence)
 

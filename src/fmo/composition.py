@@ -68,10 +68,14 @@ class ComposedRuntime:
         with self.repository.database.transaction() as transaction:
             if kind == "endpoint":
                 row = self.repository.provider_endpoints.get(transaction, identifier)
+                rejection = _latest_endpoint_rejection(transaction, identifier)
             else:
                 row = _latest_role_diagnostic(transaction, identifier)
+                rejection = None
         if row is None:
             return f"{kind}:{identifier}:not_found"
+        if rejection:
+            return f"{kind}:{identifier}:{row}:rejection={rejection}"
         return f"{kind}:{identifier}:{row}"
 
     def run_scheduler_once(self, timestamp: str) -> RuntimeCliResult:
@@ -196,6 +200,25 @@ def _cli_result(result: PipelineRunResult) -> RuntimeCliResult:
         combo_test_called=any(bool(stage["details"].get("combo_test_called")) for stage in result.stage_results),
         error_reason=failing_stage.get("reason") if failing_stage else None,
     )
+
+
+def _latest_endpoint_rejection(transaction, endpoint_id: str) -> str | None:
+    row = transaction.execute(
+        """
+        SELECT rejection_reasons
+        FROM role_scores
+        WHERE endpoint_id = %(endpoint_id)s
+          AND eligibility = false
+          AND rejection_reasons IS NOT NULL
+        ORDER BY calculated_at DESC
+        LIMIT 1
+        """,
+        {"endpoint_id": endpoint_id},
+    ).fetchone()
+    if row is None:
+        return None
+    reasons = row["rejection_reasons"] or []
+    return ",".join(str(reason) for reason in reasons)
 
 
 def _run_type(command: str) -> str:

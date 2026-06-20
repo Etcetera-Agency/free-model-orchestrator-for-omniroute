@@ -17,6 +17,7 @@ from fmo.applier import ComboApplier
 from fmo.apply_guard import ApplyPreconditions, check_apply_preconditions
 from fmo.aa_migration import run_migration_agent
 from fmo.config import StartupConfig
+from fmo.context import context_eligible, effective_context_window
 from fmo.external_metadata import ExternalMetadataError
 from fmo.forecast import apply_historical_reserve, cold_start_demand, protected_demand
 from fmo.hermes_inventory import (
@@ -36,11 +37,12 @@ from fmo.omniroute import OmniRouteClient, OmniRouteRequestError
 from fmo.persistence import Database, Repository
 from fmo.pipeline import CANONICAL_STAGE_NAMES, PipelineContext, PipelineRunner, PipelineRunResult, Stage, StageResult
 from fmo.probes import probe_endpoint
+from fmo.quality import evaluate_quality_gate
 from fmo.quota_manager import QuotaFetchError, fetch_live_quota_snapshot
 from fmo.quota_research import research_quota_rule
 from fmo.registry import RegistryFetchError, persist_free_registry_outcome, sync_live_free_registry
 from fmo.scanner import CatalogFetchError, CatalogScanner, scan_live_omniroute_catalogs
-from fmo.scoring import eligible_for_scoring, score_endpoint
+from fmo.scoring import EligibilityDecision, eligible_for_scoring, score_endpoint
 from fmo.scheduler import Scheduler
 from fmo.smart_review import ComboReviewResult, run_combo_review
 from fmo.telemetry import sync_live_telemetry
@@ -718,11 +720,21 @@ def _role_lifecycle_stage(_dependencies: StageDependencies, context: PipelineCon
 
 def _role_scoring_stage(_dependencies: StageDependencies, context: PipelineContext) -> StageResult:
     with context.repository.database.transaction() as transaction:
-        roles = transaction.execute("SELECT id, requirements FROM roles ORDER BY id").fetchall()
+        roles = transaction.execute(
+            """
+            SELECT id, requirements, minimum_quality_metric, minimum_quality_value,
+                   quality_gate_index_version
+            FROM roles
+            ORDER BY id
+            """
+        ).fetchall()
         endpoints = transaction.execute(
             """
             SELECT pe.id, pe.capabilities, pe.provider_account_id, pe.access_status,
-                   pe.probe_status, eas.effective_remaining
+                   pe.probe_status, pe.advertised_context_window,
+                   pe.provider_context_window, pe.probed_context_window,
+                   pe.effective_context_window, pe.canonical_model_id,
+                   eas.effective_remaining
             FROM provider_endpoints pe
             JOIN endpoint_access_states eas ON eas.endpoint_id = pe.id
             WHERE pe.access_status = 'confirmed'
@@ -730,9 +742,11 @@ def _role_scoring_stage(_dependencies: StageDependencies, context: PipelineConte
             ORDER BY pe.provider_model_id
             """
         ).fetchall()
+        latest_metrics = _latest_aa_metrics_by_model(transaction)
         written = 0
         for role in roles:
-            required = set((role["requirements"] or {}).get("capabilities", []))
+            requirements = role["requirements"] or {}
+            required = set(requirements.get("capabilities", []))
             for endpoint in endpoints:
                 eligibility = eligible_for_scoring(
                     {
@@ -745,6 +759,10 @@ def _role_scoring_stage(_dependencies: StageDependencies, context: PipelineConte
                     },
                     required_capabilities=required,
                 )
+                if eligibility.eligible:
+                    eligibility = _context_window_eligibility(endpoint, requirements)
+                if eligibility.eligible:
+                    eligibility = _quality_gate_eligibility(role, latest_metrics.get(endpoint["canonical_model_id"]), requirements)
                 score = score_endpoint(
                     {
                         "benchmark_fit": 1.0,
@@ -768,6 +786,68 @@ def _role_scoring_stage(_dependencies: StageDependencies, context: PipelineConte
                 )
                 written += 1
     return _effect_result("role-scoring", changed=written > 0)
+
+
+def _latest_aa_metrics_by_model(transaction: Any) -> dict[Any, dict[str, Any]]:
+    rows = transaction.execute(
+        """
+        SELECT DISTINCT ON (canonical_model_id)
+               canonical_model_id, intelligence_index, coding_index, agentic_index,
+               index_version
+        FROM artificial_analysis_model_metrics
+        ORDER BY canonical_model_id, fetched_at DESC
+        """
+    ).fetchall()
+    return {
+        row["canonical_model_id"]: {
+            "metrics": {
+                key: float(row[key])
+                for key in ("intelligence_index", "coding_index", "agentic_index")
+                if row[key] is not None
+            },
+            "index_version": row["index_version"],
+        }
+        for row in rows
+    }
+
+
+def _context_window_eligibility(endpoint: Any, requirements: dict[str, Any]) -> EligibilityDecision:
+    minimum = requirements.get("minimum_context_window")
+    if minimum is None:
+        return EligibilityDecision(True)
+    effective = effective_context_window(
+        [
+            endpoint["advertised_context_window"],
+            endpoint["provider_context_window"],
+            endpoint["probed_context_window"],
+            endpoint["effective_context_window"],
+        ]
+    )
+    decision = context_eligible(
+        effective_context=effective,
+        minimum_context=int(minimum),
+        manual_override=bool(requirements.get("manual_context_override", False)),
+    )
+    if decision.eligible:
+        return EligibilityDecision(True)
+    return EligibilityDecision(False, "context")
+
+
+def _quality_gate_eligibility(role: Any, metrics_row: dict[str, Any] | None, requirements: dict[str, Any]) -> EligibilityDecision:
+    if role["minimum_quality_metric"] is None or role["minimum_quality_value"] is None:
+        return EligibilityDecision(True)
+    current_version = metrics_row.get("index_version") if metrics_row else role["quality_gate_index_version"]
+    decision = evaluate_quality_gate(
+        (metrics_row or {}).get("metrics", {}),
+        metric=role["minimum_quality_metric"],
+        value=float(role["minimum_quality_value"]),
+        index_version=str(role["quality_gate_index_version"]),
+        current_version=str(current_version),
+        allow_unverified=bool(requirements.get("allow_unverified_quality_gate", False)),
+    )
+    if decision.eligible:
+        return EligibilityDecision(True)
+    return EligibilityDecision(False, f"quality_gate:{decision.status}")
 
 
 def _demand_forecast_stage(_dependencies: StageDependencies, context: PipelineContext) -> StageResult:
@@ -865,6 +945,7 @@ def _allocation_stage(_dependencies: StageDependencies, context: PipelineContext
                 """
             ).fetchall()
         }
+        recalibration_roles = _roles_needing_quality_recalibration(transaction)
         demand = {
             role["id"]: forecast_demand.get(role["id"], cold_start_demand(schedule=None, bootstrap=None, role_minimum=1, global_minimum=1).value)
             for role in roles
@@ -888,6 +969,8 @@ def _allocation_stage(_dependencies: StageDependencies, context: PipelineContext
         }
         written = 0
         for role in roles:
+            if role["id"] in recalibration_roles:
+                continue
             allocation = plan.allocations.get(role["id"])
             role_scores = [endpoint for endpoint in endpoints if allocation is None or endpoint["id"] == allocation.endpoint_id]
             validation = validate_plan(pool_reports or {"empty": {"usage": 0, "capacity": 0}}, role_has_primary=allocation is not None)
@@ -913,6 +996,18 @@ def _allocation_stage(_dependencies: StageDependencies, context: PipelineContext
             )
             written += 1
     return _effect_result("allocation", changed=written > 0)
+
+
+def _roles_needing_quality_recalibration(transaction: Any) -> set[str]:
+    rows = transaction.execute(
+        """
+        SELECT DISTINCT ON (role_id) role_id, rejection_reasons
+        FROM role_scores
+        WHERE rejection_reasons @> '["quality_gate:needs_recalibration"]'::jsonb
+        ORDER BY role_id, calculated_at DESC
+        """
+    ).fetchall()
+    return {row["role_id"] for row in rows}
 
 
 def _diff_stage(dependencies: StageDependencies, context: PipelineContext) -> StageResult:
