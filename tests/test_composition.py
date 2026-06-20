@@ -113,6 +113,8 @@ class PipelineOpsClient(QuotaSearchClient):
                     }
                 ],
             }
+        if path == "/api/combos":
+            return {"combos": [{"id": "fmo-routing_fast", "models": ["old-endpoint"]}]}
         raise AssertionError(f"unexpected GET {path}")
 
 
@@ -155,6 +157,9 @@ def _command_for_stage(stage_name):
         "probing": "probe-models",
         "telemetry-sync": "sync-telemetry",
         "quota-sync": "sync-quotas",
+        "role-scoring": "score-roles",
+        "allocation": "allocate",
+        "diff": "diff",
     }
     return commands[stage_name]
 
@@ -164,6 +169,21 @@ def prepare_confirmed_endpoint(repository, *, client=None):
     run_composed_stage(repository, "model-matching", client=client)
     run_composed_stage(repository, "quota-research", client=client)
     run_composed_stage(repository, "access-classification", client=client)
+
+
+def prepare_scored_endpoint(repository, *, client=None):
+    prepare_confirmed_endpoint(repository, client=client)
+    run_composed_stage(repository, "probing", client=client)
+    run_composed_stage(repository, "telemetry-sync", client=client)
+    run_composed_stage(repository, "quota-sync", client=client)
+    with repository.database.transaction() as transaction:
+        repository.roles.upsert(
+            transaction,
+            role_id="routing_fast",
+            requirements={"capabilities": []},
+            expected_load={"requests": 10},
+            criticality=1,
+        )
 
 
 @pytest.mark.spec("pipeline-orchestration::Matching writes endpoint bindings")
@@ -247,10 +267,18 @@ def test_quota_research_missing_external_payload_fails_closed(postgres_url):
 
 
 @pytest.mark.spec("pipeline-orchestration::Full run calls production adapters")
-def test_full_pipeline_advances_past_probe_telemetry_and_stops_at_scoring(postgres_url):
+def test_full_pipeline_advances_past_scoring_allocation_and_stops_at_apply(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     repository = Repository(Database(postgres_url))
     seed_endpoint(repository)
+    with repository.database.transaction() as transaction:
+        repository.roles.upsert(
+            transaction,
+            role_id="routing_fast",
+            requirements={"capabilities": []},
+            expected_load={"requests": 10},
+            criticality=1,
+        )
     dependencies = StageDependencies(repository=repository, omniroute_client=PipelineOpsClient())
     adapters = StageAdapters(
         registry_sync=empty_stage_adapters().registry_sync,
@@ -275,6 +303,9 @@ def test_full_pipeline_advances_past_probe_telemetry_and_stops_at_scoring(postgr
         "telemetry-sync",
         "quota-sync",
         "role-scoring",
+        "allocation",
+        "diff",
+        "apply",
     ]
     assert result.stage_results[-1]["status"] == "not_implemented"
 
@@ -342,6 +373,66 @@ def test_quota_sync_stage_writes_remaining_quota_state(postgres_url):
     assert float(observation["used_value"]) == 40.0
     assert float(observation["remaining_value"]) == 60.0
     assert access["effective_remaining"]["requests"] == 60.0
+
+
+@pytest.mark.spec("pipeline-orchestration::Scoring persists per-role scores")
+def test_role_scoring_stage_persists_per_role_scores(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    client = PipelineOpsClient()
+    prepare_scored_endpoint(repository, client=client)
+
+    result = run_composed_stage(repository, "role-scoring", client=client)
+
+    with repository.database.transaction() as transaction:
+        score = transaction.execute("SELECT role_id, eligibility, total_score FROM role_scores").fetchone()
+    assert result.exit_code == 0
+    assert result.stage_results[0]["details"]["effect"] == "repository_write"
+    assert score["role_id"] == "routing_fast"
+    assert score["eligibility"] is True
+    assert float(score["total_score"]) > 0
+
+
+@pytest.mark.spec("pipeline-orchestration::Allocation persists one combo plan per role")
+@pytest.mark.spec("pipeline-orchestration::Oversubscription gate blocks zero-capacity pool")
+def test_allocation_stage_persists_plan_and_constraint_report(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    client = PipelineOpsClient()
+    prepare_scored_endpoint(repository, client=client)
+    run_composed_stage(repository, "role-scoring", client=client)
+
+    result = run_composed_stage(repository, "allocation", client=client)
+
+    with repository.database.transaction() as transaction:
+        plan = transaction.execute("SELECT role_id, status, targets, constraint_report FROM allocation_plans").fetchone()
+    assert result.exit_code == 0
+    assert result.stage_results[0]["details"]["effect"] == "repository_write"
+    assert plan["role_id"] == "routing_fast"
+    assert plan["status"] == "planned"
+    assert len(plan["targets"]) == 1
+    assert plan["constraint_report"]["apply"] is True
+
+
+@pytest.mark.spec("pipeline-orchestration::Diff is computed without mutating OmniRoute")
+def test_diff_stage_persists_minimal_diff_without_mutating_omniroute(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    client = PipelineOpsClient()
+    prepare_scored_endpoint(repository, client=client)
+    run_composed_stage(repository, "role-scoring", client=client)
+    run_composed_stage(repository, "allocation", client=client)
+
+    result = run_composed_stage(repository, "diff", client=client)
+
+    with repository.database.transaction() as transaction:
+        snapshot = transaction.execute("SELECT phase, state_json FROM combo_snapshots").fetchone()
+    assert result.exit_code == 0
+    assert result.stage_results[0]["details"]["effect"] == "repository_write"
+    assert client.get_calls[-1] == "/api/combos"
+    assert not any(call[0].startswith("/api/combos") for call in client.calls)
+    assert snapshot["phase"] == "diff"
+    assert snapshot["state_json"]["remove"] == ["old-endpoint"]
 
 
 @pytest.mark.spec("runtime-bootstrap::Production dispatch executes a real stage")

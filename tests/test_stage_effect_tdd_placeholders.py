@@ -2,15 +2,6 @@ import pytest
 
 
 @pytest.mark.xfail(reason="stage adapter wiring lands in subsequent OpenSpec slices", strict=True)
-@pytest.mark.spec("pipeline-orchestration::Scoring persists per-role scores")
-@pytest.mark.spec("pipeline-orchestration::Allocation persists one combo plan per role")
-@pytest.mark.spec("pipeline-orchestration::Oversubscription gate blocks zero-capacity pool")
-@pytest.mark.spec("pipeline-orchestration::Diff is computed without mutating OmniRoute")
-def test_scoring_allocation_stage_effects_are_not_wired_yet():
-    assert False
-
-
-@pytest.mark.xfail(reason="stage adapter wiring lands in subsequent OpenSpec slices", strict=True)
 @pytest.mark.spec("combo-applier::Production apply smoke-tests applied combos")
 @pytest.mark.spec("combo-applier::Fabricated smoke signal rejected")
 @pytest.mark.spec("pipeline-orchestration::Production apply runs the real smoke test")

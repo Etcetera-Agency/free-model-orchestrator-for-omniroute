@@ -4,9 +4,6 @@ No deferred review follow-up work discovered.
 
 ## Active stage-wiring follow-up
 
-- Implement and archive `wire-scoring-allocation-stages`: wire `role-scoring`,
-  `allocation`, and `diff`; replace the scoring/allocation xfail placeholders
-  with real effect assertions.
 - Implement and archive `wire-apply-audit-stages`: wire `apply` and `audit`;
   replace the apply/audit xfail placeholders with real smoke, rollback, and
   audit effect assertions.

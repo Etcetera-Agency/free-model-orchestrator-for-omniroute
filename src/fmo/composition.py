@@ -10,6 +10,7 @@ from typing import Any
 from psycopg.types.json import Jsonb
 
 from fmo.access import classify_access
+from fmo.allocation import allocate_globally, build_priority_combo, validate_plan
 from fmo.config import StartupConfig
 from fmo.external_metadata import ExternalMetadataError
 from fmo.matcher import match_model
@@ -22,6 +23,7 @@ from fmo.quota_manager import QuotaFetchError, fetch_live_quota_snapshot
 from fmo.quota_research import research_quota_rule
 from fmo.registry import RegistryFetchError, persist_free_registry_outcome, sync_live_free_registry
 from fmo.scanner import CatalogFetchError, CatalogScanner, scan_live_omniroute_catalogs
+from fmo.scoring import eligible_for_scoring, score_endpoint
 from fmo.scheduler import Scheduler
 from fmo.telemetry import sync_live_telemetry
 
@@ -230,6 +232,9 @@ def _production_stage_adapters() -> dict[str, StageAdapter]:
         "probing": _probing_stage,
         "telemetry-sync": _telemetry_sync_stage,
         "quota-sync": _quota_sync_stage,
+        "role-scoring": _role_scoring_stage,
+        "allocation": _allocation_stage,
+        "diff": _diff_stage,
     }
 
 
@@ -642,6 +647,169 @@ def _quota_sync_stage(dependencies: StageDependencies, context: PipelineContext)
             )
             written += 1
     return _effect_result("quota-sync", changed=written > 0)
+
+
+def _role_scoring_stage(_dependencies: StageDependencies, context: PipelineContext) -> StageResult:
+    with context.repository.database.transaction() as transaction:
+        roles = transaction.execute("SELECT id, requirements FROM roles ORDER BY id").fetchall()
+        endpoints = transaction.execute(
+            """
+            SELECT pe.id, pe.capabilities, pe.provider_account_id, pe.access_status,
+                   pe.probe_status, eas.effective_remaining
+            FROM provider_endpoints pe
+            JOIN endpoint_access_states eas ON eas.endpoint_id = pe.id
+            WHERE pe.access_status = 'confirmed'
+              AND pe.probe_status = 'passed'
+            ORDER BY pe.provider_model_id
+            """
+        ).fetchall()
+        written = 0
+        for role in roles:
+            required = set((role["requirements"] or {}).get("capabilities", []))
+            for endpoint in endpoints:
+                eligibility = eligible_for_scoring(
+                    {
+                        "access": "free_quota_available",
+                        "basic_probe": endpoint["probe_status"] == "passed",
+                        "quota": _remaining_requests(endpoint["effective_remaining"]),
+                        "matched": True,
+                        "breaker": "closed",
+                        "capabilities": set((endpoint["capabilities"] or {}).keys()),
+                    },
+                    required_capabilities=required,
+                )
+                score = score_endpoint(
+                    {
+                        "benchmark_fit": 1.0,
+                        "capability_fit": 1.0 if eligibility.eligible else 0.0,
+                        "health": 1.0,
+                        "latency": 1.0,
+                        "quota_headroom": min(_remaining_requests(endpoint["effective_remaining"]) / 100, 1.0),
+                        "stability": 1.0,
+                    }
+                )
+                context.repository.scores.upsert(
+                    transaction,
+                    role_id=role["id"],
+                    endpoint_id=endpoint["id"],
+                    score_version="production-v1",
+                    total_score=score.total,
+                    component_scores=score.components,
+                    eligibility=eligibility.eligible,
+                    rejection_reasons=[] if eligibility.eligible else [eligibility.reason or "unknown"],
+                    input_state_hash=_hash_parts(str(role["id"]), str(endpoint["id"]), str(score.total)),
+                )
+                written += 1
+    return _effect_result("role-scoring", changed=written > 0)
+
+
+def _allocation_stage(_dependencies: StageDependencies, context: PipelineContext) -> StageResult:
+    with context.repository.database.transaction() as transaction:
+        roles = transaction.execute("SELECT id, expected_load FROM roles ORDER BY id").fetchall()
+        score_rows = transaction.execute(
+            """
+            SELECT DISTINCT ON (rs.role_id, rs.endpoint_id)
+                   rs.role_id, rs.endpoint_id, rs.total_score, pe.provider_account_id,
+                   eas.effective_remaining
+            FROM role_scores rs
+            JOIN provider_endpoints pe ON pe.id = rs.endpoint_id
+            JOIN endpoint_access_states eas ON eas.endpoint_id = pe.id
+            WHERE rs.eligibility = true
+            ORDER BY rs.role_id, rs.endpoint_id, rs.calculated_at DESC
+            """
+        ).fetchall()
+        demand = {role["id"]: float((role["expected_load"] or {}).get("requests", 1)) for role in roles}
+        endpoints = [
+            {
+                "id": str(row["endpoint_id"]),
+                "pool": str(row["provider_account_id"]),
+                "score": float(row["total_score"]),
+                "capacity": _remaining_requests(row["effective_remaining"]),
+            }
+            for row in score_rows
+        ]
+        plan = allocate_globally([role["id"] for role in roles], endpoints, demand)
+        pool_reports = {
+            pool: {
+                "usage": usage,
+                "capacity": max((endpoint["capacity"] for endpoint in endpoints if endpoint["pool"] == pool), default=0),
+            }
+            for pool, usage in plan.pool_usage.items()
+        }
+        written = 0
+        for role in roles:
+            allocation = plan.allocations.get(role["id"])
+            role_scores = [endpoint for endpoint in endpoints if allocation is None or endpoint["id"] == allocation.endpoint_id]
+            validation = validate_plan(pool_reports or {"empty": {"usage": 0, "capacity": 0}}, role_has_primary=allocation is not None)
+            targets = []
+            if allocation is not None:
+                combo = build_priority_combo(role["id"], role_scores, per_pool_cap=2)
+                targets = [
+                    {"endpoint_id": endpoint_id, "priority": index + 1}
+                    for index, endpoint_id in enumerate(combo.endpoints)
+                ]
+            context.repository.allocation_plans.upsert(
+                transaction,
+                role_id=role["id"],
+                status="planned" if validation.apply else "degraded",
+                targets=targets,
+                constraint_report={
+                    "apply": validation.apply,
+                    "reason": validation.reason,
+                    "role_status": validation.role_status,
+                    "pool_reports": pool_reports,
+                },
+                input_state_hash=_hash_parts(role["id"], str(targets), str(pool_reports)),
+            )
+            written += 1
+    return _effect_result("allocation", changed=written > 0)
+
+
+def _diff_stage(dependencies: StageDependencies, context: PipelineContext) -> StageResult:
+    current = _read_current_combos(dependencies.omniroute_client)
+    with context.repository.database.transaction() as transaction:
+        plans = transaction.execute(
+            """
+            SELECT DISTINCT ON (role_id) role_id, targets
+            FROM allocation_plans
+            ORDER BY role_id, created_at DESC
+            """
+        ).fetchall()
+        written = 0
+        for plan in plans:
+            combo_id = f"fmo-{plan['role_id']}"
+            desired = [target["endpoint_id"] for target in plan["targets"]]
+            before = current.get(combo_id, [])
+            diff = {
+                "combo_id": combo_id,
+                "before": before,
+                "after": desired,
+                "add": [endpoint_id for endpoint_id in desired if endpoint_id not in before],
+                "remove": [endpoint_id for endpoint_id in before if endpoint_id not in desired],
+            }
+            context.repository.combo_snapshots.upsert(
+                transaction,
+                role_id=plan["role_id"],
+                omniroute_combo_id=combo_id,
+                state_hash=_hash_parts(combo_id, str(diff)),
+                state_json=diff,
+                phase="diff",
+                run_id=context.run_id,
+            )
+            written += 1
+    return _effect_result("diff", changed=written > 0)
+
+
+def _read_current_combos(client: Any | None) -> dict[str, list[str]]:
+    if client is None or not hasattr(client, "get"):
+        return {}
+    payload = client.get("/api/combos")
+    combos = payload.get("combos", []) if isinstance(payload, dict) else []
+    return {
+        str(combo["id"]): [str(model) for model in combo.get("models", [])]
+        for combo in combos
+        if isinstance(combo, dict) and str(combo.get("id", "")).startswith("fmo-")
+    }
 
 
 def _insert_health_observation(
