@@ -93,6 +93,21 @@ Mode-specific fields:
 PostgreSQL can be any reachable instance via `DATABASE_URL`. Tests do not need
 that setting because they create their own temporary database.
 
+### Secrets
+
+`OMNIROUTE_API_KEY` (required) and any other credentials are read from the
+process environment — the code never reads a hardcoded key. Storage follows the
+Hermes deployment convention (`ORACLE_FRESH_SERVER_DEPLOY.md`):
+
+- **Production:** provision `/opt/apps/free-model-orchestrator/.env` from Agent
+  Vault, owned by the service user with mode `0600`, and load it via the systemd
+  unit `EnvironmentFile=/opt/apps/free-model-orchestrator/.env`. The secret is
+  never committed to git.
+- **Local dev:** copy `.env.example` to `.env` (gitignored) and `source` it, or
+  export the variables in your shell.
+
+See `.env.example` for the full variable list.
+
 ## CLI
 
 Package entrypoint:
@@ -174,7 +189,7 @@ build on drift in either direction:
 
 - a scenario with no test and not on the pending allowlist;
 - a marker pointing at a scenario that is neither shipped nor proposed;
-- a pending entry that is actually covered (the allowlist must shrink);
+- a pending entry that is actually covered;
 - a pending entry referencing a scenario that no longer exists.
 
 Bind a test to a scenario, then drop the matching line from
@@ -186,9 +201,9 @@ def test_snapshot_cannot_commit():
     ...
 ```
 
-The pending allowlist tracks scenarios not yet bound. It is currently empty and
-must not grow unless a new approved change explicitly carries uncovered
-scenarios during TDD.
+The pending allowlist tracks scenarios not yet bound. It must stay empty unless
+approved active slices explicitly carry uncovered TDD scenarios; those slices
+must also be listed in `openspec/TODO.md`.
 
 ## Safety Model
 
@@ -214,7 +229,7 @@ proposal + tasks
 → minimal implementation fixes
 → targeted pytest
 → full pytest (includes the executable-spec coverage gate)
-→ remove the now-covered scenarios from tests/spec_coverage_pending.txt
+→ remove now-covered scenarios from tests/spec_coverage_pending.txt
 → npx --yes @fission-ai/openspec@latest validate --all --strict
 → archive when approved
 ```

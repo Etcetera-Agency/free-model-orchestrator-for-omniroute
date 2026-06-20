@@ -1,36 +1,37 @@
 <!-- OPENSPEC:START -->
 # OpenSpec Instructions
 
-These instructions are for AI assistants working in this project.
+For AI assistants in this project.
 
-Always open `@/openspec/AGENTS.md` when the request:
-- Mentions planning or proposals (words like proposal, spec, change, plan)
-- Introduces new capabilities, breaking changes, architecture shifts, or big performance/security work
-- Sounds ambiguous and you need the authoritative spec before coding
+Open `@/openspec/AGENTS.md` when request:
+- Mentions proposal/spec/change/plan
+- Adds capability, breaking change, architecture shift, big perf/security work
+- Is ambiguous and needs authoritative spec before code
 
-Use `@/openspec/AGENTS.md` to learn:
-- How to create and apply change proposals
-- Spec format and conventions
-- Project structure and guidelines
+Use `@/openspec/AGENTS.md` for:
+- Proposal create/apply flow
+- Spec format/conventions
+- Project structure/guidelines
 
-Keep this managed block so 'openspec update' can refresh the instructions.
+Keep managed block so `openspec update` can refresh it.
 
 <!-- OPENSPEC:END -->
 
 ## Executable scenarios (project rule)
 
-Scenarios are executable and the binding is enforced by
-`tests/test_spec_coverage.py`, which runs as part of the normal `pytest` suite.
+Scenarios executable. `tests/test_spec_coverage.py` enforces binding in normal
+`pytest`.
 
-When you add or change tests:
+When adding/changing tests:
 
 - Bind each test to the scenario it encodes with
   `@pytest.mark.spec("<capability>::<Scenario name>")`. The id is
   `<spec dir name>::<text after "#### Scenario:">` from
   `openspec/specs/**` or an active (non-archived) `openspec/changes/**`.
-- After binding, remove the now-covered scenario from
-  `tests/spec_coverage_pending.txt`. That allowlist must shrink, never grow.
+- After bind, remove covered scenario from `tests/spec_coverage_pending.txt`.
+  Pending entries are allowed only for explicitly queued active slices that are
+  also listed in `openspec/TODO.md`.
 
-The gate fails the build when a scenario has no test and is not pending, when a
-marker points at a non-existent scenario, or when a pending entry is stale or
-already covered. See `README.md` → "Executable-spec coverage gate".
+Gate fails when scenario has no test and is not pending, marker points at missing
+scenario, or pending entry stale/already covered. See `README.md` ->
+"Executable-spec coverage gate".

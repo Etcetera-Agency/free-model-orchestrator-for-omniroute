@@ -4,6 +4,16 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
+EXPECTED_ACTIVE_PENDING = {
+    "audit-rollback::rollback command reverts combos, not AA-index",
+    "audit-rollback::rollback restore failure exits 7",
+    "combo-applier::Later combo failure rolls back earlier applied combos",
+    "combo-applier::Live state diverged from diff-time before",
+    "combo-applier::No combo is mutated without a persisted record",
+    "combo-applier::Restore failure during partial rollback",
+    "system-architecture::Refactor preserves behavior",
+    "system-architecture::Stage domains live in separate modules",
+}
 
 
 @pytest.mark.spec("runtime-documentation::Active docs state")
@@ -22,9 +32,16 @@ def test_runtime_docs_record_executable_scenario_policy_and_pending_allowlist():
     assert "Executable scenarios" in agents
     assert "@pytest.mark." + "spec(" in agents
     assert "<capability>::<Scenario name>" in agents
-    assert pending_lines == []
+    assert set(pending_lines) == EXPECTED_ACTIVE_PENDING
     assert "repository methods" in completion_review
     assert "adapter-backed boundary" in completion_review
-    assert "No deferred review follow-up work discovered." in todo
+    for change_id in (
+        "make-multi-combo-apply-atomic",
+        "rollback-apply-to-live-baseline",
+        "route-rollback-command-to-combo-revert",
+        "refactor-composition-into-stage-modules",
+    ):
+        assert change_id in todo
+    assert "No deferred review follow-up work discovered outside the active slice queue." in todo
     assert "Active Slice Backlog" not in todo
     assert "Active review follow-up slices" not in todo

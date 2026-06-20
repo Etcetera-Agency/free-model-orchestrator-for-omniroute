@@ -63,4 +63,14 @@
   fresh schema installs, and migration installs.
 - Code Simplifier review cleaned the new scheduler tests by sharing the partial
   index assertion and making concurrent-thread completion explicit.
+- Apply stage now derives quota and probe safety from persisted endpoint state
+  for desired `fmo-` combos. Missing, stale, non-hard-stop, or exhausted quota
+  evidence and missing/stale/failing probes return `unsafe_to_apply` before any
+  OmniRoute combo mutation.
+- Code Simplifier review changed apply-stage safety queries to compare endpoint
+  ids as text so malformed desired ids fail closed as missing evidence instead
+  of raising a UUID cast error.
+- Runtime documentation checks now allow only the explicitly named active-slice
+  scenario pending list, and require those remaining slices to be visible in
+  `openspec/TODO.md`.
 - Remaining deferred repo-level work: none discovered in this batch.

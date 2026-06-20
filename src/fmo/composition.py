@@ -46,6 +46,9 @@ from fmo.smart_review import ComboReviewResult, run_combo_review
 from fmo.telemetry import sync_live_telemetry
 
 
+APPLY_STAGE_EVIDENCE_MAX_AGE = timedelta(days=1)
+
+
 @dataclass(frozen=True)
 class RuntimeCliResult:
     exit_code: int
@@ -1171,14 +1174,15 @@ def _apply_stage(dependencies: StageDependencies, context: PipelineContext) -> S
             ORDER BY omniroute_combo_id, created_at DESC
             """
         ).fetchall()
+        safety = _derive_apply_stage_safety(transaction, diffs)
     try:
         check_apply_preconditions(
             ApplyPreconditions(
                 db_available=True,
                 snapshot_saved=bool(diffs),
                 desired_state_valid=all(isinstance(diff["state_json"].get("after"), list) for diff in diffs),
-                quota_safe=True,
-                probes_passed=True,
+                quota_safe=safety["quota_safe"],
+                probes_passed=safety["probes_passed"],
             )
         )
     except ValueError as exc:
@@ -1224,6 +1228,73 @@ def _apply_stage(dependencies: StageDependencies, context: PipelineContext) -> S
         changed=result.changed,
         details={**result.details, "combo_test_called": combo_test_called},
     )
+
+
+def _derive_apply_stage_safety(transaction: Any, diffs: Sequence[Any]) -> dict[str, bool]:
+    endpoint_ids = _desired_apply_endpoint_ids(diffs)
+    if not endpoint_ids:
+        return {"quota_safe": True, "probes_passed": True}
+    return {
+        "quota_safe": _desired_endpoints_have_current_quota_safety(transaction, endpoint_ids),
+        "probes_passed": _desired_endpoints_have_current_probe_success(transaction, endpoint_ids),
+    }
+
+
+def _desired_apply_endpoint_ids(diffs: Sequence[Any]) -> list[str]:
+    endpoint_ids = set()
+    for diff in diffs:
+        desired = diff["state_json"].get("after")
+        if not isinstance(desired, list):
+            continue
+        endpoint_ids.update(str(endpoint_id) for endpoint_id in desired)
+    return sorted(endpoint_ids)
+
+
+def _desired_endpoints_have_current_quota_safety(transaction: Any, endpoint_ids: Sequence[str]) -> bool:
+    rows = transaction.execute(
+        """
+        SELECT endpoint_id, effective_remaining, hard_stop_capable, evidence,
+               reset_at, classified_at, valid_until, status
+        FROM endpoint_access_states
+        WHERE endpoint_id::text = ANY(%(endpoint_ids)s)
+        """,
+        {"endpoint_ids": list(endpoint_ids)},
+    ).fetchall()
+    if len(rows) != len(endpoint_ids):
+        return False
+    now = datetime.now(timezone.utc)
+    oldest_allowed = now - APPLY_STAGE_EVIDENCE_MAX_AGE
+    return all(_endpoint_quota_row_is_safe(row, now=now, oldest_allowed=oldest_allowed) for row in rows)
+
+
+def _endpoint_quota_row_is_safe(row: Any, *, now: datetime, oldest_allowed: datetime) -> bool:
+    evidence = row["evidence"] if isinstance(row["evidence"], dict) else {}
+    safety_buffer = float(evidence.get("safety_buffer") or 0)
+    return (
+        row["status"] == "confirmed"
+        and row["hard_stop_capable"] is True
+        and _remaining_requests(row["effective_remaining"]) > safety_buffer
+        and row["reset_at"] is not None
+        and row["reset_at"] > now
+        and row["classified_at"] >= oldest_allowed
+        and (row["valid_until"] is None or row["valid_until"] > now)
+    )
+
+
+def _desired_endpoints_have_current_probe_success(transaction: Any, endpoint_ids: Sequence[str]) -> bool:
+    rows = transaction.execute(
+        """
+        SELECT DISTINCT ON (endpoint_id) endpoint_id, passed, finished_at
+        FROM endpoint_probes
+        WHERE endpoint_id::text = ANY(%(endpoint_ids)s)
+        ORDER BY endpoint_id, finished_at DESC
+        """,
+        {"endpoint_ids": list(endpoint_ids)},
+    ).fetchall()
+    if len(rows) != len(endpoint_ids):
+        return False
+    oldest_allowed = datetime.now(timezone.utc) - APPLY_STAGE_EVIDENCE_MAX_AGE
+    return all(row["passed"] is True and row["finished_at"] >= oldest_allowed for row in rows)
 
 
 def _audit_stage(dependencies: StageDependencies, context: PipelineContext) -> StageResult:

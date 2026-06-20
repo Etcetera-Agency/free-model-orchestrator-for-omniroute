@@ -892,6 +892,55 @@ def test_apply_stage_guard_failure_blocks_mutation(postgres_url):
     assert client.combos["fmo-routing_fast"] == ["old-endpoint"]
 
 
+@pytest.mark.spec("combo-applier::Failing quota evidence blocks the apply stage")
+@pytest.mark.parametrize(
+    "quota_update",
+    [
+        "UPDATE endpoint_access_states SET hard_stop_capable = false",
+        "UPDATE endpoint_access_states SET reset_at = now() - interval '1 minute'",
+        "DELETE FROM endpoint_access_states",
+    ],
+)
+def test_apply_stage_blocks_mutation_without_current_quota_safety(postgres_url, quota_update):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    client = PipelineOpsClient()
+    prepare_scored_endpoint(repository, client=client)
+    run_composed_stage(repository, "role-scoring", client=client)
+    run_composed_stage(repository, "demand-forecast", client=client)
+    run_composed_stage(repository, "allocation", client=client)
+    run_composed_stage(repository, "diff", client=client)
+    with repository.database.transaction() as transaction:
+        transaction.execute(quota_update)
+
+    result = run_composed_stage(repository, "apply", client=client)
+
+    assert result.exit_code == 5
+    assert client.combos["fmo-routing_fast"] == ["old-endpoint"]
+    assert not any(call[0].startswith("/api/combos/") for call in client.calls)
+
+
+@pytest.mark.spec("combo-applier::Failing probe evidence blocks the apply stage")
+def test_apply_stage_blocks_mutation_without_current_probe_success(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    client = PipelineOpsClient()
+    prepare_scored_endpoint(repository, client=client)
+    run_composed_stage(repository, "role-scoring", client=client)
+    run_composed_stage(repository, "demand-forecast", client=client)
+    run_composed_stage(repository, "allocation", client=client)
+    run_composed_stage(repository, "diff", client=client)
+    with repository.database.transaction() as transaction:
+        transaction.execute("UPDATE endpoint_probes SET finished_at = now() - interval '2 days'")
+
+    result = run_composed_stage(repository, "apply", client=client)
+
+    assert result.exit_code == 5
+    assert client.combos["fmo-routing_fast"] == ["old-endpoint"]
+    assert not any(call[0].startswith("/api/combos/") for call in client.calls)
+
+
+@pytest.mark.spec("combo-applier::Confirmed safety allows the apply stage")
 @pytest.mark.spec("pipeline-orchestration::Smoke failure rolls back")
 def test_apply_stage_smoke_failure_rolls_back_and_maps_failures(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))

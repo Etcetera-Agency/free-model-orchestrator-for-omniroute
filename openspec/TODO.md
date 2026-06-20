@@ -1,6 +1,13 @@
 # OpenSpec TODO
 
-No deferred review follow-up work discovered.
+## Active slice queue
+
+- [ ] `make-multi-combo-apply-atomic`
+- [ ] `rollback-apply-to-live-baseline`
+- [ ] `route-rollback-command-to-combo-revert`
+- [ ] `refactor-composition-into-stage-modules`
+
+No deferred review follow-up work discovered outside the active slice queue.
 
 ## Dropped (not needed for project essence)
 
