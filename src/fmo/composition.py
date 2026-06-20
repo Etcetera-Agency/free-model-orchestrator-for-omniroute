@@ -1204,23 +1204,12 @@ def _apply_stage(dependencies: StageDependencies, context: PipelineContext) -> S
         combo_test_called = True
         applier.apply(combo_id, desired, expected_hash=expected_hash, smoke_ok=smoke_ok)
         if not smoke_ok:
-            try:
-                dependencies.omniroute_client.post(f"/api/combos/{combo_id}", {"models": before})
-            except Exception:
+            if not _rollback_apply_mutations(dependencies.omniroute_client, applied, failed=(combo_id, before)):
                 return StageResult(status="rollback_failed", reason="rollback_failed", details={"combo_test_called": True})
+            _delete_applied_snapshots_for_run(context, applied)
             return StageResult(status="apply_failed_rolled_back", reason="smoke_failed", details={"combo_test_called": True})
+        _persist_applied_snapshot(context, diff, before, desired)
         applied.append((diff, before, desired))
-    with context.repository.database.transaction() as transaction:
-        for diff, before, desired in applied:
-            context.repository.combo_snapshots.upsert(
-                transaction,
-                role_id=diff["role_id"],
-                omniroute_combo_id=diff["omniroute_combo_id"],
-                state_hash=_hash_parts(diff["omniroute_combo_id"], str(desired), "applied"),
-                state_json={"before": before, "after": desired},
-                phase="applied",
-                run_id=context.run_id,
-            )
     result = _effect_result("apply", changed=bool(applied))
     return StageResult(
         status=result.status,
@@ -1228,6 +1217,53 @@ def _apply_stage(dependencies: StageDependencies, context: PipelineContext) -> S
         changed=result.changed,
         details={**result.details, "combo_test_called": combo_test_called},
     )
+
+
+def _persist_applied_snapshot(context: PipelineContext, diff: Any, before: list[str], desired: list[str]) -> None:
+    with context.repository.database.transaction() as transaction:
+        context.repository.combo_snapshots.upsert(
+            transaction,
+            role_id=diff["role_id"],
+            omniroute_combo_id=diff["omniroute_combo_id"],
+            state_hash=_hash_parts(diff["omniroute_combo_id"], str(desired), "applied", str(context.run_id)),
+            state_json={"before": before, "after": desired},
+            phase="applied",
+            run_id=context.run_id,
+        )
+
+
+def _rollback_apply_mutations(
+    client: Any,
+    applied: Sequence[tuple[Any, list[str], list[str]]],
+    *,
+    failed: tuple[str, list[str]],
+) -> bool:
+    rollback_targets = [(failed[0], failed[1])]
+    rollback_targets.extend((diff["omniroute_combo_id"], before) for diff, before, _desired in reversed(applied))
+    rollback_failed = False
+    for combo_id, before in rollback_targets:
+        try:
+            client.post(f"/api/combos/{combo_id}", {"models": before})
+        except Exception:
+            rollback_failed = True
+    return not rollback_failed
+
+
+def _delete_applied_snapshots_for_run(
+    context: PipelineContext,
+    applied: Sequence[tuple[Any, list[str], list[str]]],
+) -> None:
+    if not applied:
+        return
+    with context.repository.database.transaction() as transaction:
+        transaction.execute(
+            """
+            DELETE FROM combo_snapshots
+            WHERE run_id = %(run_id)s
+              AND phase = 'applied'
+            """,
+            {"run_id": context.run_id},
+        )
 
 
 def _derive_apply_stage_safety(transaction: Any, diffs: Sequence[Any]) -> dict[str, bool]:

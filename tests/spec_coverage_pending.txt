@@ -4,9 +4,6 @@
 # scenario both here and already covered.
 audit-rollback::rollback command reverts combos, not AA-index
 audit-rollback::rollback restore failure exits 7
-combo-applier::Later combo failure rolls back earlier applied combos
 combo-applier::Live state diverged from diff-time before
-combo-applier::No combo is mutated without a persisted record
-combo-applier::Restore failure during partial rollback
 system-architecture::Refactor preserves behavior
 system-architecture::Stage domains live in separate modules

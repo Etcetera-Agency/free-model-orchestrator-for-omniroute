@@ -73,4 +73,8 @@
 - Runtime documentation checks now allow only the explicitly named active-slice
   scenario pending list, and require those remaining slices to be visible in
   `openspec/TODO.md`.
+- Multi-combo apply now persists each successful `applied` snapshot before
+  moving to the next combo, restores the failed combo plus all earlier applied
+  combos on later smoke failure, cleans rolled-back applied snapshots, and
+  still attempts every restore before returning `rollback_failed`.
 - Remaining deferred repo-level work: none discovered in this batch.

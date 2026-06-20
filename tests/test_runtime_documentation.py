@@ -7,10 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_ACTIVE_PENDING = {
     "audit-rollback::rollback command reverts combos, not AA-index",
     "audit-rollback::rollback restore failure exits 7",
-    "combo-applier::Later combo failure rolls back earlier applied combos",
     "combo-applier::Live state diverged from diff-time before",
-    "combo-applier::No combo is mutated without a persisted record",
-    "combo-applier::Restore failure during partial rollback",
     "system-architecture::Refactor preserves behavior",
     "system-architecture::Stage domains live in separate modules",
 }
@@ -36,7 +33,6 @@ def test_runtime_docs_record_executable_scenario_policy_and_pending_allowlist():
     assert "repository methods" in completion_review
     assert "adapter-backed boundary" in completion_review
     for change_id in (
-        "make-multi-combo-apply-atomic",
         "rollback-apply-to-live-baseline",
         "route-rollback-command-to-combo-revert",
         "refactor-composition-into-stage-modules",

@@ -160,6 +160,50 @@ class PipelineOpsClient(QuotaSearchClient):
         raise AssertionError(f"unexpected GET {path}")
 
 
+class MultiComboOpsClient(PipelineOpsClient):
+    def __init__(self, repository, *, fail_smoke_for=None, restore_fail_for=None):
+        super().__init__()
+        self.repository = repository
+        self.fail_smoke_for = set(fail_smoke_for or [])
+        self.restore_fail_for = set(restore_fail_for or [])
+        self.combos = {
+            "fmo-a": ["old-a"],
+            "fmo-b": ["old-b"],
+        }
+        self.applied_record_seen_before_second_mutation = False
+
+    def post(self, path, payload, headers=None):
+        if path.startswith("/api/combos/"):
+            combo_id = path.rsplit("/", 1)[-1]
+            if combo_id == "fmo-b" and payload.get("models") != self._before_models(combo_id):
+                self.applied_record_seen_before_second_mutation = self._applied_record_exists("fmo-a")
+            if combo_id in self.restore_fail_for and payload.get("models") == self._before_models(combo_id):
+                raise RuntimeError("restore failed")
+        if path == "/v1/chat/completions":
+            combo_id = payload["model"]
+            self.calls.append((path, payload, headers))
+            passed = combo_id not in self.fail_smoke_for
+            return {"status_code": 200 if passed else 500, "content": "ok" if passed else ""}
+        return super().post(path, payload, headers)
+
+    def _applied_record_exists(self, combo_id):
+        with self.repository.database.transaction() as transaction:
+            row = transaction.execute(
+                """
+                SELECT 1
+                FROM combo_snapshots
+                WHERE omniroute_combo_id = %(combo_id)s
+                  AND phase = 'applied'
+                LIMIT 1
+                """,
+                {"combo_id": combo_id},
+            ).fetchone()
+        return row is not None
+
+    def _before_models(self, combo_id):
+        return {"fmo-a": ["old-a"], "fmo-b": ["old-b"]}[combo_id]
+
+
 class RecordingLlmRuntime:
     def __init__(self, *, quota_amount=200.0, review_diffs=None, fail=False):
         self.quota_amount = quota_amount
@@ -368,6 +412,51 @@ def seed_confirmed_llm_candidate(repository, *, model_id, intelligence_index, re
             {"endpoint_id": endpoint["id"], "status": health_status},
         )
     return endpoint
+
+
+def seed_apply_ready_diff(repository, *, role_id, combo_id, before, after_model_id):
+    endpoint = seed_confirmed_llm_candidate(
+        repository,
+        model_id=after_model_id,
+        intelligence_index=80,
+        remaining=100,
+    )
+    now = datetime.now(timezone.utc)
+    with repository.database.transaction() as transaction:
+        repository.roles.upsert(
+            transaction,
+            role_id=role_id,
+            requirements={"capabilities": []},
+            expected_load={"requests": 1},
+            criticality=1,
+        )
+        repository.probes.record(
+            transaction,
+            endpoint_id=endpoint["id"],
+            suite_version="production-v1",
+            probe_type="basic",
+            request_hash=f"{combo_id}:probe",
+            passed=True,
+            http_status=200,
+            started_at=now,
+            finished_at=now,
+            details={"suites": ["basic"], "reserved_capacity": True},
+        )
+        repository.combo_snapshots.upsert(
+            transaction,
+            role_id=role_id,
+            omniroute_combo_id=combo_id,
+            state_hash=f"{combo_id}:diff",
+            state_json={
+                "before": before,
+                "after": [str(endpoint["id"])],
+                "add": [str(endpoint["id"])],
+                "remove": before,
+            },
+            phase="diff",
+            run_id=None,
+        )
+    return str(endpoint["id"])
 
 
 @pytest.mark.spec("pipeline-orchestration::Matching writes endpoint bindings")
@@ -961,6 +1050,39 @@ def test_apply_stage_smoke_failure_rolls_back_and_maps_failures(postgres_url):
     rollback_repository = Repository(Database(postgres_url))
     rollback_result = run_composed_stage(rollback_repository, "apply", client=rollback_client)
     assert rollback_result.exit_code == 7
+
+
+@pytest.mark.spec("combo-applier::Later combo failure rolls back earlier applied combos")
+@pytest.mark.spec("combo-applier::No combo is mutated without a persisted record")
+def test_multi_combo_apply_rolls_back_earlier_combo_on_later_smoke_failure(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    seed_apply_ready_diff(repository, role_id="a", combo_id="fmo-a", before=["old-a"], after_model_id="free-a")
+    seed_apply_ready_diff(repository, role_id="b", combo_id="fmo-b", before=["old-b"], after_model_id="free-b")
+    client = MultiComboOpsClient(repository, fail_smoke_for={"fmo-b"})
+
+    result = run_composed_stage(repository, "apply", client=client)
+
+    with repository.database.transaction() as transaction:
+        applied = transaction.execute("SELECT count(*) AS total FROM combo_snapshots WHERE phase = 'applied'").fetchone()
+    assert result.exit_code == 6
+    assert client.combos["fmo-a"] == ["old-a"]
+    assert client.combos["fmo-b"] == ["old-b"]
+    assert client.applied_record_seen_before_second_mutation is True
+    assert applied["total"] == 0
+
+
+@pytest.mark.spec("combo-applier::Restore failure during partial rollback")
+def test_multi_combo_apply_reports_rollback_failed_when_earlier_restore_fails(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    seed_apply_ready_diff(repository, role_id="a", combo_id="fmo-a", before=["old-a"], after_model_id="free-a")
+    seed_apply_ready_diff(repository, role_id="b", combo_id="fmo-b", before=["old-b"], after_model_id="free-b")
+    client = MultiComboOpsClient(repository, fail_smoke_for={"fmo-b"}, restore_fail_for={"fmo-a"})
+
+    result = run_composed_stage(repository, "apply", client=client)
+
+    assert result.exit_code == 7
 
 
 @pytest.mark.spec("pipeline-orchestration::Audit persists records")
