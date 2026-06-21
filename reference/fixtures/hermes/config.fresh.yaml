@@ -1,0 +1,6 @@
+model: ""
+provider: omniroute
+auxiliary:
+  vision:
+    provider: omniroute
+    model: fmo-gemini-flash

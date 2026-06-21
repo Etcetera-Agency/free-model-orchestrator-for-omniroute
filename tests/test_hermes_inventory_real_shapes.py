@@ -29,6 +29,7 @@ from fmo.hermes_inventory import (
     parse_cron_jobs,
     parse_profiles,
     parse_webhook_subscriptions,
+    read_profile_slots,
     read_hermes_command_sources,
     read_hermes_home,
     read_hermes_http_sources,
@@ -50,6 +51,22 @@ def _build_state_db(path):
     )
     conn.commit()
     return conn
+
+
+def _profiles_with_config_paths(tmp_path):
+    payload = load_hermes_fixture("profiles.json")
+    home = tmp_path / "hermes"
+    default_dir = home
+    research_dir = home / "profiles" / "research"
+    default_dir.mkdir(parents=True)
+    research_dir.mkdir(parents=True)
+    (default_dir / "config.yaml").write_text(hermes_fixture_path("config.default.yaml").read_text())
+    (research_dir / "config.yaml").write_text(hermes_fixture_path("config.research.yaml").read_text())
+    payload["profiles"][0]["path"] = str(default_dir)
+    payload["profiles"][1]["path"] = str(research_dir)
+    payload["profiles"][0]["model"] = "stale-summary-combo"
+    payload["profiles"][1]["model"] = "stale-research-summary"
+    return payload
 
 
 @pytest.mark.spec("hermes-inventory::Real cron job schedule mapped")
@@ -89,8 +106,9 @@ def test_parse_webhook_subscriptions_maps_real_routes():
 
 
 @pytest.mark.spec("hermes-inventory::Profile gateway state selects consumer type")
-def test_parse_profiles_distinguishes_service_from_agent_profile():
-    payload = load_hermes_fixture("profiles.json")
+@pytest.mark.spec("hermes-inventory::Model slots are read from per-profile config")
+def test_parse_profiles_distinguishes_service_from_agent_profile(tmp_path):
+    payload = _profiles_with_config_paths(tmp_path)
 
     consumers = parse_profiles(payload)
 
@@ -101,6 +119,40 @@ def test_parse_profiles_distinguishes_service_from_agent_profile():
     assert by_consumer["default"].role_id == "chat-combo"
     assert by_consumer["research"].consumer_type == "agent_profile"
     assert by_consumer["research"].cadence == "manual"
+    assert by_consumer["research"].role_id == "research-combo"
+
+
+@pytest.mark.spec("hermes-inventory::Auxiliary slots are absent from the profile list")
+def test_read_profile_slots_carries_raw_auxiliary_from_config(tmp_path):
+    payload = _profiles_with_config_paths(tmp_path)
+
+    slots = read_profile_slots(payload["profiles"][1])
+
+    assert slots.name == "research"
+    assert slots.main_combo == "research-combo"
+    assert slots.auxiliary == {
+        "vision": {"provider": "omniroute", "model": "fmo-gemini-flash"},
+        "compression": {"provider": "auto", "model": ""},
+    }
+
+
+@pytest.mark.spec("hermes-inventory::Unconfigured profile model is tolerated")
+def test_read_profile_slots_tolerates_empty_string_model(tmp_path):
+    profile_dir = tmp_path / "hermes" / "profiles" / "fresh"
+    profile_dir.mkdir(parents=True)
+    (profile_dir / "config.yaml").write_text(hermes_fixture_path("config.fresh.yaml").read_text())
+
+    slots = read_profile_slots(
+        {
+            "name": "fresh",
+            "path": str(profile_dir),
+            "gateway_running": False,
+            "model": "stale-summary-combo",
+        }
+    )
+
+    assert slots.main_combo is None
+    assert slots.auxiliary == {"vision": {"provider": "omniroute", "model": "fmo-gemini-flash"}}
 
 
 @pytest.mark.spec("hermes-inventory::Observed calls_per_run from state.db")
@@ -124,7 +176,7 @@ def test_build_hermes_inventory_records_all_four_consumer_types_with_observed_de
         inventory = build_hermes_inventory(
             cron_jobs=load_hermes_fixture("cron_jobs.json"),
             webhook_subscriptions=load_hermes_fixture("webhook_subscriptions.json"),
-            profiles=load_hermes_fixture("profiles.json"),
+            profiles=_profiles_with_config_paths(tmp_path),
             session_connection=conn,
         )
     finally:
@@ -147,7 +199,7 @@ def test_read_hermes_home_reads_real_directory_layout(tmp_path):
     (home / "config.yaml").write_text(hermes_fixture_path("gateway_config.yaml").read_text())
     research_profile = home / "profiles" / "research"
     research_profile.mkdir(parents=True)
-    (research_profile / "config.yaml").write_text("model: research-combo\nprovider: omniroute\n")
+    (research_profile / "config.yaml").write_text(hermes_fixture_path("config.research.yaml").read_text())
     _build_state_db(home / "state.db").close()
 
     inventory = read_hermes_home(home)
@@ -215,9 +267,11 @@ def test_live_profile_enumeration_scans_profile_dirs_and_config_models(tmp_path)
     home = tmp_path / "hermes"
     (home / "profiles" / "research").mkdir(parents=True)
     (home / "profiles" / "ops").mkdir(parents=True)
-    (home / "config.yaml").write_text("model: chat-combo\nprovider: omniroute\n")
-    (home / "profiles" / "research" / "config.yaml").write_text("model: research-combo\nprovider: omniroute\n")
-    (home / "profiles" / "ops" / "config.yaml").write_text("model: ops-combo\nprovider: omniroute\n")
+    (home / "config.yaml").write_text(hermes_fixture_path("config.default.yaml").read_text())
+    (home / "profiles" / "research" / "config.yaml").write_text(hermes_fixture_path("config.research.yaml").read_text())
+    (home / "profiles" / "ops" / "config.yaml").write_text(
+        "model:\n  provider: omniroute\n  default: ops-combo\nprovider: omniroute\n"
+    )
 
     profiles = enumerate_live_profiles(home)
     consumers = parse_profiles(profiles)
