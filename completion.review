@@ -94,6 +94,11 @@
   a limit hint during triggered full recalc, and deactivates lost-free models so
   rebalance drops them while provider-model rows remain additive. Focused review
   added the probe/quota safety stages to rebalance tests before apply.
+- New confirmed-free provider models are now additively registered in OmniRoute
+  through `POST /api/provider-models` only when their provider has an existing
+  connection and no endpoint already exists; paid, unreachable, and already-known
+  models are skipped, and an integration test covers registered models flowing
+  through scan, matching, quota, probe, scoring, and combo rebalance.
 - Multi-combo apply now persists each successful `applied` snapshot before
   moving to the next combo, restores the failed combo plus all earlier applied
   combos on later smoke failure, cleans rolled-back applied snapshots, and

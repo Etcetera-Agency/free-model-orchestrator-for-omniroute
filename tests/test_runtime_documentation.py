@@ -7,13 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 # Active proposal slices awaiting TDD implementation. Each entry is dropped from
 # tests/spec_coverage_pending.txt (and here) when its test lands. Slices are
 # listed in openspec/TODO.md and openspec/changes/<id>/.
-EXPECTED_ACTIVE_PENDING = {
-    # register-new-free-models-in-omniroute
-    "model-registration::New free model under a connection is registered",
-    "model-registration::Registration is idempotent and additive",
-    "model-registration::Model outside our connections is skipped",
-    "system-architecture::Registration is the only added write",
-}
+EXPECTED_ACTIVE_PENDING = set()
 
 
 @pytest.mark.spec("runtime-documentation::Active docs state")

@@ -34,6 +34,7 @@ from fmo.hermes_inventory import (
 from fmo.llm_runtime import LlmProviderConfig, SharedInstructorRuntime, build_instructor_runtime
 from fmo.matcher import match_model
 from fmo.metadata_sync import sync_external_metadata
+from fmo.model_registration import register_new_free_models
 from fmo.omniroute import OmniRouteClient, OmniRouteRequestError
 from fmo.persistence import Database, Repository
 from fmo.pipeline import CANONICAL_STAGE_NAMES, PipelineContext, PipelineRunner, PipelineRunResult, Stage, StageResult
@@ -118,6 +119,8 @@ def _free_candidate_stage(dependencies: StageDependencies, adapters: StageAdapte
         try:
             if command in {"sync-free-registry", "full"}:
                 outcome = adapters.registry_sync(dependencies.omniroute_client)
+                if dependencies.omniroute_client is not None:
+                    register_new_free_models(context.repository, dependencies.omniroute_client, outcome.free_models_payload)
                 persist_free_registry_outcome(context.repository, outcome)
             if command in {"scan-providers", "full"}:
                 scanner = CatalogScanner(context.repository)

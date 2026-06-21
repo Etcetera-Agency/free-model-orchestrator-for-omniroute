@@ -5,9 +5,3 @@
 #
 # Active proposal slices awaiting TDD implementation (see openspec/TODO.md and
 # openspec/changes/<id>/). Each line is dropped when its test lands.
-
-# register-new-free-models-in-omniroute
-model-registration::New free model under a connection is registered
-model-registration::Registration is idempotent and additive
-model-registration::Model outside our connections is skipped
-system-architecture::Registration is the only added write
