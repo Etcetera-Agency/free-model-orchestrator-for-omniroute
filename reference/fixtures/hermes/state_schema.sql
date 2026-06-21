@@ -1,4 +1,4 @@
--- Subset of NousResearch/hermes-agent hermes_state.py @ tag v2026.6.5.
+-- Subset of NousResearch/hermes-agent hermes_state.py @ tag v2026.6.19.
 -- The `sessions` table is the runtime-observation source used to derive
 -- observed calls_per_run / token averages per role (model). Copied verbatim so
 -- the real column set and types are exercised, not a hand-fabricated schema.

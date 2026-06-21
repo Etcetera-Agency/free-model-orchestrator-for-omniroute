@@ -141,7 +141,7 @@ def _normalize(payload: dict) -> Inventory:
 # ---------------------------------------------------------------------------
 # Real Hermes source surfaces
 #
-# Shapes below mirror NousResearch/hermes-agent @ tag v2026.6.5 exactly:
+# Shapes below mirror NousResearch/hermes-agent @ tag v2026.6.19 exactly:
 #   - cron jobs:    ~/.hermes/cron/jobs.json -> {"jobs": [<job>], "updated_at"}
 #                   each job: cron/jobs.py:create_job (schedule = parse_schedule)
 #   - webhooks:     ~/.hermes/webhook_subscriptions.json -> {"<route>": <route>}

@@ -1,6 +1,6 @@
 """Ingest real Hermes source shapes into the inventory.
 
-Every fixture mirrors NousResearch/hermes-agent @ tag v2026.6.5 exactly:
+Every fixture mirrors NousResearch/hermes-agent @ tag v2026.6.19 exactly:
   - ``cron_jobs.json``             -> ``cron/jobs.py`` ``{"jobs": [...]}``
   - ``webhook_subscriptions.json`` -> ``hermes_cli/webhook.py`` route records
   - ``profiles.json``              -> ``hermes_cli/profiles.py`` ProfileInfo

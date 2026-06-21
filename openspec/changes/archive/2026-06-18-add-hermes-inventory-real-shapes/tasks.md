@@ -1,6 +1,6 @@
 ## 1. Real Hermes source shapes
 
-- [x] 1.1 Study NousResearch/hermes-agent @ v2026.6.5 for the real cron job,
+- [x] 1.1 Study NousResearch/hermes-agent @ v2026.6.19 for the real cron job,
   webhook subscription, profile and `state.db` sessions shapes.
 - [x] 1.2 Record fixtures under `reference/fixtures/hermes/` from those shapes.
 
