@@ -8,14 +8,6 @@ ROOT = Path(__file__).resolve().parents[1]
 # tests/spec_coverage_pending.txt (and here) when its test lands. Slices are
 # listed in openspec/TODO.md and openspec/changes/<id>/.
 EXPECTED_ACTIVE_PENDING = {
-    # add-profile-combo-normalization
-    "profile-normalization::Raw slot maps to combo with same canonical model",
-    "profile-normalization::Missing combo falls back to default profile combo",
-    "profile-normalization::Conforming and auto slots are untouched",
-    "profile-normalization::Dry-run writes nothing and backs up config",
-    "profile-normalization::Apply backs up before atomic rewrite",
-    "cli-and-operations::Normalize command dispatches to normalization",
-    "cli-and-operations::Normalize dry-run reports without writing",
     # trigger-quota-recalc-on-free-model-changes
     "quota-research::No new free model skips quota research",
     "quota-research::Recalc re-searches all on new free model",

@@ -12,6 +12,7 @@ from fmo.metadata_sync import sync_external_metadata
 from fmo.omniroute import OmniRouteClient
 from fmo.persistence import Database, Repository
 from fmo.pipeline import CANONICAL_STAGE_NAMES, PipelineRunner, PipelineRunResult, Stage
+from fmo.profile_normalization import ProfileNormalizationResult, normalize_profiles as normalize_profile_configs
 from fmo.scheduler import Scheduler
 from fmo.composition_contracts import RuntimeCliResult
 from fmo.composition_stages import (
@@ -25,6 +26,7 @@ from fmo.composition_stages import (
     _metadata_stage,
     _omniroute_instance_id,
     _production_stage_adapters,
+    _read_current_combos,
     _rollback_stage,
     _scan_catalogs,
 )
@@ -95,6 +97,22 @@ class ComposedRuntime:
 
     def run_aa_index(self, command: str, _args: argparse.Namespace) -> RuntimeCliResult:
         return _run_aa_index_command(self.repository, self.llm_runtime, self.config, command)
+
+    def normalize_profiles(self, args: argparse.Namespace) -> RuntimeCliResult:
+        if not self.config.hermes_home:
+            return RuntimeCliResult(exit_code=3, changed=False, error_reason="hermes_home_required")
+        # AICODE-NOTE: profile normalization never creates combos; live combos
+        # are only lookup targets for raw/missing Hermes slots.
+        result = normalize_profile_configs(
+            self.config.hermes_home,
+            current_combos=_read_current_combos(self.omniroute_client),
+            dry_run=getattr(args, "dry_run", False),
+        )
+        return RuntimeCliResult(
+            exit_code=result.exit_code,
+            changed=result.changed,
+            output=_profile_normalization_output(result),
+        )
 
 
 def compose_runtime(
@@ -202,6 +220,14 @@ def _cli_result(result: PipelineRunResult) -> RuntimeCliResult:
         combo_test_called=any(bool(stage["details"].get("combo_test_called")) for stage in result.stage_results),
         error_reason=failing_stage.get("reason") if failing_stage else None,
     )
+
+
+def _profile_normalization_output(result: ProfileNormalizationResult) -> str:
+    lines = [
+        f"{rewrite.config_path}:{rewrite.slot}:{rewrite.old}->{rewrite.new}"
+        for rewrite in result.rewrites
+    ]
+    return "\n".join(lines)
 
 
 def _latest_endpoint_rejection(transaction, endpoint_id: str) -> str | None:
