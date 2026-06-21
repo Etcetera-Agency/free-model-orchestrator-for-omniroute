@@ -255,15 +255,24 @@ def parse_profiles(payload: Any, *, demand_by_role: dict[str, float] | None = No
     consumers = []
     for profile in profiles:
         slots = _profile_slots_from_record(profile)
-        role = _combo_role(slots.main_combo)
         is_service = bool(profile.get("gateway_running"))
-        consumers.append(
-            Consumer(
-                role_id=role,
-                consumer_type="service" if is_service else "agent_profile",
-                consumer=profile["name"],
-                cadence="continuous" if is_service else "manual",
-                calls_per_run=demand_by_role.get(role, BOOTSTRAP_CALLS_PER_RUN),
+        if slots.main_combo is not None:
+            role = _combo_role(slots.main_combo)
+            consumers.append(
+                Consumer(
+                    role_id=role,
+                    consumer_type="service" if is_service else "agent_profile",
+                    consumer=profile["name"],
+                    cadence="continuous" if is_service else "manual",
+                    calls_per_run=demand_by_role.get(role, BOOTSTRAP_CALLS_PER_RUN),
+                )
+            )
+        consumers.extend(
+            _auxiliary_consumers(
+                owner=profile["name"],
+                main_combo=slots.main_combo,
+                auxiliary=slots.auxiliary,
+                demand_by_role=demand_by_role,
             )
         )
     return consumers
@@ -283,6 +292,7 @@ def parse_gateway_services(payload: Any, *, demand_by_role: dict[str, float] | N
     default_model = _combo_role(config.get("model"))
     platforms = (config.get("gateway") or {}).get("platforms") or {}
     consumers = []
+    gateway_auxiliary = _auxiliary_mapping(config.get("auxiliary"))
     for name, platform in sorted(platforms.items()):
         if not platform.get("enabled"):
             continue
@@ -296,7 +306,56 @@ def parse_gateway_services(payload: Any, *, demand_by_role: dict[str, float] | N
                 calls_per_run=demand_by_role.get(role, BOOTSTRAP_CALLS_PER_RUN),
             )
         )
+        auxiliary = {**gateway_auxiliary, **_auxiliary_mapping(platform.get("auxiliary"))}
+        consumers.extend(
+            _auxiliary_consumers(
+                owner=f"gateway:{name}",
+                main_combo=role,
+                auxiliary=auxiliary,
+                demand_by_role=demand_by_role,
+            )
+        )
     return consumers
+
+
+def _auxiliary_consumers(
+    *,
+    owner: str,
+    main_combo: str | None,
+    auxiliary: dict[str, Any],
+    demand_by_role: dict[str, float],
+) -> list[Consumer]:
+    consumers = []
+    for slot, config in sorted(auxiliary.items()):
+        combo = _resolved_aux_combo(config, main_combo)
+        if combo is None:
+            continue
+        role = _combo_role(combo)
+        consumers.append(
+            Consumer(
+                role_id=role,
+                consumer_type="auxiliary",
+                consumer=f"{owner}:{slot}",
+                cadence="auxiliary",
+                calls_per_run=demand_by_role.get(role, BOOTSTRAP_CALLS_PER_RUN),
+            )
+        )
+    return consumers
+
+
+def _resolved_aux_combo(config: Any, main_combo: str | None) -> str | None:
+    if not isinstance(config, dict):
+        return None
+    if str(config.get("provider") or "").lower() == "auto":
+        return None
+    model = config.get("model")
+    if not model or model == main_combo:
+        return None
+    return str(model)
+
+
+def _auxiliary_mapping(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
 
 
 def build_hermes_inventory(

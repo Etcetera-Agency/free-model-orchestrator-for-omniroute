@@ -79,6 +79,8 @@
 - Apply now rebalances only live `fmo-` combos from the OmniRoute combo set,
   skips absent desired combos as `unmanaged_combo`, and removes the unwired
   unknown-role immediate inventory trigger.
+- Hermes inventory now emits non-auto profile and gateway auxiliary model slots
+  as `auxiliary` consumers, and shared-combo demand sums those slot consumers.
 - Multi-combo apply now persists each successful `applied` snapshot before
   moving to the next combo, restores the failed combo plus all earlier applied
   combos on later smoke failure, cleans rolled-back applied snapshots, and

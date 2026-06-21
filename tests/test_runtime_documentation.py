@@ -8,11 +8,6 @@ ROOT = Path(__file__).resolve().parents[1]
 # tests/spec_coverage_pending.txt (and here) when its test lands. Slices are
 # listed in openspec/TODO.md and openspec/changes/<id>/.
 EXPECTED_ACTIVE_PENDING = {
-    # add-auxiliary-slot-consumers
-    "hermes-inventory::Auxiliary override becomes a consumer",
-    "hermes-inventory::Auto auxiliary slot is not a separate consumer",
-    "hermes-inventory::Gateway auxiliary overrides are consumers",
-    "demand-forecast::Shared combo sums demand across slots",
     # add-forecast-driven-quality-band
     "quality-gate::Endpoint above the band is excluded",
     "quality-gate::Band bounds are set once from the seed anchor",

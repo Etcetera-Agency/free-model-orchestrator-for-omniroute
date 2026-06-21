@@ -13,16 +13,16 @@ Write each test first (red) → green → refactor. Recorded real Hermes shapes
 
 ## Tasks
 
-- [ ] 1. TEST: a profile with `auxiliary.vision = {provider: omniroute, model:
+- [x] 1. TEST: a profile with `auxiliary.vision = {provider: omniroute, model:
   fmo-…}` emits an `auxiliary` consumer keyed `"{profile}:vision"` for that combo
   → implement auxiliary consumer emission in `parse_profiles`.
-- [ ] 2. TEST: a slot with `provider: auto` or empty `model` emits **no**
+- [x] 2. TEST: a slot with `provider: auto` or empty `model` emits **no**
   separate consumer (covered by the main combo) → implement the auto/empty skip.
-- [ ] 3. TEST: a gateway-config top-level (or per-platform) `auxiliary` override
+- [x] 3. TEST: a gateway-config top-level (or per-platform) `auxiliary` override
   emits an `auxiliary` consumer keyed `"gateway:…:slot"` →
   extend `parse_gateway_services`.
-- [ ] 4. TEST: two slots in different profiles pointing at one combo produce a
+- [x] 4. TEST: two slots in different profiles pointing at one combo produce a
   summed protected demand for that combo → verify through `aggregate_demand`.
-- [ ] 5. Bind tests with `@pytest.mark.spec("...")`, drop matching lines from
+- [x] 5. Bind tests with `@pytest.mark.spec("...")`, drop matching lines from
   `tests/spec_coverage_pending.txt`, run full `pytest` and
   `openspec validate add-auxiliary-slot-consumers --strict`.

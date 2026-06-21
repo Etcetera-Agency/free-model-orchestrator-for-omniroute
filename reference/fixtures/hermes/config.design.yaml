@@ -1,0 +1,13 @@
+model:
+  provider: omniroute
+  default: design-combo
+  base_url: ""
+  api_mode: chat_completions
+provider: omniroute
+auxiliary:
+  vision:
+    provider: omniroute
+    model: fmo-gemini-flash
+  compression:
+    provider: auto
+    model: ""
