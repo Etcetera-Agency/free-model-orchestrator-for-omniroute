@@ -8,14 +8,6 @@ ROOT = Path(__file__).resolve().parents[1]
 # tests/spec_coverage_pending.txt (and here) when its test lands. Slices are
 # listed in openspec/TODO.md and openspec/changes/<id>/.
 EXPECTED_ACTIVE_PENDING = {
-    # trigger-quota-recalc-on-free-model-changes
-    "quota-research::No new free model skips quota research",
-    "quota-research::Recalc re-searches all on new free model",
-    "quota-research::New model outside our connections does not trigger",
-    "quota-research::Changed free status triggers recalc",
-    "pipeline-orchestration::Quota research is triggered by new free models",
-    "pipeline-orchestration::No new free model leaves quota research skipped",
-    "pipeline-orchestration::Lost-free-status model is dropped on rebalance",
     # register-new-free-models-in-omniroute
     "model-registration::New free model under a connection is registered",
     "model-registration::Registration is idempotent and additive",

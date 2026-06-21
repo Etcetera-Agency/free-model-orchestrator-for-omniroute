@@ -389,6 +389,61 @@ def seed_endpoint(repository, *, model_id="free-chat"):
     return endpoint
 
 
+def seed_free_registry_snapshot(repository, *, models, created_at):
+    payload = {
+        "free_models": {
+            "models": [
+                {"provider": provider, "modelId": model_id, "freeType": "free"}
+                for provider, model_id in models
+            ]
+        },
+        "rankings": {"providers": []},
+    }
+    with repository.database.transaction() as transaction:
+        transaction.execute(
+            """
+            INSERT INTO free_provider_registry_snapshots (
+              free_models_hash, rankings_hashes, raw_json, created_at
+            )
+            VALUES (
+              %(hash)s, '{}'::jsonb, %(payload)s, %(created_at)s
+            )
+            """,
+            {
+                "hash": f"{created_at.isoformat()}:{models}",
+                "payload": Jsonb(payload),
+                "created_at": created_at,
+            },
+        )
+        for provider, model_id in models:
+            transaction.execute(
+                """
+                INSERT INTO free_model_definitions (
+                  provider_id, provider_model_id, free_type, omniroute_pool_key,
+                  source_snapshot_id, status, last_seen_at
+                )
+                SELECT %(provider)s, %(model_id)s, 'free', %(pool_key)s,
+                       id, 'active', %(created_at)s
+                FROM free_provider_registry_snapshots
+                WHERE free_models_hash = %(hash)s
+                ON CONFLICT (provider_id, provider_model_id)
+                DO UPDATE SET
+                  free_type = EXCLUDED.free_type,
+                  omniroute_pool_key = EXCLUDED.omniroute_pool_key,
+                  source_snapshot_id = EXCLUDED.source_snapshot_id,
+                  status = EXCLUDED.status,
+                  last_seen_at = EXCLUDED.last_seen_at
+                """,
+                {
+                    "provider": provider,
+                    "model_id": model_id,
+                    "pool_key": f"{provider}:{model_id}",
+                    "hash": f"{created_at.isoformat()}:{models}",
+                    "created_at": created_at,
+                },
+            )
+
+
 def run_composed_stage(repository, stage_name, *, client=None):
     dependencies = StageDependencies(repository=repository, omniroute_client=client or PipelineOpsClient())
     stages = build_canonical_stages(dependencies=dependencies, metadata_sync=lambda **_kwargs: None)
@@ -420,6 +475,21 @@ def run_runtime_command(repository, client, command, **args):
     }
     values.update(args)
     return runtime.run_command(command, argparse.Namespace(**values))
+
+
+def run_rebalance_stages(repository, client):
+    stage_names = [
+        "quota-research",
+        "access-classification",
+        "probing",
+        "telemetry-sync",
+        "quota-sync",
+        "role-scoring",
+        "allocation",
+        "diff",
+        "apply",
+    ]
+    return [run_composed_stage(repository, stage_name, client=client) for stage_name in stage_names]
 
 
 def _command_for_stage(stage_name):
@@ -713,6 +783,162 @@ def test_quota_research_missing_external_payload_fails_closed(postgres_url):
     assert result.exit_code == 4
     assert result.status == "external_dependency_failed"
     assert result.stage_results[0]["reason"] == "missing_amount"
+
+
+@pytest.mark.spec("quota-research::No new free model skips quota research")
+@pytest.mark.spec("pipeline-orchestration::No new free model leaves quota research skipped")
+def test_quota_research_skips_when_free_registry_snapshot_is_unchanged(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    seed_endpoint(repository)
+    run_composed_stage(repository, "model-matching")
+    now = datetime.now(timezone.utc)
+    seed_free_registry_snapshot(repository, models=[("provider-a", "free-chat")], created_at=now - timedelta(days=1))
+    seed_free_registry_snapshot(repository, models=[("provider-a", "free-chat")], created_at=now)
+    client = PipelineOpsClient()
+
+    result = run_composed_stage(repository, "quota-research", client=client)
+
+    assert result.exit_code == 0
+    assert result.stage_results[0]["details"]["effect"] == "idempotent_no_change"
+    assert result.stage_results[0]["details"]["reason"] == "no_free_model_change"
+    assert not [call for call in client.calls if call[0] == "/v1/search"]
+
+
+@pytest.mark.spec("quota-research::Recalc re-searches all on new free model")
+@pytest.mark.spec("pipeline-orchestration::Quota research is triggered by new free models")
+def test_new_reachable_free_model_triggers_full_recalc_and_uses_quota_total_hint(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    seed_endpoint(repository, model_id="free-chat")
+    seed_endpoint(repository, model_id="new-free")
+    run_composed_stage(repository, "model-matching")
+    now = datetime.now(timezone.utc)
+    seed_free_registry_snapshot(repository, models=[("provider-a", "free-chat")], created_at=now - timedelta(days=1))
+    seed_free_registry_snapshot(
+        repository,
+        models=[("provider-a", "free-chat"), ("provider-a", "new-free")],
+        created_at=now,
+    )
+    client = PipelineOpsClient()
+    llm_runtime = RecordingLlmRuntime(quota_amount=50.0)
+    dependencies = StageDependencies(repository=repository, omniroute_client=client, llm_runtime=llm_runtime)
+
+    result = run_composed_stage_with_dependencies(repository, "quota-research", dependencies)
+
+    with repository.database.transaction() as transaction:
+        rule_rows = transaction.execute("SELECT limits FROM quota_rules ORDER BY model_pattern").fetchall()
+    assert result.exit_code == 0
+    assert [call[0] for call in client.calls if call[0] == "/v1/search"] == ["/v1/search", "/v1/search"]
+    assert [row["limits"]["requests"] for row in rule_rows] == [50.0, 50.0]
+
+
+@pytest.mark.spec("quota-research::New model outside our connections does not trigger")
+def test_new_free_model_outside_our_connections_does_not_trigger_recalc(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    seed_endpoint(repository)
+    run_composed_stage(repository, "model-matching")
+    now = datetime.now(timezone.utc)
+    seed_free_registry_snapshot(repository, models=[("provider-a", "free-chat")], created_at=now - timedelta(days=1))
+    seed_free_registry_snapshot(
+        repository,
+        models=[("provider-a", "free-chat"), ("provider-b", "outside-free")],
+        created_at=now,
+    )
+    client = PipelineOpsClient()
+
+    result = run_composed_stage(repository, "quota-research", client=client)
+
+    assert result.exit_code == 0
+    assert result.stage_results[0]["details"]["effect"] == "idempotent_no_change"
+    assert not [call for call in client.calls if call[0] == "/v1/search"]
+
+
+@pytest.mark.spec("quota-research::Changed free status triggers recalc")
+def test_changed_free_status_triggers_recalc_and_deactivates_lost_free_rule(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    seed_endpoint(repository, model_id="lost-free")
+    run_composed_stage(repository, "model-matching")
+    now = datetime.now(timezone.utc)
+    seed_free_registry_snapshot(repository, models=[("provider-a", "lost-free")], created_at=now - timedelta(days=1))
+    seed_free_registry_snapshot(repository, models=[], created_at=now)
+    client = PipelineOpsClient()
+
+    result = run_composed_stage(repository, "quota-research", client=client)
+
+    with repository.database.transaction() as transaction:
+        rule = transaction.execute("SELECT status FROM quota_rules WHERE model_pattern = 'lost-free'").fetchone()
+        endpoint = transaction.execute("SELECT access_status FROM provider_endpoints WHERE provider_model_id = 'lost-free'").fetchone()
+        definition = transaction.execute("SELECT status FROM free_model_definitions WHERE provider_model_id = 'lost-free'").fetchone()
+    assert result.exit_code == 0
+    assert [call[0] for call in client.calls if call[0] == "/v1/search"] == ["/v1/search"]
+    assert rule["status"] == "inactive"
+    assert endpoint["access_status"] == "rejected"
+    assert definition["status"] == "inactive"
+
+
+@pytest.mark.spec("pipeline-orchestration::Lost-free-status model is dropped on rebalance")
+def test_lost_free_model_is_removed_from_existing_combo_on_rebalance(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    lost = seed_confirmed_llm_candidate(repository, model_id="lost-free", intelligence_index=70)
+    kept = seed_confirmed_llm_candidate(repository, model_id="still-free", intelligence_index=75)
+    with repository.database.transaction() as transaction:
+        repository.roles.upsert(
+            transaction,
+            role_id="routing_fast",
+            requirements={"capabilities": []},
+            expected_load={"requests": 1},
+            criticality=1,
+        )
+    now = datetime.now(timezone.utc)
+    seed_free_registry_snapshot(
+        repository,
+        models=[("provider-a", "lost-free"), ("provider-a", "still-free")],
+        created_at=now - timedelta(days=1),
+    )
+    seed_free_registry_snapshot(repository, models=[("provider-a", "still-free")], created_at=now)
+    client = PipelineOpsClient()
+    client.combos = {"fmo-routing_fast": [str(lost["id"]), str(kept["id"])]}
+
+    results = run_rebalance_stages(repository, client)
+
+    assert [result.exit_code for result in results] == [0] * 9
+    assert client.combos["fmo-routing_fast"] == [str(kept["id"])]
+    assert not client.deleted_paths
+
+
+@pytest.mark.spec("pipeline-orchestration::Quota research is triggered by new free models")
+def test_gained_free_model_is_added_to_existing_combo_on_rebalance(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    old = seed_confirmed_llm_candidate(repository, model_id="old-free", intelligence_index=70)
+    new = seed_confirmed_llm_candidate(repository, model_id="new-free", intelligence_index=70)
+    with repository.database.transaction() as transaction:
+        repository.roles.upsert(
+            transaction,
+            role_id="routing_fast",
+            requirements={"capabilities": []},
+            expected_load={"requests": 1},
+            criticality=1,
+        )
+    now = datetime.now(timezone.utc)
+    seed_free_registry_snapshot(repository, models=[("provider-a", "old-free")], created_at=now - timedelta(days=1))
+    seed_free_registry_snapshot(
+        repository,
+        models=[("provider-a", "old-free"), ("provider-a", "new-free")],
+        created_at=now,
+    )
+    client = PipelineOpsClient()
+    client.combos = {"fmo-routing_fast": [str(old["id"])]}
+
+    results = run_rebalance_stages(repository, client)
+
+    assert [result.exit_code for result in results] == [0] * 9
+    assert set(client.combos["fmo-routing_fast"]) == {str(old["id"]), str(new["id"])}
+    assert not client.deleted_paths
 
 
 @pytest.mark.spec("pipeline-orchestration::Full run calls production adapters")

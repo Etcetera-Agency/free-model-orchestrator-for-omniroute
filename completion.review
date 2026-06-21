@@ -89,6 +89,11 @@
   supports dry-run reporting, backs up configs before atomic writes, and is
   exposed through `normalize-profiles`; focused review fixed nested gateway
   auxiliary slot writes before commit.
+- Quota research now runs only on reachable free-model changes, skips unchanged
+  free-registry snapshots without `/v1/search`, uses OmniRoute `quotaTotal` as
+  a limit hint during triggered full recalc, and deactivates lost-free models so
+  rebalance drops them while provider-model rows remain additive. Focused review
+  added the probe/quota safety stages to rebalance tests before apply.
 - Multi-combo apply now persists each successful `applied` snapshot before
   moving to the next combo, restores the failed combo plus all earlier applied
   combos on later smoke failure, cleans rolled-back applied snapshots, and

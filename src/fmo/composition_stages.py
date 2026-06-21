@@ -80,6 +80,17 @@ class StageAdapters:
     openai_client_factory: Any | None = None
 
 
+@dataclass(frozen=True)
+class FreeModelChanges:
+    gained: set[tuple[str, str]]
+    lost: set[tuple[str, str]]
+    known: bool = True
+
+    @property
+    def triggered(self) -> bool:
+        return not self.known or bool(self.gained or self.lost)
+
+
 def _metadata_stage(sync: MetadataSync) -> Callable[[PipelineContext], StageResult]:
     def run(context: PipelineContext) -> StageResult:
         try:
@@ -354,10 +365,13 @@ def _quota_research_stage(dependencies: StageDependencies, context: PipelineCont
     if dependencies.omniroute_client is None:
         return StageResult(status="external_dependency_failed", reason="omniroute_client_required")
     with context.repository.database.transaction() as transaction:
+        changes = _detect_free_model_changes(transaction, dependencies.omniroute_client)
+        if not changes.triggered:
+            return _quota_research_skipped_result()
         endpoints = transaction.execute(
             """
-            SELECT pe.id, pe.provider_model_id, pa.id AS account_id, p.id AS provider_id,
-                   p.omniroute_provider_id
+            SELECT pe.id, pe.provider_model_id, pa.id AS account_id,
+                   pa.omniroute_connection_id, p.id AS provider_id, p.omniroute_provider_id
             FROM provider_endpoints pe
             JOIN provider_accounts pa ON pa.id = pe.provider_account_id
             JOIN providers p ON p.id = pa.provider_id
@@ -365,6 +379,7 @@ def _quota_research_stage(dependencies: StageDependencies, context: PipelineCont
             ORDER BY pe.provider_model_id
             """
         ).fetchall()
+    quota_limit_hints = _quota_limit_hints(dependencies.omniroute_client)
     written = 0
     today = datetime.now(timezone.utc)
     for endpoint in endpoints:
@@ -375,6 +390,12 @@ def _quota_research_stage(dependencies: StageDependencies, context: PipelineCont
             today=today,
             summary_confidence_cap=0.70,
             instructor_call=dependencies.llm_runtime,
+            previous_limit=quota_limit_hints.get(
+                _quota_hint_key(
+                    endpoint["omniroute_provider_id"],
+                    endpoint["omniroute_connection_id"],
+                )
+            ),
         )
         if result.error is not None:
             return StageResult(status="external_dependency_failed", reason=result.error.reason)
@@ -408,7 +429,126 @@ def _quota_research_stage(dependencies: StageDependencies, context: PipelineCont
                 rule_hash=_hash_parts(str(endpoint["id"]), snapshot["content_hash"], str(rule.confidence)),
             )
         written += 1
+    if changes.lost:
+        with context.repository.database.transaction() as transaction:
+            _deactivate_lost_free_models(transaction, changes.lost)
     return _effect_result("quota-research", changed=written > 0)
+
+
+def _quota_research_skipped_result() -> StageResult:
+    return StageResult(
+        status="success",
+        changed=False,
+        idempotency_key="quota-research:production",
+        details={
+            "adapter": "quota-research",
+            "effect": "idempotent_no_change",
+            "reason": "no_free_model_change",
+        },
+    )
+
+
+def _detect_free_model_changes(transaction: Any, client: Any) -> FreeModelChanges:
+    snapshots = transaction.execute(
+        """
+        SELECT raw_json
+        FROM free_provider_registry_snapshots
+        WHERE raw_json ? 'free_models'
+        ORDER BY created_at DESC, id DESC
+        LIMIT 2
+        """
+    ).fetchall()
+    if len(snapshots) < 2:
+        return FreeModelChanges(gained=set(), lost=set(), known=False)
+    reachable = _reachable_providers(client)
+    if reachable is None:
+        return FreeModelChanges(gained=set(), lost=set(), known=False)
+    current = _free_models_from_registry_snapshot(snapshots[0]["raw_json"])
+    previous = _free_models_from_registry_snapshot(snapshots[1]["raw_json"])
+    gained = {model for model in current - previous if model[0] in reachable}
+    lost = {model for model in previous - current if model[0] in reachable}
+    return FreeModelChanges(gained=gained, lost=lost)
+
+
+def _free_models_from_registry_snapshot(raw_json: dict[str, Any]) -> set[tuple[str, str]]:
+    free_models = raw_json.get("free_models", {})
+    models = free_models.get("models", []) if isinstance(free_models, dict) else []
+    return {
+        (str(item["provider"]), str(item["modelId"]))
+        for item in models
+        if isinstance(item, dict) and item.get("provider") and item.get("modelId")
+    }
+
+
+def _reachable_providers(client: Any) -> set[str] | None:
+    try:
+        payload = client.get("/api/rate-limits")
+    except Exception:
+        return None
+    connections = payload.get("connections") if isinstance(payload, dict) else None
+    if not isinstance(connections, list):
+        return None
+    return {
+        str(connection["provider"])
+        for connection in connections
+        if isinstance(connection, dict) and connection.get("provider") and connection.get("enabled", True)
+    }
+
+
+def _quota_limit_hints(client: Any) -> dict[str, float]:
+    try:
+        snapshot = fetch_live_quota_snapshot(client)
+    except (QuotaFetchError, AttributeError, NotImplementedError):
+        return {}
+    except Exception:
+        return {}
+    return {
+        _quota_hint_key(quota.provider, quota.connection_id): quota.limit
+        for quota in snapshot.quotas.values()
+        if quota.limit is not None
+    }
+
+
+def _quota_hint_key(provider: Any, connection_id: Any) -> str:
+    return f"{provider}:{connection_id}"
+
+
+def _deactivate_lost_free_models(transaction: Any, lost_models: set[tuple[str, str]]) -> None:
+    for provider_id, model_id in lost_models:
+        # AICODE-NOTE: lost-free detection is the only path that turns quota
+        # rules inactive; provider-model rows stay additive and are not deleted.
+        transaction.execute(
+            """
+            UPDATE quota_rules qr
+            SET status = 'inactive'
+            FROM providers p
+            WHERE qr.provider_id = p.id
+              AND p.omniroute_provider_id = %(provider_id)s
+              AND qr.model_pattern = %(model_id)s
+            """,
+            {"provider_id": provider_id, "model_id": model_id},
+        )
+        transaction.execute(
+            """
+            UPDATE provider_endpoints pe
+            SET access_status = 'rejected'
+            FROM provider_accounts pa
+            JOIN providers p ON p.id = pa.provider_id
+            WHERE pe.provider_account_id = pa.id
+              AND p.omniroute_provider_id = %(provider_id)s
+              AND pe.provider_model_id = %(model_id)s
+            """,
+            {"provider_id": provider_id, "model_id": model_id},
+        )
+        transaction.execute(
+            """
+            UPDATE free_model_definitions
+            SET status = 'inactive'
+            WHERE provider_id = %(provider_id)s
+              AND provider_model_id = %(model_id)s
+            """,
+            {"provider_id": provider_id, "model_id": model_id},
+        )
 
 
 def _access_classification_stage(_dependencies: StageDependencies, context: PipelineContext) -> StageResult:
@@ -418,10 +558,14 @@ def _access_classification_stage(_dependencies: StageDependencies, context: Pipe
             SELECT DISTINCT ON (pe.id)
                    pe.id AS endpoint_id, pe.provider_account_id, pe.provider_model_id,
                    p.omniroute_provider_id, qr.id AS quota_rule_id, qr.limits,
-                   qr.reset_policy, qr.hard_stop_capable, qr.confidence
+                   qr.reset_policy, qr.hard_stop_capable, qr.confidence,
+                   fmd.status AS free_definition_status
             FROM provider_endpoints pe
             JOIN provider_accounts pa ON pa.id = pe.provider_account_id
             JOIN providers p ON p.id = pa.provider_id
+            LEFT JOIN free_model_definitions fmd
+              ON fmd.provider_id = p.omniroute_provider_id
+             AND fmd.provider_model_id = pe.provider_model_id
             LEFT JOIN quota_rules qr
               ON qr.provider_id = p.id
              AND qr.model_pattern = pe.provider_model_id
@@ -430,10 +574,22 @@ def _access_classification_stage(_dependencies: StageDependencies, context: Pipe
             ORDER BY pe.id, qr.created_at DESC NULLS LAST
             """
         ).fetchall()
-        if any(row["quota_rule_id"] is None for row in rows):
+        lost_free_rows = [
+            row
+            for row in rows
+            if row["quota_rule_id"] is None and row["free_definition_status"] == "inactive"
+        ]
+        missing_rows = [
+            row
+            for row in rows
+            if row["quota_rule_id"] is None and row["free_definition_status"] != "inactive"
+        ]
+        for row in lost_free_rows:
+            _record_lost_free_access_state(transaction, row["endpoint_id"])
+        if missing_rows:
             return StageResult(status="partial_stale", reason="quota_rule_missing")
         written = 0
-        for row in rows:
+        for row in [item for item in rows if item["quota_rule_id"] is not None]:
             limit = _quota_limit(row["limits"])
             reset_at = datetime.now(timezone.utc) + timedelta(days=1)
             evidence = {
@@ -527,6 +683,39 @@ def _access_classification_stage(_dependencies: StageDependencies, context: Pipe
             )
             written += 1
     return _effect_result("access-classification", changed=written > 0)
+
+
+def _record_lost_free_access_state(transaction: Any, endpoint_id: Any) -> None:
+    transaction.execute(
+        """
+        UPDATE provider_endpoints
+        SET access_status = 'rejected'
+        WHERE id = %(endpoint_id)s
+        """,
+        {"endpoint_id": endpoint_id},
+    )
+    transaction.execute(
+        """
+        INSERT INTO endpoint_access_states (
+          endpoint_id, status, reason_code, effective_remaining,
+          reset_at, hard_stop_capable, evidence
+        )
+        VALUES (
+          %(endpoint_id)s, 'rejected', 'lost_free_status',
+          '{}'::jsonb, NULL, false, '{"free_access": false}'::jsonb
+        )
+        ON CONFLICT (endpoint_id)
+        DO UPDATE SET
+          status = EXCLUDED.status,
+          reason_code = EXCLUDED.reason_code,
+          effective_remaining = EXCLUDED.effective_remaining,
+          reset_at = EXCLUDED.reset_at,
+          hard_stop_capable = EXCLUDED.hard_stop_capable,
+          evidence = EXCLUDED.evidence,
+          classified_at = now()
+        """,
+        {"endpoint_id": endpoint_id},
+    )
 
 
 def _probing_stage(dependencies: StageDependencies, context: PipelineContext) -> StageResult:
@@ -1187,7 +1376,7 @@ def _allocation_stage(_dependencies: StageDependencies, context: PipelineContext
             if role["id"] in recalibration_roles:
                 continue
             allocation = plan.allocations.get(role["id"])
-            role_scores = [endpoint for endpoint in endpoints if allocation is None or endpoint["id"] == allocation.endpoint_id]
+            role_scores = endpoints if allocation is not None else []
             validation = validate_plan(pool_reports or {"empty": {"usage": 0, "capacity": 0}}, role_has_primary=allocation is not None)
             targets = []
             if allocation is not None:

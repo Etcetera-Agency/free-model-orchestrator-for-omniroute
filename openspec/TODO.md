@@ -12,16 +12,7 @@ Hermes per-profile + auxiliary model slots → combos (proposed, remaining in
 requested implementation order). Slots route through OmniRoute; combos are
 created/seeded by the operator and only rebalanced by the orchestrator:
 
-1. `trigger-quota-recalc-on-free-model-changes` — gate quota-research on a
-   free-model-change trigger: (A) a new free/0-cost or free-provider model, or
-   (B) an existing model whose free/0-cost status changed (either direction),
-   both reachable via an existing connection. On trigger re-search ALL (OmniRoute
-   `quotaTotal` as input, search sets hard-stop); skip otherwise. Trigger run
-   adds gained-free models to fitting existing combos and drops lost-free ones on
-   rebalance. Brings code to the existing `quota-research` spec. Depends on
-   archived `update-combo-applier-to-rebalance-only` and
-   `add-forecast-driven-quality-band`.
-2. `register-new-free-models-in-omniroute` — register a new confirmed-free model
+1. `register-new-free-models-in-omniroute` — register a new confirmed-free model
    reachable via an existing connection in OmniRoute (`POST /api/provider-models`,
    idempotent/additive/free-only); model outside our connections is skipped (no
    recalc, no registration); never creates connections. Extends the OmniRoute
