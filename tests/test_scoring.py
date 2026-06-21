@@ -183,12 +183,18 @@ def test_context_hard_filter_unknown_override_and_no_bonus():
 
 
 @pytest.mark.spec("quality-gate::Below the gate")
+@pytest.mark.spec("quality-gate::Endpoint above the band is excluded")
 @pytest.mark.spec("quality-gate::Missing gate metric")
 @pytest.mark.spec("quality-gate::Major index change")
 def test_quality_gate_hard_prefilter_unverifiable_and_index_change():
     assert evaluate_quality_gate({"agentic_index": 30}, metric="agentic_index", value=45, index_version="v1", current_version="v1").eligible is False
+    above = evaluate_quality_gate({"intelligence_index": 75}, metric="intelligence_index", value=40, maximum_value=60, index_version="v1", current_version="v1")
+    inside = evaluate_quality_gate({"intelligence_index": 50}, metric="intelligence_index", value=40, maximum_value=60, index_version="v1", current_version="v1")
     missing = evaluate_quality_gate({}, metric="coding_index", value=10, index_version="v1", current_version="v1")
     changed = evaluate_quality_gate({"coding_index": 50}, metric="coding_index", value=10, index_version="v1", current_version="v2")
+    assert above.status == "above_band"
+    assert above.eligible is False
+    assert inside.eligible is True
     assert missing.status == "unverifiable"
     assert missing.eligible is False
     assert changed.status == "needs_recalibration"

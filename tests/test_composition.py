@@ -1267,6 +1267,102 @@ def test_role_scoring_stage_rejects_endpoint_below_quality_gate(postgres_url):
     assert score["rejection_reasons"] == ["quality_gate:below_gate"]
 
 
+@pytest.mark.spec("quality-gate::Endpoint above the band is excluded")
+def test_role_scoring_stage_rejects_endpoint_above_quality_band(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    seed_confirmed_llm_candidate(repository, model_id="too-smart", intelligence_index=75)
+    with repository.database.transaction() as transaction:
+        repository.roles.upsert(
+            transaction,
+            role_id="banded_role",
+            requirements={"capabilities": []},
+            expected_load={"requests": 1},
+            criticality=1,
+            minimum_quality_metric="intelligence_index",
+            minimum_quality_value=40,
+            maximum_quality_metric="intelligence_index",
+            maximum_quality_value=60,
+            quality_gate_index_version="4.1",
+        )
+
+    run_composed_stage(repository, "role-scoring")
+
+    with repository.database.transaction() as transaction:
+        score = transaction.execute("SELECT eligibility, rejection_reasons FROM role_scores").fetchone()
+    assert score["eligibility"] is False
+    assert score["rejection_reasons"] == ["quality_gate:above_band"]
+
+
+@pytest.mark.spec("quality-gate::Band bounds are set once from the seed anchor")
+def test_role_scoring_stage_sets_quality_band_from_single_seed_and_keeps_existing_band(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    seed = seed_confirmed_llm_candidate(repository, model_id="seed-mid", intelligence_index=60)
+    other = seed_confirmed_llm_candidate(repository, model_id="other-high", intelligence_index=80)
+    with repository.database.transaction() as transaction:
+        repository.roles.upsert(transaction, role_id="routing_fast", requirements={"capabilities": []}, expected_load={"requests": 1}, criticality=1)
+    client = PipelineOpsClient()
+    client.combos["fmo-routing_fast"] = [str(seed["id"])]
+
+    run_composed_stage(repository, "role-scoring", client=client)
+    client.combos["fmo-routing_fast"] = [str(seed["id"]), str(other["id"])]
+    with repository.database.transaction() as transaction:
+        transaction.execute("UPDATE roles SET minimum_quality_value = 55, maximum_quality_value = 65 WHERE id = 'routing_fast'")
+    run_composed_stage(repository, "role-scoring", client=client)
+
+    with repository.database.transaction() as transaction:
+        role = transaction.execute("SELECT minimum_quality_value, maximum_quality_value FROM roles WHERE id = 'routing_fast'").fetchone()
+    assert float(role["minimum_quality_value"]) == 55
+    assert float(role["maximum_quality_value"]) == 65
+
+
+@pytest.mark.spec("quality-gate::Re-seeding re-anchors the band")
+def test_role_scoring_stage_reanchors_when_combo_is_stripped_to_single_member(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    first = seed_confirmed_llm_candidate(repository, model_id="seed-low", intelligence_index=50)
+    second = seed_confirmed_llm_candidate(repository, model_id="seed-high", intelligence_index=75)
+    with repository.database.transaction() as transaction:
+        repository.roles.upsert(transaction, role_id="routing_fast", requirements={"capabilities": []}, expected_load={"requests": 1}, criticality=1)
+    client = PipelineOpsClient()
+    client.combos["fmo-routing_fast"] = [str(first["id"])]
+    run_composed_stage(repository, "role-scoring", client=client)
+    client.combos["fmo-routing_fast"] = [str(second["id"])]
+    run_composed_stage(repository, "role-scoring", client=client)
+
+    with repository.database.transaction() as transaction:
+        role = transaction.execute("SELECT minimum_quality_value, maximum_quality_value FROM roles WHERE id = 'routing_fast'").fetchone()
+    assert float(role["minimum_quality_value"]) <= 75 <= float(role["maximum_quality_value"])
+    assert float(role["minimum_quality_value"]) > 50
+
+
+@pytest.mark.spec("quality-gate::Paid seed anchors but is not a member")
+def test_paid_seed_sets_anchor_but_is_excluded_from_allocated_members(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    paid_seed = seed_confirmed_llm_candidate(repository, model_id="paid-seed", intelligence_index=70)
+    free_member = seed_confirmed_llm_candidate(repository, model_id="free-member", intelligence_index=68)
+    with repository.database.transaction() as transaction:
+        transaction.execute("UPDATE provider_endpoints SET access_status = 'paid' WHERE id = %(id)s", {"id": paid_seed["id"]})
+        transaction.execute("DELETE FROM endpoint_access_states WHERE endpoint_id = %(id)s", {"id": paid_seed["id"]})
+        repository.roles.upsert(transaction, role_id="routing_fast", requirements={"capabilities": []}, expected_load={"requests": 1}, criticality=1)
+    client = PipelineOpsClient()
+    client.combos["fmo-routing_fast"] = [str(paid_seed["id"])]
+
+    run_composed_stage(repository, "role-scoring", client=client)
+    run_composed_stage(repository, "demand-forecast", client=client)
+    run_composed_stage(repository, "allocation", client=client)
+
+    with repository.database.transaction() as transaction:
+        role = transaction.execute("SELECT minimum_quality_value, maximum_quality_value FROM roles WHERE id = 'routing_fast'").fetchone()
+        plan = transaction.execute("SELECT targets FROM allocation_plans WHERE role_id = 'routing_fast' ORDER BY created_at DESC LIMIT 1").fetchone()
+    target_ids = [target["endpoint_id"] for target in plan["targets"]]
+    assert float(role["minimum_quality_value"]) <= 70 <= float(role["maximum_quality_value"])
+    assert str(paid_seed["id"]) not in target_ids
+    assert str(free_member["id"]) in target_ids
+
+
 @pytest.mark.spec("quality-gate::Missing gate metric")
 def test_role_scoring_stage_rejects_unverifiable_quality_unless_role_allows(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))

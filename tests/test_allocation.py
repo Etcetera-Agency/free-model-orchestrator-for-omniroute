@@ -8,7 +8,7 @@ from fmo.allocation import (
 )
 from fmo.applier import ComboApplier, ComboConflict
 from fmo.audit import audit_change, rollback_run
-from fmo.forecast import aggregate_demand, apply_historical_reserve, cold_start_demand, protected_demand
+from fmo.forecast import aggregate_demand, apply_historical_reserve, cold_start_demand, protected_demand, quality_band_for_demand
 
 
 @pytest.mark.spec("demand-forecast::Multiple agents and a shared role")
@@ -53,13 +53,14 @@ def test_global_allocation_shared_capacity_and_heavy_role_separation():
 
 
 @pytest.mark.spec("allocator::Combo output")
+@pytest.mark.spec("allocator::Combo orders weakest-eligible first")
 def test_priority_combo_no_weights_oversubscription_and_degraded_modes():
     combo = build_priority_combo("research_scout", [{"id": "e1", "score": 2}, {"id": "e2", "score": 1}], per_pool_cap=2)
     blocked = validate_plan({"pool-a": {"usage": 120, "capacity": 100}})
     degraded = validate_plan({"pool-a": {"usage": 0, "capacity": 0}}, role_has_primary=False)
     assert combo.strategy == "priority"
     assert combo.weights is None
-    assert combo.endpoints == ["e1", "e2"]
+    assert combo.endpoints == ["e2", "e1"]
     assert blocked.apply is False
     assert blocked.reason == "oversubscribed"
     assert degraded.role_status == "unavailable"
@@ -99,7 +100,34 @@ def test_heavy_role_priority_combo_skips_second_primary_in_same_pool():
         per_pool_cap=2,
     )
 
-    assert combo.endpoints == ["e1", "e3"]
+    assert combo.endpoints == ["e3", "e2"]
+
+
+@pytest.mark.spec("demand-forecast::Quality band widens to cover protected demand")
+def test_quality_band_widens_until_confirmed_free_capacity_covers_demand():
+    band = quality_band_for_demand(
+        anchor=60,
+        candidates=[
+            {"quality": 60, "capacity": 10, "confirmed_free": True},
+            {"quality": 50, "capacity": 20, "confirmed_free": True},
+            {"quality": 70, "capacity": 30, "confirmed_free": True},
+            {"quality": 30, "capacity": 100, "confirmed_free": True},
+            {"quality": 65, "capacity": 100, "confirmed_free": False},
+        ],
+        protected_requests=55,
+        adequacy_floor=45,
+    )
+    degraded = quality_band_for_demand(
+        anchor=60,
+        candidates=[{"quality": 50, "capacity": 5, "confirmed_free": True}],
+        protected_requests=20,
+        adequacy_floor=45,
+    )
+
+    assert band.minimum == 50
+    assert band.maximum == 70
+    assert band.degraded is False
+    assert degraded.degraded is True
 
 
 @pytest.mark.spec("role-scorer::Unchanged inputs")

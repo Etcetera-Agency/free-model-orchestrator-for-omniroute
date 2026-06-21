@@ -13,6 +13,7 @@ def evaluate_quality_gate(
     *,
     metric: str,
     value: float,
+    maximum_value: float | None = None,
     index_version: str,
     current_version: str,
     allow_unverified: bool = False,
@@ -23,4 +24,6 @@ def evaluate_quality_gate(
         return QualityGateDecision(eligible=allow_unverified, status="unverifiable")
     if metrics[metric] < value:
         return QualityGateDecision(eligible=False, status="below_gate")
+    if maximum_value is not None and metrics[metric] > maximum_value:
+        return QualityGateDecision(eligible=False, status="above_band")
     return QualityGateDecision(eligible=True, status="passed")

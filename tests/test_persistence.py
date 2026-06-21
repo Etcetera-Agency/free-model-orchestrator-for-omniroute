@@ -227,6 +227,35 @@ def test_idempotent_repository_writes_do_not_duplicate(repository):
         assert repository.probes.count_by_request_hash(transaction, "same-key") == 1
 
 
+@pytest.mark.spec("data-model::Role carries a maximum quality bound")
+def test_role_quality_band_upper_bound_round_trips(repository):
+    with repository.database.transaction() as transaction:
+        banded = repository.roles.upsert(
+            transaction,
+            role_id="banded",
+            requirements={"capabilities": []},
+            expected_load={"requests": 1},
+            criticality=1,
+            minimum_quality_metric="intelligence_index",
+            minimum_quality_value=40,
+            maximum_quality_metric="intelligence_index",
+            maximum_quality_value=60,
+            quality_gate_index_version="4.1",
+        )
+        unbounded = repository.roles.upsert(
+            transaction,
+            role_id="unbounded",
+            requirements={"capabilities": []},
+            expected_load={"requests": 1},
+            criticality=1,
+        )
+
+    assert banded["maximum_quality_metric"] == "intelligence_index"
+    assert float(banded["maximum_quality_value"]) == 60
+    assert unbounded["maximum_quality_metric"] is None
+    assert unbounded["maximum_quality_value"] is None
+
+
 @pytest.mark.spec("persistence::Duplicate payload is one snapshot")
 @pytest.mark.spec("persistence::Duplicate payload is one snapshot")
 def test_content_hashed_snapshots_are_immutable_and_deduplicated(repository):

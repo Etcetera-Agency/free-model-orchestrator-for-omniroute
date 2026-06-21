@@ -81,6 +81,9 @@
   unknown-role immediate inventory trigger.
 - Hermes inventory now emits non-auto profile and gateway auxiliary model slots
   as `auxiliary` consumers, and shared-combo demand sums those slot consumers.
+- Quality gates now persist upper bounds, derive seed-anchored bands from live
+  combo seeds, widen bands to forecast demand, and order combo members weakest
+  eligible first.
 - Multi-combo apply now persists each successful `applied` snapshot before
   moving to the next combo, restores the failed combo plus all earlier applied
   combos on later smoke failure, cleans rolled-back applied snapshots, and

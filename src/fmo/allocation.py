@@ -54,7 +54,7 @@ def allocate_globally(roles: list[str], endpoints: list[dict], demand: dict[str,
 def build_priority_combo(role_id: str, endpoints: list[dict], *, per_pool_cap: int) -> Combo:
     ordered = []
     used_pools = set()
-    for endpoint in sorted(endpoints, key=lambda item: item["score"], reverse=True):
+    for endpoint in sorted(endpoints, key=lambda item: item["score"]):
         pool = endpoint.get("pool")
         if role_id in HEAVY_ROLES and pool is not None and pool in used_pools:
             continue

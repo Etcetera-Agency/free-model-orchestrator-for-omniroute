@@ -8,14 +8,6 @@ ROOT = Path(__file__).resolve().parents[1]
 # tests/spec_coverage_pending.txt (and here) when its test lands. Slices are
 # listed in openspec/TODO.md and openspec/changes/<id>/.
 EXPECTED_ACTIVE_PENDING = {
-    # add-forecast-driven-quality-band
-    "quality-gate::Endpoint above the band is excluded",
-    "quality-gate::Band bounds are set once from the seed anchor",
-    "quality-gate::Re-seeding re-anchors the band",
-    "quality-gate::Paid seed anchors but is not a member",
-    "data-model::Role carries a maximum quality bound",
-    "allocator::Combo orders weakest-eligible first",
-    "demand-forecast::Quality band widens to cover protected demand",
     # add-profile-combo-normalization
     "profile-normalization::Raw slot maps to combo with same canonical model",
     "profile-normalization::Missing combo falls back to default profile combo",

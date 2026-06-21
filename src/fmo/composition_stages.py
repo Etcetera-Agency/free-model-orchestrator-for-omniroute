@@ -20,7 +20,7 @@ from fmo.aa_migration import run_migration_agent
 from fmo.config import StartupConfig
 from fmo.context import context_eligible, effective_context_window
 from fmo.external_metadata import ExternalMetadataError
-from fmo.forecast import apply_historical_reserve, cold_start_demand, protected_demand
+from fmo.forecast import apply_historical_reserve, cold_start_demand, protected_demand, quality_band_for_demand
 from fmo.hermes_inventory import (
     HermesInventoryError,
     Inventory,
@@ -844,10 +844,12 @@ def _role_lifecycle_stage(_dependencies: StageDependencies, context: PipelineCon
 
 def _role_scoring_stage(_dependencies: StageDependencies, context: PipelineContext) -> StageResult:
     with context.repository.database.transaction() as transaction:
+        if _dependencies.omniroute_client is not None:
+            _seed_quality_bands(transaction, _dependencies.omniroute_client)
         roles = transaction.execute(
             """
             SELECT id, requirements, minimum_quality_metric, minimum_quality_value,
-                   quality_gate_index_version
+                   maximum_quality_metric, maximum_quality_value, quality_gate_index_version
             FROM roles
             ORDER BY id
             """
@@ -912,6 +914,92 @@ def _role_scoring_stage(_dependencies: StageDependencies, context: PipelineConte
     return _effect_result("role-scoring", changed=written > 0)
 
 
+def _seed_quality_bands(transaction: Any, client: Any) -> None:
+    current = _read_current_combos(client)
+    latest_metrics = _latest_aa_metrics_by_model(transaction)
+    for combo_id, members in current.items():
+        if not combo_id.startswith("fmo-") or len(members) != 1:
+            continue
+        # AICODE-NOTE: A live one-member combo is the operator seed signal; a
+        # multi-member combo keeps its persisted band to avoid drift per run.
+        role_id = combo_id.removeprefix("fmo-")
+        seed = transaction.execute(
+            """
+            SELECT id, canonical_model_id
+            FROM provider_endpoints
+            WHERE id::text = %(endpoint_id)s
+            """,
+            {"endpoint_id": str(members[0])},
+        ).fetchone()
+        if seed is None:
+            continue
+        metric = "intelligence_index"
+        metrics = latest_metrics.get(seed["canonical_model_id"])
+        if not metrics or metric not in metrics["metrics"]:
+            continue
+        anchor = float(metrics["metrics"][metric])
+        candidates = _quality_band_candidates(transaction, metric)
+        protected = _latest_protected_requests(transaction, role_id)
+        band = quality_band_for_demand(
+            anchor=anchor,
+            candidates=candidates,
+            protected_requests=protected,
+            adequacy_floor=max(0, anchor - 20),
+        )
+        transaction.execute(
+            """
+            UPDATE roles
+            SET minimum_quality_metric = %(metric)s,
+                minimum_quality_value = %(minimum)s,
+                maximum_quality_metric = %(metric)s,
+                maximum_quality_value = %(maximum)s,
+                quality_gate_index_version = %(index_version)s
+            WHERE id = %(role_id)s
+            """,
+            {
+                "role_id": role_id,
+                "metric": metric,
+                "minimum": band.minimum,
+                "maximum": band.maximum,
+                "index_version": str(metrics["index_version"]),
+            },
+        )
+
+
+def _quality_band_candidates(transaction: Any, metric: str) -> list[dict[str, Any]]:
+    rows = transaction.execute(
+        f"""
+        SELECT aa.{metric} AS quality, eas.effective_remaining, eas.status, eas.hard_stop_capable
+        FROM provider_endpoints pe
+        JOIN artificial_analysis_model_metrics aa ON aa.canonical_model_id = pe.canonical_model_id
+        LEFT JOIN endpoint_access_states eas ON eas.endpoint_id = pe.id
+        WHERE aa.{metric} IS NOT NULL
+        """
+    ).fetchall()
+    return [
+        {
+            "quality": float(row["quality"]),
+            "capacity": _remaining_requests(row["effective_remaining"]) if row["effective_remaining"] is not None else 0,
+            "confirmed_free": row["status"] == "confirmed" and bool(row["hard_stop_capable"]),
+        }
+        for row in rows
+    ]
+
+
+def _latest_protected_requests(transaction: Any, role_id: str) -> float:
+    row = transaction.execute(
+        """
+        SELECT protected_requests
+        FROM role_demand_forecasts
+        WHERE role_id = %(role_id)s
+        ORDER BY created_at DESC
+        LIMIT 1
+        """,
+        {"role_id": role_id},
+    ).fetchone()
+    return float(row["protected_requests"]) if row is not None else 1.0
+
+
 def _latest_aa_metrics_by_model(transaction: Any) -> dict[Any, dict[str, Any]]:
     rows = transaction.execute(
         """
@@ -965,6 +1053,7 @@ def _quality_gate_eligibility(role: Any, metrics_row: dict[str, Any] | None, req
         (metrics_row or {}).get("metrics", {}),
         metric=role["minimum_quality_metric"],
         value=float(role["minimum_quality_value"]),
+        maximum_value=float(role["maximum_quality_value"]) if role["maximum_quality_value"] is not None else None,
         index_version=str(role["quality_gate_index_version"]),
         current_version=str(current_version),
         allow_unverified=bool(requirements.get("allow_unverified_quality_gate", False)),
