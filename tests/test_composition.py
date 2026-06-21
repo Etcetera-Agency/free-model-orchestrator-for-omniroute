@@ -1,4 +1,5 @@
 import argparse
+from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -31,7 +32,8 @@ from fmo.pipeline import CANONICAL_STAGE_NAMES, PipelineRunner
 from fmo.quota_research import QuotaClaimResponse
 from fmo.registry import FreeRegistry, FreeRegistrySyncOutcome
 from fmo.smart_review import ComboReviewResponse
-from tests._stage_effects import assert_success_has_declared_effect, effectful_success
+from _fixtures import fixture_body, load_hermes_fixture
+from _stage_effects import assert_success_has_declared_effect, effectful_success
 
 
 OPENAI_CHAT_COMPLETION_BODY = {
@@ -95,13 +97,14 @@ def empty_adapters_with_stage_effects():
 
 
 def hermes_inventory_fixture():
+    cron = load_hermes_fixture("cron_jobs.json")["jobs"][0]
     return Inventory(
         consumers=[
             Consumer(
-                role_id="routing_fast",
+                role_id=str(cron["model"]),
                 consumer_type="cron_job",
-                consumer="daily-routing",
-                cadence="0 4 * * *",
+                consumer=str(cron["id"]),
+                cadence=str(cron["schedule"]["expr"]),
                 calls_per_run=12,
             )
         ]
@@ -137,6 +140,51 @@ class PipelineOpsClient(QuotaSearchClient):
         self.get_calls = []
         self.combos = {"fmo-routing_fast": ["old-endpoint"]}
         self.deleted_paths = []
+        self.providers_body = deepcopy(fixture_body("omniroute_api_providers"))
+        self.rate_limits_body = deepcopy(fixture_body("omniroute_api_rate_limits"))
+        self.analytics_body = deepcopy(fixture_body("omniroute_api_usage_analytics"))
+        self.quota_body = deepcopy(fixture_body("omniroute_api_usage_quota"))
+        self.providers_body.setdefault("connections", []).append(
+            {
+                "id": "conn-provider-a",
+                "provider": "provider-a",
+                "enabled": True,
+                "isActive": True,
+                "upstream_account_id": "acct-provider-a",
+                "status": "confirmed",
+                "quota": 100,
+            }
+        )
+        self.rate_limits_body.setdefault("connections", []).append(
+            {
+                "connectionId": "conn-provider-a",
+                "provider": "provider-a",
+                "enabled": True,
+                "active": True,
+                "remaining": 100,
+            }
+        )
+        self.analytics_body.setdefault("byProvider", []).append(
+            {"provider": "provider-a", "requests": 10, "successRatePct": 90, "avgLatencyMs": 120}
+        )
+        self.analytics_body.setdefault("byModel", []).append(
+            {
+                "provider": "provider-a",
+                "model": "free-chat",
+                "requests": 5,
+                "successRatePct": 100,
+                "avgLatencyMs": 80,
+            }
+        )
+        self.quota_body.setdefault("providers", []).append(
+            {
+                "provider": "provider-a",
+                "connectionId": "conn-provider-a",
+                "quotaTotal": 100,
+                "quotaUsed": 40,
+                "resetAt": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
+            }
+        )
 
     def post(self, path, payload, headers=None, idempotency_key=None):
         if path == "/v1/search":
@@ -165,55 +213,15 @@ class PipelineOpsClient(QuotaSearchClient):
     def get(self, path):
         self.get_calls.append(path)
         if path == "/api/providers":
-            return {
-                "connections": [
-                    {
-                        "id": "conn-provider-a",
-                        "provider": "provider-a",
-                        "enabled": True,
-                        "upstream_account_id": "acct-provider-a",
-                        "status": "confirmed",
-                        "quota": 100,
-                    }
-                ]
-            }
+            return self.providers_body
         if path == "/api/rate-limits":
-            return {
-                "connections": [
-                    {
-                        "connectionId": "conn-provider-a",
-                        "provider": "provider-a",
-                        "enabled": True,
-                        "remaining": 100,
-                    }
-                ]
-            }
+            return self.rate_limits_body
         if path == "/api/usage/analytics":
-            return {
-                "byProvider": [{"provider": "provider-a", "requests": 10, "successRatePct": 90, "avgLatencyMs": 120}],
-                "byModel": [
-                    {
-                        "provider": "provider-a",
-                        "model": "free-chat",
-                        "requests": 5,
-                        "successRatePct": 100,
-                        "avgLatencyMs": 80,
-                    }
-                ],
-            }
+            return self.analytics_body
         if path == "/api/usage/quota":
-            return {
-                "meta": {"generatedAt": datetime.now(timezone.utc).isoformat()},
-                "providers": [
-                    {
-                        "provider": "provider-a",
-                        "connectionId": "conn-provider-a",
-                        "quotaTotal": 100,
-                        "quotaUsed": 40,
-                        "resetAt": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
-                    }
-                ],
-            }
+            body = deepcopy(self.quota_body)
+            body.setdefault("meta", {})["generatedAt"] = datetime.now(timezone.utc).isoformat()
+            return body
         if path == "/api/combos":
             return {"combos": [{"id": combo_id, "models": models} for combo_id, models in self.combos.items()]}
         raise AssertionError(f"unexpected GET {path}")
@@ -365,18 +373,18 @@ class FakeInstructorClient:
         self.chat = type("Chat", (), {"completions": FakeInstructorCompletions()})()
 
 
-def seed_endpoint(repository, *, model_id="free-chat"):
+def seed_endpoint(repository, *, model_id="free-chat", provider_id="provider-a", connection_id="conn-provider-a"):
     with repository.database.transaction() as transaction:
         provider = repository.providers.upsert(
             transaction,
             omniroute_instance_id="local",
-            omniroute_provider_id="provider-a",
+            omniroute_provider_id=provider_id,
             provider_type="api",
         )
         account = repository.provider_accounts.upsert(
             transaction,
             provider_id=provider["id"],
-            omniroute_connection_id="conn-provider-a",
+            omniroute_connection_id=connection_id,
         )
         endpoint = repository.provider_endpoints.upsert(
             transaction,
@@ -546,19 +554,21 @@ def seed_confirmed_llm_candidate(
     coding_index=None,
     agentic_index=None,
     aa_index_version="4.1",
+    provider_id="provider-a",
+    connection_id="pool-a",
 ):
     with repository.database.transaction() as transaction:
         canonical = repository.canonical_models.upsert(transaction, canonical_slug=model_id)
         provider = repository.providers.upsert(
             transaction,
             omniroute_instance_id="local",
-            omniroute_provider_id="provider-a",
+            omniroute_provider_id=provider_id,
             provider_type="api",
         )
         account = repository.provider_accounts.upsert(
             transaction,
             provider_id=provider["id"],
-            omniroute_connection_id="pool-a",
+            omniroute_connection_id=connection_id,
         )
         endpoint = repository.provider_endpoints.upsert(
             transaction,
@@ -1252,11 +1262,11 @@ def test_hermes_inventory_stage_uses_selected_adapter_and_persists_prompt_only_f
     assert result.stage_results[0]["details"]["effect"] == "repository_write"
     assert role["expected_load"]["requests"] == 25
     assert role["role_lifecycle_status"] == "bootstrap_pending"
-    assert consumer["consumer_key"] == "daily-routing"
+    assert consumer["consumer_key"] == "a1b2c3d4e5f6"
     assert float(consumer["calls_per_run"]) == 12.0
     assert inventory_run["source_mode"] == "command"
     assert inventory_run["status"] == "completed"
-    assert inventory_run["roles_found"] == 1
+    assert inventory_run["roles_found"] == 2
     assert inventory_run["routines_found"] == 1
     assert llm_runtime.calls == [
         {
@@ -1266,7 +1276,7 @@ def test_hermes_inventory_stage_uses_selected_adapter_and_persists_prompt_only_f
                     "Hermes inventory forecast request\n"
                     "Changes:\n"
                     "Consumers:\n"
-                    "routing_fast cron_job daily-routing 0 4 * * * 12"
+                    "coding-combo cron_job a1b2c3d4e5f6 0 2 * * * 12"
                 )
             },
             "response_model": "InspectorForecastResponse",

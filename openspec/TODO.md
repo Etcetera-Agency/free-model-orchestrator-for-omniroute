@@ -1,6 +1,12 @@
 # OpenSpec TODO
 
-No deferred review follow-up work discovered.
+## Deferred follow-up
+
+- Live OmniRoute API bridge on etc2nd-shlink (`127.0.0.1:20129`) still returns
+  bridge-level 404 for `/api/combos*`; FMO combo apply reads `/api/combos` and
+  posts `/api/combos/{id}`. Decide whether production FMO should use a different
+  OmniRoute base URL for combo apply or whether the bridge must explicitly allow
+  the required combo management routes.
 
 ## Dropped (not needed for project essence)
 

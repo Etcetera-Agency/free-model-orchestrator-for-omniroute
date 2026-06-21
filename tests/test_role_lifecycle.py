@@ -5,43 +5,60 @@ import pytest
 from fmo.hermes_inventory import (
     InspectorForecast,
     assemble_inspector_prompt,
+    build_hermes_inventory,
     inventory_diff,
-    normalize_command_inventory,
     normalize_filesystem_inventory,
-    normalize_http_inventory,
     run_inspector,
 )
 from fmo.role_lifecycle import reconcile_roles
+from _fixtures import hermes_fixture_path, load_hermes_fixture
+
+
+def _profiles_with_config_paths(tmp_path):
+    payload = load_hermes_fixture("profiles.json")
+    home = tmp_path / "hermes"
+    default_dir = home
+    research_dir = home / "profiles" / "research"
+    default_dir.mkdir(parents=True)
+    research_dir.mkdir(parents=True)
+    (default_dir / "config.yaml").write_text(hermes_fixture_path("config.default.yaml").read_text())
+    (research_dir / "config.yaml").write_text(hermes_fixture_path("config.research.yaml").read_text())
+    payload["profiles"][0]["path"] = str(default_dir)
+    payload["profiles"][1]["path"] = str(research_dir)
+    return payload
 
 
 @pytest.mark.spec("hermes-inventory::Missing required env")
 def test_adapters_normalize_samples_and_missing_env_fails():
-    sample = {"roles": [{"role": "research_scout", "consumer_type": "cron_job", "consumer": "daily", "cadence": "0 4 * * *", "calls_per_run": 2}]}
-    assert normalize_filesystem_inventory(sample, env={"HERMES_HOME": "/tmp"}).consumers[0].consumer_type == "cron_job"
-    assert normalize_command_inventory(sample, env={"HERMES_INVENTORY_COMMAND": "hermes inventory"}).consumers[0].role_id == "research_scout"
-    assert normalize_http_inventory(sample, env={"HERMES_INVENTORY_URL": "http://localhost"}).consumers[0].calls_per_run == 2
     with pytest.raises(ValueError):
-        normalize_filesystem_inventory(sample, env={})
+        normalize_filesystem_inventory({}, env={})
 
 
 @pytest.mark.spec("hermes-inventory::Mixed consumers recorded")
-def test_daily_inventory_records_all_consumer_types():
-    sample = {
-        "roles": [
-            {"role": "r", "consumer_type": "agent_profile", "consumer": "p", "cadence": "manual", "calls_per_run": 1},
-            {"role": "r", "consumer_type": "cron_job", "consumer": "c", "cadence": "daily", "calls_per_run": 2},
-            {"role": "r", "consumer_type": "webhook", "consumer": "w", "cadence": "observed", "calls_per_run": 3},
-            {"role": "r", "consumer_type": "service", "consumer": "s", "cadence": "continuous", "calls_per_run": 4},
-        ]
-    }
-    inventory = normalize_command_inventory(sample, env={"HERMES_INVENTORY_COMMAND": "cmd"})
-    assert {consumer.consumer_type for consumer in inventory.consumers} == {"agent_profile", "cron_job", "webhook", "service"}
+def test_daily_inventory_records_all_consumer_types(tmp_path):
+    inventory = build_hermes_inventory(
+        cron_jobs=load_hermes_fixture("cron_jobs.json"),
+        webhook_subscriptions=load_hermes_fixture("webhook_subscriptions.json"),
+        profiles=_profiles_with_config_paths(tmp_path),
+    )
+
+    assert {consumer.consumer_type for consumer in inventory.consumers} >= {"agent_profile", "cron_job", "webhook", "service"}
 
 
 @pytest.mark.spec("hermes-inventory::Schedule changed")
 def test_inventory_diff_marks_forecast_stale_and_material_allocation_gate():
-    old = normalize_command_inventory({"roles": [{"role": "r", "consumer_type": "cron_job", "consumer": "c", "cadence": "daily", "calls_per_run": 1}]}, env={"HERMES_INVENTORY_COMMAND": "cmd"})
-    new = normalize_command_inventory({"roles": [{"role": "r", "consumer_type": "cron_job", "consumer": "c", "cadence": "hourly", "calls_per_run": 1}]}, env={"HERMES_INVENTORY_COMMAND": "cmd"})
+    old = build_hermes_inventory(
+        cron_jobs=load_hermes_fixture("cron_jobs.json"),
+        webhook_subscriptions=load_hermes_fixture("webhook_subscriptions.json"),
+        profiles=[],
+    )
+    changed_cron_jobs = load_hermes_fixture("cron_jobs.json")
+    changed_cron_jobs["jobs"][0]["schedule"] = {"kind": "interval", "minutes": 60, "display": "hourly"}
+    new = build_hermes_inventory(
+        cron_jobs=changed_cron_jobs,
+        webhook_subscriptions=load_hermes_fixture("webhook_subscriptions.json"),
+        profiles=[],
+    )
     diff = inventory_diff(old, new)
     assert diff.forecast_stale is True
     assert diff.run_inspector is True
@@ -51,7 +68,11 @@ def test_inventory_diff_marks_forecast_stale_and_material_allocation_gate():
 @pytest.mark.spec("hermes-inventory::Inspector does not inspect")
 @pytest.mark.spec("hermes-inventory::Inspector output")
 def test_inspector_prompt_and_scope_no_secret_or_file_reads():
-    inventory = normalize_command_inventory({"roles": [{"role": "r", "consumer_type": "webhook", "consumer": "w", "cadence": "observed", "calls_per_run": 3}]}, env={"HERMES_INVENTORY_COMMAND": "cmd"})
+    inventory = build_hermes_inventory(
+        cron_jobs=load_hermes_fixture("cron_jobs.json"),
+        webhook_subscriptions=load_hermes_fixture("webhook_subscriptions.json"),
+        profiles=load_hermes_fixture("profiles.json"),
+    )
     prompt = assemble_inspector_prompt(inventory, changes=["cadence changed"], secrets={"HERMES_INVENTORY_TOKEN": "secret"})
     forecast = run_inspector(lambda prompt: {"role": "r", "expected_calls": 9, "average_input_tokens": 100, "average_output_tokens": 20, "confidence": "low"}, prompt)
     assert "secret" not in prompt

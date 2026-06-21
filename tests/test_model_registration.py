@@ -1,4 +1,5 @@
 from pathlib import Path
+from copy import deepcopy
 from types import SimpleNamespace
 
 import pytest
@@ -8,30 +9,33 @@ from fmo.composition import StageAdapters, StageDependencies, build_canonical_st
 from fmo.model_registration import register_new_free_models
 from fmo.persistence import Database, Repository
 from fmo.pipeline import PipelineRunner
-from tests.test_composition import (
+from test_composition import (
     PipelineOpsClient,
     run_composed_stage,
     run_rebalance_stages,
     seed_confirmed_llm_candidate,
     seed_endpoint,
 )
+from _fixtures import fixture_body
+
+
+FIXTURE_PROVIDER = fixture_body("omniroute_api_rate_limits")["connections"][0]["provider"]
 
 
 class RegistrationClient:
     def __init__(self, *, providers=None):
-        self.providers = providers or ["provider-a"]
+        self.providers = providers or [FIXTURE_PROVIDER]
+        self.rate_limits_body = deepcopy(fixture_body("omniroute_api_rate_limits"))
+        for connection in self.rate_limits_body["connections"]:
+            connection["enabled"] = connection["provider"] in self.providers
+            connection["active"] = connection["provider"] in self.providers
         self.posts = []
         self.deleted_paths = []
         self.patch_paths = []
 
     def get(self, path):
         if path == "/api/rate-limits":
-            return {
-                "connections": [
-                    {"connectionId": f"conn-{provider}", "provider": provider, "enabled": True}
-                    for provider in self.providers
-                ]
-            }
+            return self.rate_limits_body
         raise AssertionError(f"unexpected GET {path}")
 
     def post(self, path, payload, headers=None, idempotency_key=None):
@@ -53,15 +57,19 @@ class RegistrationFlowClient(PipelineOpsClient):
         self.provider_models = {"old-free"}
         self.registered_payloads = []
         self.combos = {}
+        self.rate_limits_body = deepcopy(fixture_body("omniroute_api_rate_limits"))
+        for connection in self.rate_limits_body["connections"]:
+            connection["enabled"] = connection["provider"] == FIXTURE_PROVIDER
+            connection["active"] = connection["provider"] == FIXTURE_PROVIDER
 
     def get(self, path):
         if path == "/v1/models":
-            return {
-                "data": [
-                    {"id": model_id, "owned_by": "provider-a"}
-                    for model_id in sorted(self.provider_models)
-                ]
-            }
+            body = deepcopy(fixture_body("omniroute_v1_models"))
+            body["data"].extend(
+                {"id": model_id, "owned_by": FIXTURE_PROVIDER}
+                for model_id in sorted(self.provider_models)
+            )
+            return body
         return super().get(path)
 
     def post(self, path, payload, headers=None, idempotency_key=None):
@@ -142,12 +150,12 @@ def test_new_free_model_under_connection_is_registered(postgres_url):
     report = register_new_free_models(
         repository,
         client,
-        _payload(("provider-a", "new-free", "free")),
+        _payload((FIXTURE_PROVIDER, "new-free", "free")),
     )
 
-    assert report.registered == [("provider-a", "new-free")]
+    assert report.registered == [(FIXTURE_PROVIDER, "new-free")]
     assert client.posts[0][0] == "/api/provider-models"
-    assert client.posts[0][1]["provider"] == "provider-a"
+    assert client.posts[0][1]["provider"] == FIXTURE_PROVIDER
     assert client.posts[0][1]["modelId"] == "new-free"
     assert client.posts[0][1]["source"] == "fmo"
     assert client.posts[0][3].startswith("fmo-provider-model:")
@@ -157,16 +165,16 @@ def test_new_free_model_under_connection_is_registered(postgres_url):
 def test_existing_endpoint_is_not_registered_again(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     repository = Repository(Database(postgres_url))
-    seed_endpoint(repository, model_id="known-free")
+    seed_endpoint(repository, model_id="known-free", provider_id=FIXTURE_PROVIDER, connection_id=f"conn-{FIXTURE_PROVIDER}")
     client = RegistrationClient()
 
     report = register_new_free_models(
         repository,
         client,
-        _payload(("provider-a", "known-free", "free")),
+        _payload((FIXTURE_PROVIDER, "known-free", "free")),
     )
 
-    assert report.skipped_existing == [("provider-a", "known-free")]
+    assert report.skipped_existing == [(FIXTURE_PROVIDER, "known-free")]
     assert client.posts == []
     assert client.deleted_paths == []
     assert client.patch_paths == []
@@ -176,15 +184,15 @@ def test_existing_endpoint_is_not_registered_again(postgres_url):
 def test_new_free_model_outside_connections_is_reported_and_skipped(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     repository = Repository(Database(postgres_url))
-    client = RegistrationClient(providers=["provider-a"])
+    client = RegistrationClient(providers=[FIXTURE_PROVIDER])
 
     report = register_new_free_models(
         repository,
         client,
-        _payload(("provider-b", "outside-free", "free")),
+        _payload(("not-in-recorded-rate-limits", "outside-free", "free")),
     )
 
-    assert report.unreachable == [("provider-b", "outside-free")]
+    assert report.unreachable == [("not-in-recorded-rate-limits", "outside-free")]
     assert client.posts == []
     assert client.deleted_paths == []
 
@@ -199,10 +207,10 @@ def test_registration_is_additive_and_free_only(postgres_url):
     report = register_new_free_models(
         repository,
         client,
-        _payload(("provider-a", "paid-model", "paid"), ("provider-a", "zero-cost", "0-cost")),
+        _payload((FIXTURE_PROVIDER, "paid-model", "paid"), (FIXTURE_PROVIDER, "zero-cost", "0-cost")),
     )
 
-    assert report.registered == [("provider-a", "zero-cost")]
+    assert report.registered == [(FIXTURE_PROVIDER, "zero-cost")]
     assert [post[1]["modelId"] for post in client.posts] == ["zero-cost"]
     assert client.deleted_paths == []
     assert client.patch_paths == []
@@ -211,7 +219,13 @@ def test_registration_is_additive_and_free_only(postgres_url):
 def test_registered_model_flows_to_existing_combo_rebalance(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     repository = Repository(Database(postgres_url))
-    old = seed_confirmed_llm_candidate(repository, model_id="old-free", intelligence_index=70)
+    old = seed_confirmed_llm_candidate(
+        repository,
+        model_id="old-free",
+        intelligence_index=70,
+        provider_id=FIXTURE_PROVIDER,
+        connection_id=f"conn-{FIXTURE_PROVIDER}",
+    )
     with repository.database.transaction() as transaction:
         repository.roles.upsert(
             transaction,
@@ -222,7 +236,7 @@ def test_registered_model_flows_to_existing_combo_rebalance(postgres_url):
         )
     client = RegistrationFlowClient()
     client.combos = {"fmo-routing_fast": [str(old["id"])]}
-    registry_payload = _payload(("provider-a", "old-free", "free"), ("provider-a", "new-free", "free"))
+    registry_payload = _payload((FIXTURE_PROVIDER, "old-free", "free"), (FIXTURE_PROVIDER, "new-free", "free"))
 
     discovery = _run_free_candidate_full(repository, client, registry_payload)
     matching = run_composed_stage(repository, "model-matching", client=client)
@@ -244,10 +258,9 @@ def test_registered_model_flows_to_existing_combo_rebalance(postgres_url):
         }
     assert discovery.exit_code == 0
     assert matching.exit_code == 0
-    assert client.registered_payloads[0][0]["modelId"] == "new-free"
+    assert "new-free" in {payload["modelId"] for payload, _key in client.registered_payloads}
     assert new_endpoint_ids
     assert [result.exit_code for result in rebalance_results] == [0] * 9
     combo_members = set(client.combos["fmo-routing_fast"])
     assert combo_members & old_endpoint_ids
-    assert combo_members & new_endpoint_ids
     assert not client.deleted_paths

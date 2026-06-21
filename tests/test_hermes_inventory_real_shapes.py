@@ -226,6 +226,14 @@ def test_observe_session_demand_reads_real_state_db_schema(tmp_path):
     assert demand["chat-combo"] == pytest.approx((2 + 5) / 2)
 
 
+def test_live_slink_empty_state_fixture_records_current_absence():
+    payload = load_hermes_fixture("live_empty_state.json")
+
+    assert payload["source"] == "etc2nd-shlink:/opt/apps/hermes/data/state.db"
+    assert payload["schema"] == []
+    assert payload["sessions"] == []
+
+
 @pytest.mark.spec("hermes-inventory::Mixed consumers recorded")
 def test_build_hermes_inventory_records_source_and_auxiliary_consumers_with_observed_demand(tmp_path):
     conn = _build_state_db(tmp_path / "state.db")

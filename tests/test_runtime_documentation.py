@@ -29,7 +29,8 @@ def test_runtime_docs_record_executable_scenario_policy_and_pending_allowlist():
     assert set(pending_lines) == EXPECTED_ACTIVE_PENDING
     assert "repository methods" in completion_review
     assert "adapter-backed boundary" in completion_review
-    assert "No deferred review follow-up work discovered." in todo
+    assert "Deferred follow-up" in todo
+    assert "/api/combos" in todo
     assert "Active Slice Backlog" not in todo
     assert "Active review follow-up slices" not in todo
 

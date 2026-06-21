@@ -1,0 +1,7 @@
+{
+  "captured_at": "2026-06-21T12:50:00.000Z",
+  "source": "etc2nd-shlink:/opt/apps/hermes/data/state.db",
+  "schema": [],
+  "sessions": [],
+  "note": "Live Hermes state.db existed on slink but contained no sqlite schema or session rows at capture time."
+}

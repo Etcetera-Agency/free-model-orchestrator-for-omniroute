@@ -1,0 +1,292 @@
+{
+  "captured_at": "2026-06-21T12:49:19.000Z",
+  "source": "omniroute-shlink-storage-sqlite",
+  "name": "omniroute_api_combos",
+  "method": "GET",
+  "path": "/api/combos",
+  "status": 200,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "capture_note": "The 20129 API bridge returned bridge-level 404 for /api/combos, so this fixture is reconstructed from the live OmniRoute SQLite table used by src/app/api/combos/route.ts.",
+  "body": {
+    "combos": [
+      {
+        "id": "197d665c-4e63-4807-9aa0-3882c740bde7",
+        "name": "fmo-chat-combo",
+        "models": [
+          {
+            "id": "fmo-chat-combo-model-1-oc-big-pickle",
+            "kind": "model",
+            "model": "oc/big-pickle",
+            "providerId": "oc",
+            "weight": 0
+          }
+        ],
+        "strategy": "priority",
+        "config": {},
+        "isHidden": false,
+        "sortOrder": 1,
+        "createdAt": "2026-06-21T12:44:44.000Z",
+        "updatedAt": "2026-06-21T12:45:11.000Z",
+        "version": 2
+      },
+      {
+        "id": "99a38668-b85a-42d5-8df5-d4a8c1e43e37",
+        "name": "fmo-research-combo",
+        "models": [
+          {
+            "id": "fmo-research-combo-model-1-oc-big-pickle",
+            "kind": "model",
+            "model": "oc/big-pickle",
+            "providerId": "oc",
+            "weight": 0
+          }
+        ],
+        "strategy": "priority",
+        "config": {},
+        "isHidden": false,
+        "sortOrder": 2,
+        "createdAt": "2026-06-21T12:44:44.000Z",
+        "updatedAt": "2026-06-21T12:45:11.000Z",
+        "version": 2
+      },
+      {
+        "id": "74d51061-d578-40eb-8e61-8f40fdcb57cb",
+        "name": "fmo-coding-combo",
+        "models": [
+          {
+            "id": "fmo-coding-combo-model-1-oc-big-pickle",
+            "kind": "model",
+            "model": "oc/big-pickle",
+            "providerId": "oc",
+            "weight": 0
+          }
+        ],
+        "strategy": "priority",
+        "config": {},
+        "isHidden": false,
+        "sortOrder": 3,
+        "createdAt": "2026-06-21T12:44:44.000Z",
+        "updatedAt": "2026-06-21T12:45:11.000Z",
+        "version": 2
+      },
+      {
+        "id": "5ddfbf8a-b2fc-4af5-bc63-9ae9df6cfdc1",
+        "name": "fmo-title-generation",
+        "models": [
+          {
+            "id": "fmo-title-generation-model-1-oc-big-pickle",
+            "kind": "model",
+            "model": "oc/big-pickle",
+            "providerId": "oc",
+            "weight": 0
+          }
+        ],
+        "strategy": "priority",
+        "config": {},
+        "isHidden": false,
+        "sortOrder": 4,
+        "createdAt": "2026-06-21T12:47:20.000Z",
+        "updatedAt": "2026-06-21T12:47:20.000Z",
+        "version": 2
+      },
+      {
+        "id": "0922a2a1-030b-449f-b3be-68976e39a64a",
+        "name": "fmo-vision",
+        "models": [
+          {
+            "id": "fmo-vision-model-1-oc-big-pickle",
+            "kind": "model",
+            "model": "oc/big-pickle",
+            "providerId": "oc",
+            "weight": 0
+          }
+        ],
+        "strategy": "priority",
+        "config": {},
+        "isHidden": false,
+        "sortOrder": 5,
+        "createdAt": "2026-06-21T12:47:20.000Z",
+        "updatedAt": "2026-06-21T12:47:20.000Z",
+        "version": 2
+      },
+      {
+        "id": "cc49d9a7-0104-40cb-8efe-420b335c138c",
+        "name": "fmo-compression",
+        "models": [
+          {
+            "id": "fmo-compression-model-1-oc-big-pickle",
+            "kind": "model",
+            "model": "oc/big-pickle",
+            "providerId": "oc",
+            "weight": 0
+          }
+        ],
+        "strategy": "priority",
+        "config": {},
+        "isHidden": false,
+        "sortOrder": 6,
+        "createdAt": "2026-06-21T12:47:20.000Z",
+        "updatedAt": "2026-06-21T12:47:20.000Z",
+        "version": 2
+      },
+      {
+        "id": "ec544d53-bdb4-43c2-9c96-bed13460147e",
+        "name": "fmo-approval",
+        "models": [
+          {
+            "id": "fmo-approval-model-1-oc-big-pickle",
+            "kind": "model",
+            "model": "oc/big-pickle",
+            "providerId": "oc",
+            "weight": 0
+          }
+        ],
+        "strategy": "priority",
+        "config": {},
+        "isHidden": false,
+        "sortOrder": 7,
+        "createdAt": "2026-06-21T12:47:20.000Z",
+        "updatedAt": "2026-06-21T12:47:20.000Z",
+        "version": 2
+      },
+      {
+        "id": "a6d19f05-2ba8-4e91-af9e-bb5b09757f4b",
+        "name": "fmo-skills",
+        "models": [
+          {
+            "id": "fmo-skills-model-1-oc-big-pickle",
+            "kind": "model",
+            "model": "oc/big-pickle",
+            "providerId": "oc",
+            "weight": 0
+          }
+        ],
+        "strategy": "priority",
+        "config": {},
+        "isHidden": false,
+        "sortOrder": 9,
+        "createdAt": "2026-06-21T12:47:20.000Z",
+        "updatedAt": "2026-06-21T12:47:20.000Z",
+        "version": 2
+      },
+      {
+        "id": "a6f48cc5-75cf-4a76-baf0-7c1c364a9f08",
+        "name": "fmo-mcp",
+        "models": [
+          {
+            "id": "fmo-mcp-model-1-oc-big-pickle",
+            "kind": "model",
+            "model": "oc/big-pickle",
+            "providerId": "oc",
+            "weight": 0
+          }
+        ],
+        "strategy": "priority",
+        "config": {},
+        "isHidden": false,
+        "sortOrder": 10,
+        "createdAt": "2026-06-21T12:47:20.000Z",
+        "updatedAt": "2026-06-21T12:47:20.000Z",
+        "version": 2
+      },
+      {
+        "id": "5ae24011-93f1-46b4-8fe0-a916175dc444",
+        "name": "fmo-triage-specifier",
+        "models": [
+          {
+            "id": "fmo-triage-specifier-model-1-oc-big-pickle",
+            "kind": "model",
+            "model": "oc/big-pickle",
+            "providerId": "oc",
+            "weight": 0
+          }
+        ],
+        "strategy": "priority",
+        "config": {},
+        "isHidden": false,
+        "sortOrder": 11,
+        "createdAt": "2026-06-21T12:47:20.000Z",
+        "updatedAt": "2026-06-21T12:47:20.000Z",
+        "version": 2
+      },
+      {
+        "id": "283e290d-7a91-428c-bd41-8b2af86748fc",
+        "name": "fmo-kanban-decomposer",
+        "models": [
+          {
+            "id": "fmo-kanban-decomposer-model-1-oc-big-pickle",
+            "kind": "model",
+            "model": "oc/big-pickle",
+            "providerId": "oc",
+            "weight": 0
+          }
+        ],
+        "strategy": "priority",
+        "config": {},
+        "isHidden": false,
+        "sortOrder": 12,
+        "createdAt": "2026-06-21T12:47:20.000Z",
+        "updatedAt": "2026-06-21T12:47:20.000Z",
+        "version": 2
+      },
+      {
+        "id": "9f68265a-1834-4ce7-87b3-becefc0536c0",
+        "name": "fmo-profile-describer",
+        "models": [
+          {
+            "id": "fmo-profile-describer-model-1-oc-big-pickle",
+            "kind": "model",
+            "model": "oc/big-pickle",
+            "providerId": "oc",
+            "weight": 0
+          }
+        ],
+        "strategy": "priority",
+        "config": {},
+        "isHidden": false,
+        "sortOrder": 13,
+        "createdAt": "2026-06-21T12:47:20.000Z",
+        "updatedAt": "2026-06-21T12:47:20.000Z",
+        "version": 2
+      },
+      {
+        "id": "a9956670-6c54-4df9-b298-7e4c31431a2b",
+        "name": "fmo-curator",
+        "models": [
+          {
+            "id": "fmo-curator-model-1-oc-big-pickle",
+            "kind": "model",
+            "model": "oc/big-pickle",
+            "providerId": "oc",
+            "weight": 0
+          }
+        ],
+        "strategy": "priority",
+        "config": {},
+        "isHidden": false,
+        "sortOrder": 14,
+        "createdAt": "2026-06-21T12:47:20.000Z",
+        "updatedAt": "2026-06-21T12:47:20.000Z",
+        "version": 2
+      }
+    ]
+  },
+  "storage": {
+    "path": "/opt/apps/omniroute/data/storage.sqlite",
+    "table": "combos",
+    "columns": [
+      "id",
+      "name",
+      "data",
+      "sort_order",
+      "created_at",
+      "updated_at",
+      "system_message",
+      "tool_filter_regex",
+      "context_cache_protection"
+    ],
+    "row_count": 13
+  }
+}

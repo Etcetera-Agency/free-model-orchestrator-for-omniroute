@@ -16,6 +16,7 @@
     "omniroute_api_free_models.json",
     "omniroute_api_free_provider_rankings.json",
     "omniroute_api_free_tier_summary.json",
+    "omniroute_api_combos.json",
     "omniroute_api_monitoring_health.json",
     "omniroute_api_providers.json",
     "omniroute_api_rate_limits.json",

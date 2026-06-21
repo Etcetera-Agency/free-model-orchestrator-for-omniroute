@@ -135,4 +135,10 @@
   dispatches to that stage, quota-pool membership and independence status are
   persisted, rate-limit failures stay conservative, and allocation uses
   account quota pools instead of double-counting same-pool accounts.
-- Remaining deferred repo-level work: none discovered in this batch.
+- Recorded slink fixtures now cover live OmniRoute combo rows and Hermes empty
+  live state; formerly stub-heavy registration, composition, and role-lifecycle
+  tests now replay recorded OmniRoute/Hermes bodies as their base inputs, with
+  only scenario-specific overlays kept local to the test. Code Simplifier review
+  cleaned the prompt assertion formatting before commit.
+- Remaining deferred repo-level work: OmniRoute API bridge still returns 404 for
+  `/api/combos*` on `127.0.0.1:20129`; tracked in `openspec/TODO.md`.
