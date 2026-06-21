@@ -161,6 +161,7 @@ def test_provider_and_combo_locks_are_independent(repository):
 @pytest.mark.spec("scheduler::Scheduler fires at cron time")
 @pytest.mark.spec("scheduler::Scheduled daily run")
 @pytest.mark.spec("scheduler::Service fires the daily run")
+@pytest.mark.spec("hermes-inventory::Daily run performs full inventory")
 def test_scheduler_fires_full_pipeline_at_configured_cron(repository):
     calls = []
 
@@ -188,6 +189,7 @@ def test_scheduler_fires_full_pipeline_at_configured_cron(repository):
 @pytest.mark.spec("scheduler::Apply pipeline runs")
 @pytest.mark.spec("scheduler::Urgent run after paid charge")
 @pytest.mark.spec("scheduler::Urgent trigger runs out of schedule")
+@pytest.mark.spec("hermes-inventory::Manual run can request full inventory")
 def test_manual_and_urgent_triggers_start_pipeline_without_combo_test(repository):
     calls = []
 
@@ -217,3 +219,33 @@ def test_manual_and_urgent_triggers_start_pipeline_without_combo_test(repository
         ("event-provider-added:anthropic", "provider"),
         ("urgent-paid-charge:qiniu", "provider"),
     ]
+
+
+@pytest.mark.spec("hermes-inventory::Unknown role event does not create inventory or combo")
+def test_unknown_role_trigger_stays_role_scoped_without_full_inventory_or_combo(repository):
+    calls = []
+    full_inventory_requests = []
+    combo_creations = []
+
+    def runner(trigger, run_type):
+        calls.append((trigger, run_type))
+        if run_type == "full":
+            full_inventory_requests.append(trigger)
+            combo_creations.append(f"fmo-{trigger}")
+        return PipelineRunResult(
+            run_id="run-role",
+            status="success",
+            exit_code=0,
+            changed=False,
+            stage_results=[],
+            skipped_stages=[],
+        )
+
+    scheduler = Scheduler(repository, cron="0 4 * * *", pipeline_runner=runner)
+
+    result = scheduler.trigger("manual-role", role="unknown-role")
+
+    assert result.exit_code == 0
+    assert calls == [("manual-role:unknown-role", "role")]
+    assert full_inventory_requests == []
+    assert combo_creations == []
