@@ -88,10 +88,6 @@ def normalize_http_inventory(payload: dict, *, env: dict[str, str]) -> Inventory
     return _normalize(payload)
 
 
-def should_run_full_inventory(*, observed_role: str, known_roles: set[str]) -> str | None:
-    return "full" if observed_role not in known_roles else None
-
-
 def inventory_diff(old: Inventory, new: Inventory) -> InventoryDiff:
     old_set = {(consumer.role_id, consumer.consumer_type, consumer.consumer, consumer.cadence, consumer.calls_per_run) for consumer in old.consumers}
     new_set = {(consumer.role_id, consumer.consumer_type, consumer.consumer, consumer.cadence, consumer.calls_per_run) for consumer in new.consumers}

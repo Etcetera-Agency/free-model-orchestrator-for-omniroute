@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -5,6 +6,12 @@ import pytest
 from fmo.db import MigrationRunner
 from fmo.persistence import Database, Repository
 from fmo.registry import FreeRegistry, FreeRegistrySyncOutcome
+
+# Relative probe timestamps so stored-evidence fixtures never drift past a
+# wall-clock freshness window. Computed once per run; dedup keys off request_hash,
+# not these values.
+_PROBE_STARTED_AT = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
+_PROBE_FINISHED_AT = (datetime.now(timezone.utc) - timedelta(minutes=1) + timedelta(seconds=1)).isoformat()
 
 
 @pytest.fixture()
@@ -116,8 +123,8 @@ def test_domain_repository_round_trips(repository):
             probe_type="basic",
             request_hash="probe-key",
             passed=True,
-            started_at="2026-06-18T00:00:00Z",
-            finished_at="2026-06-18T00:00:01Z",
+            started_at=_PROBE_STARTED_AT,
+            finished_at=_PROBE_FINISHED_AT,
         )
         role = repository.roles.upsert(
             transaction,
@@ -201,8 +208,8 @@ def test_idempotent_repository_writes_do_not_duplicate(repository):
             probe_type="basic",
             request_hash="same-key",
             passed=True,
-            started_at="2026-06-18T00:00:00Z",
-            finished_at="2026-06-18T00:00:01Z",
+            started_at=_PROBE_STARTED_AT,
+            finished_at=_PROBE_FINISHED_AT,
         )
         second_probe = repository.probes.record(
             transaction,
@@ -211,8 +218,8 @@ def test_idempotent_repository_writes_do_not_duplicate(repository):
             probe_type="basic",
             request_hash="same-key",
             passed=True,
-            started_at="2026-06-18T00:00:00Z",
-            finished_at="2026-06-18T00:00:01Z",
+            started_at=_PROBE_STARTED_AT,
+            finished_at=_PROBE_FINISHED_AT,
         )
 
     assert second_probe["id"] == first_probe["id"]

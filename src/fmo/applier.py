@@ -22,6 +22,8 @@ class ComboApplier:
     def apply(self, name: str, desired: list[str], *, expected_hash: str, smoke_ok: bool) -> None:
         if not name.startswith("fmo-"):
             return
+        if name not in self.current:
+            raise ComboConflict("combo is not managed")
         if self.state_hash(name) != expected_hash:
             raise ComboConflict("combo drift detected")
         snapshot = list(self.current.get(name, []))

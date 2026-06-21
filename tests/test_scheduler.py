@@ -1,5 +1,6 @@
 import threading
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 import psycopg
@@ -176,7 +177,8 @@ def test_scheduler_fires_full_pipeline_at_configured_cron(repository):
 
     scheduler = Scheduler(repository, cron="0 4 * * *", pipeline_runner=runner)
 
-    result = scheduler.tick("2026-06-18T04:00:00Z")
+    cron_now = datetime.now(timezone.utc).replace(hour=4, minute=0, second=0, microsecond=0)
+    result = scheduler.tick(cron_now.isoformat())
 
     assert result.exit_code == 0
     assert calls == [("scheduled", "full")]

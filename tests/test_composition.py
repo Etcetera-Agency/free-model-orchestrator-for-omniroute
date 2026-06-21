@@ -1,5 +1,5 @@
 import argparse
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -136,6 +136,7 @@ class PipelineOpsClient(QuotaSearchClient):
         self.rollback_fails = rollback_fails
         self.get_calls = []
         self.combos = {"fmo-routing_fast": ["old-endpoint"]}
+        self.deleted_paths = []
 
     def post(self, path, payload, headers=None, idempotency_key=None):
         if path == "/v1/search":
@@ -156,6 +157,10 @@ class PipelineOpsClient(QuotaSearchClient):
             return OPENAI_CHAT_COMPLETION_BODY
         self.calls.append((path, payload, headers, idempotency_key))
         return {"status_code": self.probe_status, "content": "ok" if self.probe_status == 200 else ""}
+
+    def delete(self, path):
+        self.deleted_paths.append(path)
+        raise AssertionError(f"unexpected DELETE {path}")
 
     def get(self, path):
         self.get_calls.append(path)
@@ -205,7 +210,7 @@ class PipelineOpsClient(QuotaSearchClient):
                         "connectionId": "conn-provider-a",
                         "quotaTotal": 100,
                         "quotaUsed": 40,
-                        "resetAt": "2026-06-21T00:00:00+00:00",
+                        "resetAt": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
                     }
                 ],
             }
@@ -1659,6 +1664,47 @@ def test_apply_stage_blocks_when_live_combo_diverged_from_diff_before(postgres_u
     assert result.exit_code == 5
     assert client.combos["fmo-routing_fast"] == ["manual-live"]
     assert not any(call[0].startswith("/api/combos/") for call in client.calls)
+    assert client.deleted_paths == []
+
+
+@pytest.mark.spec("combo-applier::Non-existent combo is not created")
+@pytest.mark.spec("combo-applier::Combos are never deleted")
+def test_apply_stage_skips_absent_combo_without_create_or_delete(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    seed_apply_ready_diff(repository, role_id="missing", combo_id="fmo-missing", before=[], after_model_id="free-missing")
+    client = PipelineOpsClient()
+
+    result = run_composed_stage(repository, "apply", client=client)
+
+    assert result.exit_code == 0
+    assert "fmo-missing" not in client.combos
+    assert not any(call[0] == "/api/combos/fmo-missing" for call in client.calls)
+    assert client.deleted_paths == []
+    assert result.stage_results[0]["details"]["unmanaged_combos"] == ["fmo-missing"]
+    assert result.stage_results[0]["details"]["effect"] == "idempotent_no_change"
+
+
+@pytest.mark.spec("combo-applier::Absent combo is skipped without failing the run")
+@pytest.mark.spec("combo-applier::Combos are never deleted")
+@pytest.mark.spec("combo-applier::Production apply smoke-tests applied combos")
+def test_apply_stage_skips_absent_combo_and_rebalances_present_combo(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    present_endpoint = seed_apply_ready_diff(repository, role_id="routing_fast", combo_id="fmo-routing_fast", before=["old-endpoint"], after_model_id="free-present")
+    seed_apply_ready_diff(repository, role_id="missing", combo_id="fmo-missing", before=[], after_model_id="free-missing")
+    client = PipelineOpsClient()
+
+    result = run_composed_stage(repository, "apply", client=client)
+
+    assert result.exit_code == 0
+    assert client.combos["fmo-routing_fast"] == [present_endpoint]
+    assert "fmo-missing" not in client.combos
+    assert any(call[0] == "/api/combos/fmo-routing_fast" for call in client.calls)
+    assert not any(call[0] == "/api/combos/fmo-missing" for call in client.calls)
+    assert any(call[0] == "/v1/chat/completions" and call[1]["model"] == "fmo-routing_fast" for call in client.calls)
+    assert client.deleted_paths == []
+    assert result.stage_results[0]["details"]["unmanaged_combos"] == ["fmo-missing"]
 
 
 @pytest.mark.spec("combo-applier::Later combo failure rolls back earlier applied combos")
@@ -2082,7 +2128,8 @@ def test_composed_scheduler_run_once_starts_full_pipeline_at_cron(postgres_url):
         adapters=empty_adapters_with_stage_effects(),
     )
 
-    cli_result = runtime.run_scheduler_once("2026-06-19T04:00:00Z")
+    cron_now = datetime.now(timezone.utc).replace(hour=4, minute=0, second=0, microsecond=0)
+    cli_result = runtime.run_scheduler_once(cron_now.isoformat())
 
     repository = Repository(Database(postgres_url))
     with repository.database.transaction() as transaction:

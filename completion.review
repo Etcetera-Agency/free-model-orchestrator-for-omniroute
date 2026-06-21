@@ -76,6 +76,9 @@
 - Hermes inventory now reads profile main model slots and raw auxiliary blocks
   from each profile's `config.yaml`, ignoring stale list-summary model values;
   Code Simplifier added an anchor on that source-of-truth boundary.
+- Apply now rebalances only live `fmo-` combos from the OmniRoute combo set,
+  skips absent desired combos as `unmanaged_combo`, and removes the unwired
+  unknown-role immediate inventory trigger.
 - Multi-combo apply now persists each successful `applied` snapshot before
   moving to the next combo, restores the failed combo plus all earlier applied
   combos on later smoke failure, cleans rolled-back applied snapshots, and

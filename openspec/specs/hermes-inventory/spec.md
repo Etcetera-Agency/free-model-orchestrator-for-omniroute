@@ -3,17 +3,11 @@
 ## Purpose
 TBD - created by archiving change add-role-lifecycle. Update Purpose after archive.
 ## Requirements
-### Requirement: Daily and unknown-role inventory
+### Requirement: Daily and event-triggered inventory
 
-The system SHALL run a full Hermes inventory daily, and SHALL run an immediate
-full inventory (never a partial single-agent lookup) whenever a role name appears
-in Hermes usage, cron, config or an OmniRoute request that is absent from the
-registry.
-
-#### Scenario: Unknown role observed
-- GIVEN an OmniRoute request references a role not in the registry
-- WHEN the orchestrator detects it
-- THEN it runs a full Hermes inventory immediately, not a partial scan
+The system SHALL run a full Hermes inventory daily. Manual or event-driven runs
+MAY request a full Hermes inventory, but an unknown role name alone SHALL NOT
+force an immediate inventory run or create a new combo.
 
 ### Requirement: Consumer registry
 

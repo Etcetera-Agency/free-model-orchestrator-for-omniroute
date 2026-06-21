@@ -121,11 +121,14 @@ def test_stability_tolerates_missing_score_for_previous_endpoint():
 @pytest.mark.spec("combo-applier::Manual edit detected")
 @pytest.mark.spec("combo-applier::Failing guard input blocks apply")
 @pytest.mark.spec("combo-applier::Healthy guard inputs allow apply")
+@pytest.mark.spec("combo-applier::Non-existent combo is not created")
 def test_applier_manages_only_fmo_transaction_smoke_rollback_and_drift():
     applier = ComboApplier(current={"fmo-role": ["old"], "foreign": ["x"]})
     assert applier.managed_names() == ["fmo-role"]
     applier.apply("fmo-role", ["new"], expected_hash=applier.state_hash("fmo-role"), smoke_ok=True)
     assert applier.current["fmo-role"] == ["new"]
+    with pytest.raises(ComboConflict):
+        applier.apply("fmo-missing", ["new"], expected_hash=applier.state_hash("fmo-missing"), smoke_ok=True)
     with pytest.raises(ComboConflict):
         applier.apply("fmo-role", ["other"], expected_hash="stale", smoke_ok=True)
     applier.apply("fmo-role", ["bad"], expected_hash=applier.state_hash("fmo-role"), smoke_ok=False)

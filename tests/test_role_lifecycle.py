@@ -10,7 +10,6 @@ from fmo.hermes_inventory import (
     normalize_filesystem_inventory,
     normalize_http_inventory,
     run_inspector,
-    should_run_full_inventory,
 )
 from fmo.role_lifecycle import reconcile_roles
 
@@ -25,8 +24,8 @@ def test_adapters_normalize_samples_and_missing_env_fails():
         normalize_filesystem_inventory(sample, env={})
 
 
-@pytest.mark.spec("hermes-inventory::Unknown role observed")
-def test_daily_inventory_records_all_consumer_types_and_unknown_role_full_inventory():
+@pytest.mark.spec("hermes-inventory::Mixed consumers recorded")
+def test_daily_inventory_records_all_consumer_types():
     sample = {
         "roles": [
             {"role": "r", "consumer_type": "agent_profile", "consumer": "p", "cadence": "manual", "calls_per_run": 1},
@@ -37,7 +36,6 @@ def test_daily_inventory_records_all_consumer_types_and_unknown_role_full_invent
     }
     inventory = normalize_command_inventory(sample, env={"HERMES_INVENTORY_COMMAND": "cmd"})
     assert {consumer.consumer_type for consumer in inventory.consumers} == {"agent_profile", "cron_job", "webhook", "service"}
-    assert should_run_full_inventory(observed_role="new", known_roles={"r"}) == "full"
 
 
 @pytest.mark.spec("hermes-inventory::Schedule changed")

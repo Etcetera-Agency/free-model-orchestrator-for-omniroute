@@ -13,10 +13,6 @@ EXPECTED_ACTIVE_PENDING = {
     "hermes-inventory::Auto auxiliary slot is not a separate consumer",
     "hermes-inventory::Gateway auxiliary overrides are consumers",
     "demand-forecast::Shared combo sums demand across slots",
-    # update-combo-applier-to-rebalance-only
-    "combo-applier::Non-existent combo is not created",
-    "combo-applier::Absent combo is skipped without failing the run",
-    "combo-applier::Combos are never deleted",
     # add-forecast-driven-quality-band
     "quality-gate::Endpoint above the band is excluded",
     "quality-gate::Band bounds are set once from the seed anchor",

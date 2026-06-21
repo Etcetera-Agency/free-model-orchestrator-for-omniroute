@@ -1220,19 +1220,25 @@ def _apply_stage(dependencies: StageDependencies, context: PipelineContext) -> S
     applier = ComboApplier(current={combo_id: list(models) for combo_id, models in current.items()})
     combo_test_called = False
     applied = []
+    unmanaged_combos = []
     dry_run = bool(context.config.get("dry_run", False))
     for diff in diffs:
         combo_id = diff["omniroute_combo_id"]
         diff_before = list(diff["state_json"].get("before", []))
-        live_baseline = list(current.get(combo_id, []))
         desired = list(diff["state_json"].get("after", []))
         if not combo_id.startswith("fmo-"):
             continue
+        # AICODE-NOTE: Live OmniRoute combo set is source of truth for whether
+        # apply may rebalance; absent desired combos are operator-managed setup.
+        if combo_id not in current:
+            unmanaged_combos.append(combo_id)
+            continue
+        live_baseline = list(current[combo_id])
         if live_baseline != diff_before:
             return StageResult(
                 status="unsafe_to_apply",
                 reason="combo_drift_detected",
-                details={"combo_test_called": combo_test_called},
+                details={"combo_test_called": combo_test_called, "unmanaged_combos": unmanaged_combos},
             )
         if dry_run:
             continue
@@ -1257,14 +1263,14 @@ def _apply_stage(dependencies: StageDependencies, context: PipelineContext) -> S
             status="success",
             changed=False,
             idempotency_key="apply:dry-run",
-            details={"combo_test_called": False, "effect": "idempotent_no_change"},
+            details={"combo_test_called": False, "effect": "idempotent_no_change", "unmanaged_combos": unmanaged_combos},
         )
     result = _effect_result("apply", changed=bool(applied))
     return StageResult(
         status=result.status,
         idempotency_key=result.idempotency_key,
         changed=result.changed,
-        details={**result.details, "combo_test_called": combo_test_called},
+        details={**result.details, "combo_test_called": combo_test_called, "unmanaged_combos": unmanaged_combos},
     )
 
 
