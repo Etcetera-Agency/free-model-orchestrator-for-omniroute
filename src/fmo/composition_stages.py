@@ -44,13 +44,19 @@ from fmo.quota_manager import QuotaFetchError, fetch_live_quota_snapshot
 from fmo.quota_research import research_quota_rule
 from fmo.registry import RegistryFetchError, persist_free_registry_outcome, sync_live_free_registry
 from fmo.scanner import CatalogFetchError, CatalogScanner, scan_live_omniroute_catalogs
-from fmo.scoring import EligibilityDecision, eligible_for_scoring, score_endpoint
+from fmo.scoring import EligibilityDecision, aa_subscore, eligible_for_scoring, latency_score_source, score_endpoint
 from fmo.scheduler import Scheduler
 from fmo.smart_review import ComboReviewResult, run_combo_review
 from fmo.telemetry import sync_live_telemetry
 
 
 APPLY_STAGE_EVIDENCE_MAX_AGE = timedelta(days=1)
+AA_SCORE_WEIGHTS = {"intelligence_index": 1.0, "coding_index": 0.5, "agentic_index": 0.5}
+AA_SCORE_PERCENTILES = {
+    "intelligence_index": (0.0, 100.0),
+    "coding_index": (0.0, 100.0),
+    "agentic_index": (0.0, 100.0),
+}
 
 
 MetadataSync = Callable[..., object]
@@ -1060,8 +1066,10 @@ def _role_scoring_stage(_dependencies: StageDependencies, context: PipelineConte
                    pe.probe_status, pe.advertised_context_window,
                    pe.provider_context_window, pe.probed_context_window,
                    pe.effective_context_window, pe.canonical_model_id,
-                   eas.effective_remaining
+                   eas.effective_remaining,
+                   COALESCE(pa.quota_pool_id, pe.provider_account_id) AS quota_pool_id
             FROM provider_endpoints pe
+            JOIN provider_accounts pa ON pa.id = pe.provider_account_id
             JOIN endpoint_access_states eas ON eas.endpoint_id = pe.id
             WHERE pe.access_status = 'confirmed'
               AND pe.probe_status = 'passed'
@@ -1069,16 +1077,19 @@ def _role_scoring_stage(_dependencies: StageDependencies, context: PipelineConte
             """
         ).fetchall()
         latest_metrics = _latest_aa_metrics_by_model(transaction)
+        latest_health = _latest_health_by_endpoint(transaction)
+        pool_remaining = _latest_remaining_by_pool(transaction)
         written = 0
         for role in roles:
             requirements = role["requirements"] or {}
             required = set(requirements.get("capabilities", []))
             for endpoint in endpoints:
+                remaining = pool_remaining.get(str(endpoint["quota_pool_id"]), _remaining_amount(endpoint["effective_remaining"]))
                 eligibility = eligible_for_scoring(
                     {
                         "access": "free_quota_available",
                         "basic_probe": endpoint["probe_status"] == "passed",
-                        "quota": _remaining_requests(endpoint["effective_remaining"]),
+                        "quota": remaining,
                         "matched": True,
                         "breaker": "closed",
                         "capabilities": set((endpoint["capabilities"] or {}).keys()),
@@ -1089,14 +1100,27 @@ def _role_scoring_stage(_dependencies: StageDependencies, context: PipelineConte
                     eligibility = _context_window_eligibility(endpoint, requirements)
                 if eligibility.eligible:
                     eligibility = _quality_gate_eligibility(role, latest_metrics.get(endpoint["canonical_model_id"]), requirements)
+                metrics_row = latest_metrics.get(endpoint["canonical_model_id"], {})
+                benchmark = aa_subscore(
+                    metrics_row.get("metrics", {}),
+                    weights=AA_SCORE_WEIGHTS,
+                    percentiles=AA_SCORE_PERCENTILES,
+                )
+                health = latest_health.get(str(endpoint["id"]), {})
+                latency = latency_score_source(
+                    endpoint_p95=health.get("endpoint_p95"),
+                    provider_p95=health.get("provider_p95"),
+                    aa_latency=metrics_row.get("aa_latency"),
+                )
                 score = score_endpoint(
                     {
-                        "benchmark_fit": 1.0,
+                        "benchmark_fit": benchmark.value or 0.0,
                         "capability_fit": 1.0 if eligibility.eligible else 0.0,
-                        "health": 1.0,
-                        "latency": 1.0,
-                        "quota_headroom": min(_remaining_requests(endpoint["effective_remaining"]) / 100, 1.0),
-                        "stability": 1.0,
+                        "health": health.get("health", 0.0),
+                        "latency": _latency_component(*latency),
+                        "quota_headroom": min(remaining / 100, 1.0),
+                        "stability": health.get("stability", 0.0),
+                        "uncertainty": benchmark.uncertainty_penalty + (0.1 if benchmark.unknown else 0.0),
                     }
                 )
                 context.repository.scores.upsert(
@@ -1205,7 +1229,7 @@ def _latest_aa_metrics_by_model(transaction: Any) -> dict[Any, dict[str, Any]]:
         """
         SELECT DISTINCT ON (canonical_model_id)
                canonical_model_id, intelligence_index, coding_index, agentic_index,
-               index_version
+               median_end_to_end_seconds, index_version
         FROM artificial_analysis_model_metrics
         ORDER BY canonical_model_id, fetched_at DESC
         """
@@ -1218,9 +1242,92 @@ def _latest_aa_metrics_by_model(transaction: Any) -> dict[Any, dict[str, Any]]:
                 if row[key] is not None
             },
             "index_version": row["index_version"],
+            "aa_latency": float(row["median_end_to_end_seconds"]) if row["median_end_to_end_seconds"] is not None else None,
         }
         for row in rows
     }
+
+
+def _latest_health_by_endpoint(transaction: Any) -> dict[str, dict[str, float | int | None]]:
+    rows = transaction.execute(
+        """
+        SELECT pe.id AS endpoint_id, endpoint.status AS endpoint_status,
+               endpoint.latency_p95_ms AS endpoint_p95, provider.latency_p95_ms AS provider_p95,
+               endpoint.success_rate AS endpoint_success_rate, endpoint.error_rate AS endpoint_error_rate,
+               endpoint.sample_count AS endpoint_sample_count
+        FROM provider_endpoints pe
+        JOIN provider_accounts pa ON pa.id = pe.provider_account_id
+        LEFT JOIN LATERAL (
+          SELECT status, latency_p95_ms, success_rate, error_rate, sample_count
+          FROM endpoint_health_observations
+          WHERE endpoint_id = pe.id
+          ORDER BY observed_at DESC
+          LIMIT 1
+        ) endpoint ON true
+        LEFT JOIN LATERAL (
+          SELECT latency_p95_ms
+          FROM endpoint_health_observations
+          WHERE provider_id = pa.provider_id
+            AND endpoint_id IS NULL
+          ORDER BY observed_at DESC
+          LIMIT 1
+        ) provider ON true
+        ORDER BY pe.id
+        """
+    ).fetchall()
+    return {
+        str(row["endpoint_id"]): {
+            "health": _health_component(row["endpoint_status"], row["endpoint_success_rate"], row["endpoint_error_rate"]),
+            "stability": _stability_component(row["endpoint_status"], row["endpoint_sample_count"]),
+            "endpoint_p95": row["endpoint_p95"],
+            "provider_p95": row["provider_p95"],
+        }
+        for row in rows
+    }
+
+
+def _latest_remaining_by_pool(transaction: Any) -> dict[str, float]:
+    rows = transaction.execute(
+        """
+        SELECT DISTINCT ON (quota_pool_id) quota_pool_id, remaining_value
+        FROM quota_observations
+        WHERE metric = 'requests'
+          AND remaining_value IS NOT NULL
+        ORDER BY quota_pool_id, observed_at DESC
+        """
+    ).fetchall()
+    return {str(row["quota_pool_id"]): float(row["remaining_value"]) for row in rows}
+
+
+def _health_component(status: str | None, success_rate: Any, error_rate: Any) -> float:
+    if success_rate is not None:
+        return max(0.0, min(float(success_rate) / 100.0, 1.0))
+    if error_rate is not None:
+        return max(0.0, min(1.0 - float(error_rate) / 100.0, 1.0))
+    if status == "active":
+        return 0.9
+    if status == "degraded":
+        return 0.35
+    return 0.0
+
+
+def _stability_component(status: str | None, sample_count: Any) -> float:
+    if status == "active":
+        base = 0.9
+    elif status == "degraded":
+        base = 0.35
+    else:
+        base = 0.0
+    if sample_count is None:
+        return base
+    return min(base, max(0.0, float(sample_count) / 10.0))
+
+
+def _latency_component(source: str, value: float | None) -> float:
+    if value is None:
+        return 0.0
+    latency_ms = float(value) * 1000.0 if source == "aa" else float(value)
+    return max(0.0, min(1.0, 1.0 - latency_ms / 10_000.0))
 
 
 def _context_window_eligibility(endpoint: Any, requirements: dict[str, Any]) -> EligibilityDecision:
@@ -1362,6 +1469,7 @@ def _allocation_stage(_dependencies: StageDependencies, context: PipelineContext
             ).fetchall()
         }
         recalibration_roles = _roles_needing_quality_recalibration(transaction)
+        pool_remaining = _latest_remaining_by_pool(transaction)
         demand = {
             role["id"]: forecast_demand.get(role["id"], cold_start_demand(schedule=None, bootstrap=None, role_minimum=1, global_minimum=1).value)
             for role in roles
@@ -1371,32 +1479,25 @@ def _allocation_stage(_dependencies: StageDependencies, context: PipelineContext
                 "id": str(row["endpoint_id"]),
                 "pool": str(row["quota_pool_id"]),
                 "score": float(row["total_score"]),
-                "capacity": _remaining_requests(row["effective_remaining"]),
+                "capacity": pool_remaining.get(str(row["quota_pool_id"]), _remaining_amount(row["effective_remaining"])),
                 "is_router": is_configured_router(str(row["provider_model_id"])),
                 "input": _configured_router_input(str(row["provider_model_id"])),
                 "effective_context_window": int(row["effective_context_window"] or 0),
                 "access": "free_quota_available" if row["access_status"] == "confirmed" else "unknown_excluded",
                 "basic_probe": row["probe_status"] == "passed",
-                "quota": _remaining_requests(row["effective_remaining"]),
+                "quota": pool_remaining.get(str(row["quota_pool_id"]), _remaining_amount(row["effective_remaining"])),
                 "breaker": "closed",
             }
             for row in score_rows
         ]
         plan = allocate_globally([role["id"] for role in roles], endpoints, demand)
-        pool_reports = {
-            pool: {
-                "usage": usage,
-                "capacity": max((endpoint["capacity"] for endpoint in endpoints if endpoint["pool"] == pool), default=0),
-            }
-            for pool, usage in plan.pool_usage.items()
-        }
         written = 0
         for role in roles:
             if role["id"] in recalibration_roles:
                 continue
             allocation = plan.allocations.get(role["id"])
             role_scores = endpoints if allocation is not None else []
-            validation = validate_plan(pool_reports or {"empty": {"usage": 0, "capacity": 0}}, role_has_primary=allocation is not None)
+            pool_usage = dict(plan.pool_usage)
             targets = []
             if allocation is not None:
                 requirements = role["requirements"] or {}
@@ -1404,6 +1505,9 @@ def _allocation_stage(_dependencies: StageDependencies, context: PipelineContext
                     role["id"],
                     role_scores,
                     per_pool_cap=2,
+                    demand=demand[role["id"]],
+                    pool_usage=pool_usage,
+                    reserved_endpoint_id=allocation.endpoint_id,
                     auto_router_tail=tuple(entry.id for entry in DEFAULT_AUTO_ROUTER_TAIL),
                     required_capabilities=set(requirements.get("capabilities", [])),
                     minimum_context=int(requirements.get("minimum_context_window") or 0),
@@ -1412,6 +1516,14 @@ def _allocation_stage(_dependencies: StageDependencies, context: PipelineContext
                     {"endpoint_id": endpoint_id, "priority": index + 1}
                     for index, endpoint_id in enumerate(combo.endpoints)
                 ]
+            pool_reports = {
+                pool: {
+                    "usage": usage,
+                    "capacity": max((endpoint["capacity"] for endpoint in endpoints if endpoint["pool"] == pool), default=0),
+                }
+                for pool, usage in pool_usage.items()
+            }
+            validation = validate_plan(pool_reports or {"empty": {"usage": 0, "capacity": 0}}, role_has_primary=allocation is not None)
             context.repository.allocation_plans.upsert(
                 transaction,
                 role_id=role["id"],
@@ -1998,7 +2110,6 @@ def _remaining_amount(effective_remaining: Any) -> float:
     return 0.0
 
 
-# Back-compat alias: readers previously assumed the "requests" metric.
 _remaining_requests = _remaining_amount
 
 

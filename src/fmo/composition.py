@@ -273,5 +273,8 @@ _COMMAND_STAGE_NAMES = {
     "allocate": "allocation",
     "diff": "diff",
     "apply": "apply",
+    # `rollback` selects the audit stage via stages_for_command (audit has no
+    # command of its own); the top-level `rollback` CLI command is separately
+    # special-cased in run_command to the dedicated revert path.
     "rollback": "audit",
 }

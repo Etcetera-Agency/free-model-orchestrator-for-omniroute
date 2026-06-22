@@ -129,7 +129,10 @@ match-models
 probe-models
 sync-telemetry
 sync-quotas
+sync-hermes-inventory
+reconcile-roles
 score-roles
+forecast-demand
 allocate
 diff
 apply
@@ -138,6 +141,7 @@ full
 serve
 explain-endpoint
 explain-role
+normalize-profiles
 aa-index status|analyze|proposal|approve|reject|rollout|rollback
 ```
 

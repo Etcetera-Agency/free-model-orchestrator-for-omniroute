@@ -114,7 +114,14 @@ def test_simulated_daily_batch_builds_and_applies_free_combo():
         endpoints=[{"id": "free-provider/free-chat", "pool": "free-provider:pool", "score": score.total, "capacity": remaining}],
         demand=demand,
     )
-    combo = build_priority_combo("routing_fast", [{"id": plan.allocations["routing_fast"].endpoint_id, "score": score.total}], per_pool_cap=2)
+    combo = build_priority_combo(
+        "routing_fast",
+        [{"id": plan.allocations["routing_fast"].endpoint_id, "score": score.total}],
+        per_pool_cap=2,
+        demand=0,
+        pool_usage={},
+        reserved_endpoint_id=None,
+    )
     reviewed_combo, review_audit = apply_review_diffs(
         {"routing_fast": combo.endpoints},
         [{"op": "move", "role": "routing_fast", "endpoint_id": "free-provider/free-chat", "position": 0}],

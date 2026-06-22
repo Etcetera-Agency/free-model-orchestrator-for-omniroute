@@ -562,6 +562,7 @@ def seed_confirmed_llm_candidate(
     context_window=32768,
     coding_index=None,
     agentic_index=None,
+    aa_latency=None,
     aa_index_version="4.1",
     provider_id="provider-a",
     connection_id="pool-a",
@@ -628,11 +629,11 @@ def seed_confirmed_llm_candidate(
             """
             INSERT INTO artificial_analysis_model_metrics (
               canonical_model_id, intelligence_index, coding_index, agentic_index,
-              index_version, source_payload_hash, stale_after
+              median_end_to_end_seconds, index_version, source_payload_hash, stale_after
             )
             VALUES (
               %(model_id)s, %(index)s, %(coding_index)s, %(agentic_index)s,
-              %(index_version)s, %(hash)s, now() + interval '1 day'
+              %(aa_latency)s, %(index_version)s, %(hash)s, now() + interval '1 day'
             )
             """,
             {
@@ -640,6 +641,7 @@ def seed_confirmed_llm_candidate(
                 "index": intelligence_index,
                 "coding_index": coding_index,
                 "agentic_index": agentic_index,
+                "aa_latency": aa_latency,
                 "index_version": aa_index_version,
                 "hash": f"{model_id}:aa",
             },
@@ -1227,6 +1229,8 @@ def test_discover_accounts_command_selects_account_discovery_stage(postgres_url)
 
 
 @pytest.mark.spec("pipeline-orchestration::Account discovery persists quota pools")
+@pytest.mark.spec("quota-manager::Account remaining is not duplicated per endpoint")
+@pytest.mark.spec("quota-manager::Pool capacity bounds the sum of member allocations")
 def test_allocation_uses_account_quota_pool_not_per_account_capacity(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     repository = Repository(Database(postgres_url))
@@ -1547,6 +1551,186 @@ def test_role_scoring_stage_persists_per_role_scores(postgres_url):
     assert score["role_id"] == "routing_fast"
     assert score["eligibility"] is True
     assert float(score["total_score"]) > 0
+
+
+@pytest.mark.spec("role-scorer::AA quality drives the benchmark component")
+def test_role_scoring_stage_uses_aa_quality_for_benchmark_component(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    for model_id, index in [("quality-low", 20), ("quality-mid", 50), ("quality-high", 90)]:
+        seed_confirmed_llm_candidate(repository, model_id=model_id, intelligence_index=index)
+    with repository.database.transaction() as transaction:
+        repository.roles.upsert(
+            transaction,
+            role_id="quality_order",
+            requirements={"capabilities": []},
+            expected_load={"requests": 1},
+            criticality=1,
+        )
+
+    run_composed_stage(repository, "role-scoring")
+
+    with repository.database.transaction() as transaction:
+        rows = transaction.execute(
+            """
+            SELECT pe.provider_model_id, rs.total_score, rs.component_scores
+            FROM role_scores rs
+            JOIN provider_endpoints pe ON pe.id = rs.endpoint_id
+            WHERE rs.role_id = 'quality_order'
+            ORDER BY pe.provider_model_id
+            """
+        ).fetchall()
+    scores = {row["provider_model_id"]: row for row in rows}
+    assert (
+        scores["quality-low"]["component_scores"]["benchmark_fit"]
+        < scores["quality-mid"]["component_scores"]["benchmark_fit"]
+    )
+    assert (
+        scores["quality-mid"]["component_scores"]["benchmark_fit"]
+        < scores["quality-high"]["component_scores"]["benchmark_fit"]
+    )
+    assert float(scores["quality-low"]["total_score"]) < float(scores["quality-high"]["total_score"])
+
+
+@pytest.mark.spec("role-scorer::Latency component uses the latency source priority")
+def test_role_scoring_stage_uses_latency_source_priority(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    fast = seed_confirmed_llm_candidate(repository, model_id="latency-endpoint", intelligence_index=80, aa_latency=8)
+    aa_only = seed_confirmed_llm_candidate(
+        repository,
+        model_id="latency-aa",
+        intelligence_index=80,
+        aa_latency=2,
+        provider_id="provider-b",
+        connection_id="pool-b",
+    )
+    with repository.database.transaction() as transaction:
+        repository.roles.upsert(
+            transaction,
+            role_id="latency_role",
+            requirements={"capabilities": []},
+            expected_load={"requests": 1},
+            criticality=1,
+        )
+        provider = transaction.execute(
+            """
+            SELECT pa.provider_id
+            FROM provider_endpoints pe
+            JOIN provider_accounts pa ON pa.id = pe.provider_account_id
+            WHERE pe.id = %(endpoint_id)s
+            """,
+            {"endpoint_id": fast["id"]},
+        ).fetchone()
+        transaction.execute(
+            """
+            INSERT INTO endpoint_health_observations (
+              endpoint_id, granularity, status, latency_p95_ms, sample_count, observed_at
+            )
+            VALUES (%(endpoint_id)s, 'model', 'active', 100, 10, now() + interval '1 minute')
+            """,
+            {"endpoint_id": fast["id"]},
+        )
+        transaction.execute(
+            """
+            INSERT INTO endpoint_health_observations (
+              provider_id, granularity, status, latency_p95_ms, sample_count, observed_at
+            )
+            VALUES (%(provider_id)s, 'provider', 'active', 9000, 10, now() + interval '1 minute')
+            """,
+            {"provider_id": provider["provider_id"]},
+        )
+
+    run_composed_stage(repository, "role-scoring")
+
+    with repository.database.transaction() as transaction:
+        rows = transaction.execute(
+            """
+            SELECT pe.provider_model_id, rs.component_scores
+            FROM role_scores rs
+            JOIN provider_endpoints pe ON pe.id = rs.endpoint_id
+            WHERE rs.role_id = 'latency_role'
+            """
+        ).fetchall()
+    components = {row["provider_model_id"]: row["component_scores"] for row in rows}
+    assert components["latency-endpoint"]["latency"] == pytest.approx(0.99)
+    assert components["latency-aa"]["latency"] == pytest.approx(0.8)
+    assert str(aa_only["id"])
+
+
+@pytest.mark.spec("role-scorer::Health and stability come from telemetry observations")
+def test_role_scoring_stage_uses_health_observation_components(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    healthy = seed_confirmed_llm_candidate(repository, model_id="healthy-model", intelligence_index=80)
+    degraded = seed_confirmed_llm_candidate(repository, model_id="degraded-model", intelligence_index=80)
+    with repository.database.transaction() as transaction:
+        repository.roles.upsert(
+            transaction,
+            role_id="health_role",
+            requirements={"capabilities": []},
+            expected_load={"requests": 1},
+            criticality=1,
+        )
+        transaction.execute(
+            """
+            INSERT INTO endpoint_health_observations (
+              endpoint_id, granularity, status, success_rate, sample_count, observed_at
+            )
+            VALUES (%(endpoint_id)s, 'model', 'active', 100, 10, now() + interval '1 minute')
+            """,
+            {"endpoint_id": healthy["id"]},
+        )
+        transaction.execute(
+            """
+            INSERT INTO endpoint_health_observations (
+              endpoint_id, granularity, status, error_rate, sample_count, observed_at
+            )
+            VALUES (%(endpoint_id)s, 'model', 'degraded', 50, 1, now() + interval '1 minute')
+            """,
+            {"endpoint_id": degraded["id"]},
+        )
+
+    run_composed_stage(repository, "role-scoring")
+
+    with repository.database.transaction() as transaction:
+        rows = transaction.execute(
+            """
+            SELECT pe.provider_model_id, rs.component_scores
+            FROM role_scores rs
+            JOIN provider_endpoints pe ON pe.id = rs.endpoint_id
+            WHERE rs.role_id = 'health_role'
+            """
+        ).fetchall()
+    components = {row["provider_model_id"]: row["component_scores"] for row in rows}
+    assert components["degraded-model"]["health"] < components["healthy-model"]["health"]
+    assert components["degraded-model"]["stability"] < components["healthy-model"]["stability"]
+
+
+@pytest.mark.spec("role-scorer::Missing AA metrics apply the uncertainty penalty")
+def test_role_scoring_stage_penalizes_missing_aa_metrics(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    endpoint = seed_confirmed_llm_candidate(repository, model_id="missing-aa", intelligence_index=80)
+    with repository.database.transaction() as transaction:
+        transaction.execute("DELETE FROM artificial_analysis_model_metrics")
+        repository.roles.upsert(
+            transaction,
+            role_id="missing_aa_role",
+            requirements={"capabilities": []},
+            expected_load={"requests": 1},
+            criticality=1,
+        )
+
+    run_composed_stage(repository, "role-scoring")
+
+    with repository.database.transaction() as transaction:
+        score = transaction.execute(
+            "SELECT component_scores, total_score FROM role_scores WHERE endpoint_id = %(endpoint_id)s",
+            {"endpoint_id": endpoint["id"]},
+        ).fetchone()
+    assert score["component_scores"]["benchmark_fit"] == 0.0
+    assert float(score["total_score"]) == pytest.approx(3.7)
 
 
 @pytest.mark.spec("role-scorer::Below context minimum rejected in scoring")

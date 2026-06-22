@@ -55,7 +55,14 @@ def test_global_allocation_shared_capacity_and_heavy_role_separation():
 @pytest.mark.spec("allocator::Combo output")
 @pytest.mark.spec("allocator::Combo orders weakest-eligible first")
 def test_priority_combo_no_weights_oversubscription_and_degraded_modes():
-    combo = build_priority_combo("research_scout", [{"id": "e1", "score": 2}, {"id": "e2", "score": 1}], per_pool_cap=2)
+    combo = build_priority_combo(
+        "research_scout",
+        [{"id": "e1", "score": 2}, {"id": "e2", "score": 1}],
+        per_pool_cap=2,
+        demand=0,
+        pool_usage={},
+        reserved_endpoint_id=None,
+    )
     blocked = validate_plan({"pool-a": {"usage": 120, "capacity": 100}})
     degraded = validate_plan({"pool-a": {"usage": 0, "capacity": 0}}, role_has_primary=False)
     assert combo.strategy == "priority"
@@ -93,6 +100,9 @@ def test_priority_combo_appends_configured_router_tail_after_scored_head():
             _router_endpoint("mimocode/mimo-auto"),
         ],
         per_pool_cap=2,
+        demand=0,
+        pool_usage={},
+        reserved_endpoint_id=None,
         auto_router_tail=("mimocode/mimo-auto", "openrouter/free"),
         required_capabilities={"text"},
     )
@@ -113,6 +123,9 @@ def test_priority_combo_filters_router_tail_by_role_and_access_constraints():
             _router_endpoint("openrouter/free", input=("text", "image"), effective_context_window=128_000),
         ],
         per_pool_cap=2,
+        demand=0,
+        pool_usage={},
+        reserved_endpoint_id=None,
         auto_router_tail=("text-only", "short-context", "paid-router", "openrouter/free"),
         required_capabilities={"image"},
         minimum_context=64_000,
@@ -127,6 +140,9 @@ def test_priority_combo_allows_router_only_combo_when_no_scored_endpoint_eligibl
         "routing_fast",
         [_router_endpoint("mimocode/mimo-auto"), _router_endpoint("openrouter/free", input=("text", "image"))],
         per_pool_cap=2,
+        demand=0,
+        pool_usage={},
+        reserved_endpoint_id=None,
         auto_router_tail=("mimocode/mimo-auto", "openrouter/free"),
         required_capabilities={"text"},
     )
@@ -161,14 +177,57 @@ def test_heavy_role_priority_combo_skips_second_primary_in_same_pool():
     combo = build_priority_combo(
         "research_scout",
         [
-            {"id": "e1", "pool": "pool-a", "score": 100},
-            {"id": "e2", "pool": "pool-a", "score": 99},
-            {"id": "e3", "pool": "pool-b", "score": 98},
+            {"id": "e1", "pool": "pool-a", "score": 100, "capacity": 1},
+            {"id": "e2", "pool": "pool-a", "score": 99, "capacity": 1},
+            {"id": "e3", "pool": "pool-b", "score": 98, "capacity": 1},
         ],
         per_pool_cap=2,
+        demand=0,
+        pool_usage={},
+        reserved_endpoint_id=None,
     )
 
     assert combo.endpoints == ["e3", "e2"]
+
+
+@pytest.mark.spec("allocator::Fallback members reserve their pool capacity")
+def test_priority_combo_reserves_fallback_member_capacity():
+    pool_usage = {}
+
+    combo = build_priority_combo(
+        "routing_fast",
+        [
+            {"id": "primary", "pool": "pool-a", "score": 10, "capacity": 20},
+            {"id": "fallback", "pool": "pool-a", "score": 9, "capacity": 20},
+        ],
+        per_pool_cap=2,
+        demand=10,
+        pool_usage=pool_usage,
+        reserved_endpoint_id=None,
+    )
+
+    assert combo.endpoints == ["fallback", "primary"]
+    assert pool_usage["pool-a"] == 20
+
+
+@pytest.mark.spec("allocator::Combo member without pool capacity is dropped")
+def test_priority_combo_drops_member_without_pool_capacity():
+    pool_usage = {"pool-a": 10}
+
+    combo = build_priority_combo(
+        "routing_fast",
+        [
+            {"id": "blocked", "pool": "pool-a", "score": 9, "capacity": 10},
+            {"id": "available", "pool": "pool-b", "score": 8, "capacity": 20},
+        ],
+        per_pool_cap=2,
+        demand=10,
+        pool_usage=pool_usage,
+        reserved_endpoint_id=None,
+    )
+
+    assert combo.endpoints == ["available"]
+    assert pool_usage == {"pool-a": 10, "pool-b": 10}
 
 
 @pytest.mark.spec("demand-forecast::Quality band widens to cover protected demand")

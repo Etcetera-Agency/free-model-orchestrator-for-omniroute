@@ -59,6 +59,9 @@ def build_priority_combo(
     endpoints: list[dict],
     *,
     per_pool_cap: int,
+    demand: float,
+    pool_usage: dict[str, float],
+    reserved_endpoint_id: str | None,
     auto_router_tail: list[str] | tuple[str, ...] = (),
     required_capabilities: set[str] | None = None,
     minimum_context: int = 0,
@@ -70,9 +73,14 @@ def build_priority_combo(
         pool = endpoint.get("pool")
         if role_id in HEAVY_ROLES and pool is not None and pool in used_pools:
             continue
+        already_reserved = endpoint["id"] == reserved_endpoint_id
+        if pool is not None and not already_reserved and pool_usage.get(pool, 0) + demand > endpoint["capacity"]:
+            continue
         ordered.append(endpoint["id"])
         if pool is not None:
             used_pools.add(pool)
+            if not already_reserved:
+                pool_usage[pool] = pool_usage.get(pool, 0) + demand
         if len(ordered) == per_pool_cap:
             break
     router_order = {model_id.lower(): index for index, model_id in enumerate(auto_router_tail)}

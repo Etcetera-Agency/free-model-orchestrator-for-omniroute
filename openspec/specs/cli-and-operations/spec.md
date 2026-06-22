@@ -9,8 +9,10 @@ deterministic exit codes for Free Model Orchestrator CLI operations.
 The system SHALL provide per-stage commands (sync-free-registry,
 discover-accounts, scan-providers, research-quotas, classify-access,
 sync-metadata, match-models, probe-models, sync-telemetry, sync-quotas,
-score-roles, allocate, diff, apply, rollback, full), the `aa-index` migration
-subcommands, and diagnostics (`explain-endpoint`, `explain-role`, `show-*`).
+sync-hermes-inventory, reconcile-roles, score-roles, forecast-demand, allocate,
+diff, apply, rollback, full), the `serve` scheduler entrypoint, the `aa-index`
+migration subcommands, the `normalize-profiles` command, and diagnostics
+(`explain-endpoint`, `explain-role`, `show-*`).
 Common flags include `--dry-run`, `--provider`, `--account`, `--endpoint`,
 `--role`, `--run-id`, `--force`, `--json`, `--verbose`.
 

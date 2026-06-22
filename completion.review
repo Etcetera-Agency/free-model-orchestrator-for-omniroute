@@ -1,5 +1,11 @@
 # Completion Review
 
+- `fix-selection-correctness` is archived: production role scoring now derives
+  benchmark, latency, health, stability, quota headroom, and uncertainty from
+  persisted AA/telemetry/quota evidence; allocation consumes shared pool
+  capacity and reserves every scored combo member. Code Simplifier review pulled
+  repeated AA score config out of the scoring loop and tightened combo
+  reservation branching before commit.
 - Auto-router fallback tail now has a structured ordered config, exact
   membership matching, AA/quality-gate exemptions, and allocation appends
   eligible routers after scored endpoints without consuming scored slots.
