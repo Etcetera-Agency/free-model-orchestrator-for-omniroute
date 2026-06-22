@@ -2,7 +2,6 @@
 
 ## Active implementation queue
 
-- update-quota-manager-binding-capacity: bind and implement quota-manager request-equivalent capacity scenarios.
 - add-weekly-tpr-recalibration: bind and implement weekly tokens-per-request recalibration scenarios.
 - add-auto-router-fallback-tail: bind and implement configured router tail scenarios.
 

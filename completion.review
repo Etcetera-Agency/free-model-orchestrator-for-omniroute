@@ -1,5 +1,8 @@
 # Completion Review
 
+- Quota manager now assembles research, calibrated and live quota axes into
+  request-equivalent daily binding capacity, converts live quota token totals
+  and usage, and keeps effective remaining in the same normalized unit.
 - Quota research now captures request and token axes from deterministic summaries,
   preserves both axes on active rules, routes sub-day request rates out as
   reactive gates, and applies the same routing to Instructor inspector claims.

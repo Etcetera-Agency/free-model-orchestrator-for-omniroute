@@ -42,6 +42,7 @@ def _quota_body(*, generated_at: datetime) -> dict:
         {
             "quotaTotal": 100,
             "quotaUsed": 25,
+            "quotaWindow": "day",
             "resetAt": (generated_at + timedelta(hours=6)).isoformat().replace("+00:00", "Z"),
         }
     )
@@ -49,6 +50,7 @@ def _quota_body(*, generated_at: datetime) -> dict:
 
 
 @pytest.mark.spec("quota-manager::Quota fetched at reset")
+@pytest.mark.spec("quota-manager::Live token budget converted")
 def test_live_quota_fetch_uses_omniroute_fixture_and_recomputes_remaining():
     now = datetime(2026, 6, 18, 8, 0, tzinfo=timezone.utc)
     body = _quota_body(generated_at=now - timedelta(minutes=2))
@@ -56,12 +58,12 @@ def test_live_quota_fetch_uses_omniroute_fixture_and_recomputes_remaining():
     transport = _QuotaTransport(body=body)
     client = OmniRouteClient(base_url="https://omniroute.test", api_key="manage-key", transport=transport)
 
-    snapshot = fetch_live_quota_snapshot(client, now=now, max_age=timedelta(minutes=5))
+    snapshot = fetch_live_quota_snapshot(client, now=now, max_age=timedelta(minutes=5), tokens_per_request=10)
 
     assert transport.requested_paths == ["/api/usage/quota"]
     quota = snapshot.quotas[f"{target['provider']}:{target['connectionId']}"]
-    assert quota.limit == 100
-    assert quota.remaining == 75
+    assert quota.limit == 10
+    assert quota.remaining == 7.5
     assert quota.reset_at == now - timedelta(minutes=2) + timedelta(hours=6)
 
 

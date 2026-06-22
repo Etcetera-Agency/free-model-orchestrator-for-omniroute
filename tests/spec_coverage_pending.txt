@@ -5,11 +5,6 @@
 #
 # Active proposal slices awaiting TDD implementation (see openspec/TODO.md and
 # openspec/changes/<id>/). Each line is dropped when its test lands.
-quota-manager::Tightest axis binds the capacity
-quota-manager::Live token budget converted
-quota-manager::Calibrated endpoint contributes its axis
-quota-manager::Remaining expressed in request-equivalents per day
-quota-manager::Sub-day request axis excluded
 quota-manager::Factor refined from observations
 quota-manager::Too little signal keeps the current factor
 quota-manager::A noisy week is clamped

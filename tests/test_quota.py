@@ -9,12 +9,15 @@ from fmo.quota_attribution import (
     attribution_capacity,
 )
 from fmo.quota_manager import (
+    LiveQuota,
+    endpoint_binding_capacity,
     effective_remaining,
     require_hard_stop,
     reset_and_reclassify,
     validate_historical_reserve,
 )
 from fmo.quota_research import (
+    ActiveQuotaRule,
     QuotaClaim,
     activate_summary_rule,
     build_quota_query,
@@ -73,6 +76,58 @@ def test_summary_activation_caps_confidence_and_worsened_quota_safe_mode():
     assert active.activated_by == "summary"
     assert active.capacity_class == "opportunistic"
     assert active.safe_mode is True
+
+
+def _quota_rule(claim: QuotaClaim, axes: tuple[QuotaClaim, ...] = ()) -> ActiveQuotaRule:
+    return ActiveQuotaRule(
+        claim=claim,
+        confidence=1.0,
+        activated_by="test",
+        capacity_class="confirmed",
+        safe_mode=False,
+        axes=axes or (claim,),
+    )
+
+
+@pytest.mark.spec("quota-manager::Tightest axis binds the capacity")
+def test_endpoint_binding_capacity_uses_tightest_research_and_live_axis():
+    research = _quota_rule(QuotaClaim("requests", 100, "day", ["research"], True))
+    live = LiveQuota("provider", "connection", limit=1000, remaining=1000, reset_at=datetime.now(timezone.utc))
+
+    capacity = endpoint_binding_capacity(
+        research_rule=research,
+        live_quota=live,
+        tokens_per_request=2000,
+    )
+
+    assert capacity == 100
+
+
+@pytest.mark.spec("quota-manager::Calibrated endpoint contributes its axis")
+def test_endpoint_binding_capacity_includes_calibrated_token_axis():
+    research = _quota_rule(QuotaClaim("requests", 50, "day", ["research"], True))
+    calibrated = _quota_rule(QuotaClaim("tokens", 1000, "day", ["calibration"], True))
+
+    capacity = endpoint_binding_capacity(
+        research_rule=research,
+        calibration_rule=calibrated,
+        tokens_per_request=100,
+    )
+
+    assert capacity == 10
+
+
+@pytest.mark.spec("quota-manager::Sub-day request axis excluded")
+def test_endpoint_binding_capacity_excludes_sub_day_request_axis():
+    research = _quota_rule(
+        QuotaClaim("requests", 15, "minute", ["research"], True),
+        axes=(
+            QuotaClaim("requests", 15, "minute", ["research"], True),
+            QuotaClaim("requests", 800, "day", ["research"], True),
+        ),
+    )
+
+    assert endpoint_binding_capacity(research_rule=research) == 800
 
 
 @pytest.mark.spec("access-classifier::Live API overrides models.dev")
@@ -219,6 +274,11 @@ def test_effective_remaining_all_sources_unknown_is_none():
 @pytest.mark.spec("quota-manager::Negative effective remaining")
 def test_effective_remaining_preserves_negative_after_reservations_and_buffer():
     assert effective_remaining(limit=100, provider_remaining=3, local_used=99, pending_reserved=4, safety_buffer=2) == -5
+
+
+@pytest.mark.spec("quota-manager::Remaining expressed in request-equivalents per day")
+def test_effective_remaining_uses_converted_request_equivalent_values():
+    assert effective_remaining(limit=10, provider_remaining=7.5, local_used=2, pending_reserved=1, safety_buffer=0.5) == 6
 
 
 @pytest.mark.spec("quota-manager::No hard stop")
