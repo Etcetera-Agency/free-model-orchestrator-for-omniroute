@@ -185,6 +185,54 @@ def test_scheduler_fires_full_pipeline_at_configured_cron(repository):
     assert calls == [("scheduled", "full")]
 
 
+def _recalibration_scheduler(repository, calls):
+    return Scheduler(
+        repository,
+        cron="0 4 * * *",
+        pipeline_runner=lambda _trigger, _run_type: None,
+        recalibration_cron="0 5 * * 0",
+        recalibration_job=lambda: calls.append("recalibrate") or "done",
+    )
+
+
+@pytest.mark.spec("scheduler::Weekly recalibration fires")
+def test_scheduler_fires_weekly_recalibration_at_configured_cron(repository):
+    calls = []
+    scheduler = _recalibration_scheduler(repository, calls)
+
+    cron_now = datetime.now(timezone.utc).replace(hour=5, minute=0, second=0, microsecond=0)
+    result = scheduler.tick_recalibration(cron_now.isoformat())
+
+    assert result == "done"
+    assert calls == ["recalibrate"]
+
+
+@pytest.mark.spec("scheduler::Non-matching tick is a no-op")
+def test_scheduler_weekly_recalibration_non_matching_tick_noops(repository):
+    calls = []
+    scheduler = _recalibration_scheduler(repository, calls)
+
+    cron_now = datetime.now(timezone.utc).replace(hour=5, minute=1, second=0, microsecond=0)
+
+    assert scheduler.tick_recalibration(cron_now.isoformat()) is None
+    assert calls == []
+
+
+@pytest.mark.spec("scheduler::Recalibration does not overlap a running job")
+def test_scheduler_weekly_recalibration_noops_when_daily_lock_held(repository):
+    calls = []
+    lock = RunLockManager(repository).acquire("daily")
+    scheduler = _recalibration_scheduler(repository, calls)
+
+    cron_now = datetime.now(timezone.utc).replace(hour=5, minute=0, second=0, microsecond=0)
+
+    try:
+        assert scheduler.tick_recalibration(cron_now.isoformat()) is None
+    finally:
+        lock.release()
+    assert calls == []
+
+
 @pytest.mark.spec("scheduler::Manual trigger starts a run")
 @pytest.mark.spec("scheduler::Apply pipeline runs")
 @pytest.mark.spec("scheduler::Urgent run after paid charge")

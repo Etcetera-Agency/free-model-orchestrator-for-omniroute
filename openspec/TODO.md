@@ -2,7 +2,6 @@
 
 ## Active implementation queue
 
-- add-weekly-tpr-recalibration: bind and implement weekly tokens-per-request recalibration scenarios.
 - add-auto-router-fallback-tail: bind and implement configured router tail scenarios.
 
 ## Deferred follow-up

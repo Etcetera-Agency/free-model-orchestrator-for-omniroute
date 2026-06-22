@@ -89,6 +89,7 @@ def test_refine_factor_from_observations():
     assert refine_global_tokens_per_request(observations, current=2000) == 1500
 
 
+@pytest.mark.spec("quota-manager::Too little signal keeps the current factor")
 def test_refine_keeps_current_when_too_few_requests():
     observations = [CalibrationObservation("a", 50_000, 10)]
     assert refine_global_tokens_per_request(observations, current=2000) == 2000
@@ -98,6 +99,7 @@ def test_refine_keeps_current_on_empty():
     assert refine_global_tokens_per_request([], current=2000) == 2000
 
 
+@pytest.mark.spec("quota-manager::A noisy week is clamped")
 def test_refine_clamps_downward_swing():
     # raw would be ~100, but clamp limits to 50% drop from 2000 -> 1000
     observations = [CalibrationObservation("a", 100_000, 1000)]

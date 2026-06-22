@@ -1,5 +1,9 @@
 # Completion Review
 
+- Weekly tokens-per-request recalibration now has a transaction-scoped job that
+  refines the global factor from calibration observations, recomputes only
+  self-derived capacities, and is fired by its own scheduler cron under the
+  daily run lock.
 - Quota manager now assembles research, calibrated and live quota axes into
   request-equivalent daily binding capacity, converts live quota token totals
   and usage, and keeps effective remaining in the same normalized unit.

@@ -9,6 +9,7 @@ from fmo.pipeline import PipelineRunResult
 
 
 PipelineInvoker = Callable[[str, str], PipelineRunResult]
+RecalibrationInvoker = Callable[[], object]
 
 
 @dataclass(frozen=True)
@@ -47,16 +48,36 @@ class RunLockManager:
 
 
 class Scheduler:
-    def __init__(self, repository: Repository, *, cron: str, pipeline_runner: PipelineInvoker):
+    def __init__(
+        self,
+        repository: Repository,
+        *,
+        cron: str,
+        pipeline_runner: PipelineInvoker,
+        recalibration_cron: str | None = None,
+        recalibration_job: RecalibrationInvoker | None = None,
+    ):
         self.repository = repository
         self.cron = cron
         self.pipeline_runner = pipeline_runner
+        self.recalibration_cron = recalibration_cron
+        self.recalibration_job = recalibration_job
         self.locks = RunLockManager(repository)
 
     def tick(self, timestamp: str) -> PipelineRunResult | None:
         if not _cron_matches(self.cron, timestamp):
             return None
         return self.trigger("scheduled")
+
+    def tick_recalibration(self, timestamp: str) -> object | None:
+        if self.recalibration_cron is None or self.recalibration_job is None:
+            return None
+        if not _cron_matches(self.recalibration_cron, timestamp):
+            return None
+        with self.locks.hold("daily") as lock:
+            if not lock.acquired:
+                return None
+            return self.recalibration_job()
 
     def trigger(self, trigger: str, *, provider: str | None = None, role: str | None = None) -> PipelineRunResult:
         run_type, lock_scope, pipeline_trigger = _trigger_plan(trigger, provider=provider, role=role)

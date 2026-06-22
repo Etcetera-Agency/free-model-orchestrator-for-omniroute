@@ -5,14 +5,6 @@
 #
 # Active proposal slices awaiting TDD implementation (see openspec/TODO.md and
 # openspec/changes/<id>/). Each line is dropped when its test lands.
-quota-manager::Factor refined from observations
-quota-manager::Too little signal keeps the current factor
-quota-manager::A noisy week is clamped
-quota-manager::Derived endpoints recomputed, live untouched
-quota-manager::Factor and capacities persisted consistently
-scheduler::Non-matching tick is a no-op
-scheduler::Weekly recalibration fires
-scheduler::Recalibration does not overlap a running job
 role-scorer::Configured router is recognized
 role-scorer::Unlisted model is not a router
 role-scorer::Child router is independent of its parent
