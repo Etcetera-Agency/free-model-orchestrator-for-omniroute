@@ -17,7 +17,13 @@ from fmo.allocation import allocate_globally, build_priority_combo, validate_pla
 from fmo.applier import ComboApplier
 from fmo.apply_guard import ApplyPreconditions, check_apply_preconditions
 from fmo.aa_migration import run_migration_agent
-from fmo.config import DEFAULT_AUTO_ROUTER_TAIL, StartupConfig, configured_router_entry, is_configured_router
+from fmo.config import (
+    DEFAULT_APPLY_MIN_SAFETY_BUFFER,
+    DEFAULT_AUTO_ROUTER_TAIL,
+    StartupConfig,
+    configured_router_entry,
+    is_configured_router,
+)
 from fmo.context import context_eligible, effective_context_window
 from fmo.external_metadata import ExternalMetadataError
 from fmo.forecast import apply_historical_reserve, cold_start_demand, protected_demand, quality_band_for_demand
@@ -395,6 +401,7 @@ def _quota_research_stage(dependencies: StageDependencies, context: PipelineCont
         ).fetchall()
     quota_limit_hints = _quota_limit_hints(dependencies.omniroute_client)
     written = 0
+    failed = 0
     today = datetime.now(timezone.utc)
     for endpoint in endpoints:
         result = research_quota_rule(
@@ -412,9 +419,11 @@ def _quota_research_stage(dependencies: StageDependencies, context: PipelineCont
             ),
         )
         if result.error is not None:
-            return StageResult(status="external_dependency_failed", reason=result.error.reason)
+            failed += 1
+            continue
         if result.snapshot is None or result.rule is None:
-            return StageResult(status="partial_stale", reason="quota_rule_missing")
+            failed += 1
+            continue
         rule = result.rule
         claim = rule.claim
         with context.repository.database.transaction() as transaction:
@@ -446,6 +455,17 @@ def _quota_research_stage(dependencies: StageDependencies, context: PipelineCont
     if changes.lost:
         with context.repository.database.transaction() as transaction:
             _deactivate_lost_free_models(transaction, changes.lost)
+    if failed:
+        return StageResult(
+            status="partial_stale",
+            changed=written > 0,
+            reason="quota_research_partial",
+            details={
+                "adapter": "quota-research",
+                "effect": "repository_write" if written else None,
+                "failed_endpoints": failed,
+            },
+        )
     return _effect_result("quota-research", changed=written > 0)
 
 
@@ -613,6 +633,7 @@ def _access_classification_stage(_dependencies: StageDependencies, context: Pipe
                 "reset_at": reset_at.isoformat(),
                 "hard_stop": row["hard_stop_capable"],
                 "confidence": float(row["confidence"]),
+                "remaining_source": "assumed",
             }
             decision = classify_access(evidence)
             status = _canonical_access_status(decision.status)
@@ -895,6 +916,7 @@ def _quota_sync_stage(dependencies: StageDependencies, context: PipelineContext)
                 UPDATE endpoint_access_states eas
                 SET effective_remaining = %(effective_remaining)s,
                     reset_at = %(reset_at)s,
+                    evidence = COALESCE(eas.evidence, '{}'::jsonb) || %(evidence)s,
                     classified_at = now()
                 FROM provider_endpoints pe
                 WHERE eas.endpoint_id = pe.id
@@ -903,6 +925,12 @@ def _quota_sync_stage(dependencies: StageDependencies, context: PipelineContext)
                 {
                     "effective_remaining": Jsonb({"requests": quota.remaining}),
                     "reset_at": quota.reset_at,
+                    "evidence": Jsonb(
+                        {
+                            "remaining_source": "live_observed",
+                            "safety_buffer": DEFAULT_APPLY_MIN_SAFETY_BUFFER,
+                        }
+                    ),
                     "provider_account_id": account["id"],
                 },
             )
@@ -1624,7 +1652,16 @@ def _apply_stage(dependencies: StageDependencies, context: PipelineContext) -> S
             ORDER BY omniroute_combo_id, created_at DESC
             """
         ).fetchall()
-        safety = _derive_apply_stage_safety(transaction, diffs)
+        minimum_safety_buffer = (
+            dependencies.config.apply_min_safety_buffer
+            if dependencies.config is not None
+            else DEFAULT_APPLY_MIN_SAFETY_BUFFER
+        )
+        safety = _derive_apply_stage_safety(
+            transaction,
+            diffs,
+            minimum_safety_buffer=minimum_safety_buffer,
+        )
     try:
         check_apply_preconditions(
             ApplyPreconditions(
@@ -1743,12 +1780,21 @@ def _delete_applied_snapshots_for_run(
         )
 
 
-def _derive_apply_stage_safety(transaction: Any, diffs: Sequence[Any]) -> dict[str, bool]:
+def _derive_apply_stage_safety(
+    transaction: Any,
+    diffs: Sequence[Any],
+    *,
+    minimum_safety_buffer: float,
+) -> dict[str, bool]:
     endpoint_ids = _desired_apply_endpoint_ids(diffs)
     if not endpoint_ids:
         return {"quota_safe": True, "probes_passed": True}
     return {
-        "quota_safe": _desired_endpoints_have_current_quota_safety(transaction, endpoint_ids),
+        "quota_safe": _desired_endpoints_have_current_quota_safety(
+            transaction,
+            endpoint_ids,
+            minimum_safety_buffer=minimum_safety_buffer,
+        ),
         "probes_passed": _desired_endpoints_have_current_probe_success(transaction, endpoint_ids),
     }
 
@@ -1763,7 +1809,12 @@ def _desired_apply_endpoint_ids(diffs: Sequence[Any]) -> list[str]:
     return sorted(endpoint_ids)
 
 
-def _desired_endpoints_have_current_quota_safety(transaction: Any, endpoint_ids: Sequence[str]) -> bool:
+def _desired_endpoints_have_current_quota_safety(
+    transaction: Any,
+    endpoint_ids: Sequence[str],
+    *,
+    minimum_safety_buffer: float,
+) -> bool:
     rows = transaction.execute(
         """
         SELECT endpoint_id, effective_remaining, hard_stop_capable, evidence,
@@ -1777,15 +1828,30 @@ def _desired_endpoints_have_current_quota_safety(transaction: Any, endpoint_ids:
         return False
     now = datetime.now(timezone.utc)
     oldest_allowed = now - APPLY_STAGE_EVIDENCE_MAX_AGE
-    return all(_endpoint_quota_row_is_safe(row, now=now, oldest_allowed=oldest_allowed) for row in rows)
+    return all(
+        _endpoint_quota_row_is_safe(
+            row,
+            now=now,
+            oldest_allowed=oldest_allowed,
+            minimum_safety_buffer=minimum_safety_buffer,
+        )
+        for row in rows
+    )
 
 
-def _endpoint_quota_row_is_safe(row: Any, *, now: datetime, oldest_allowed: datetime) -> bool:
+def _endpoint_quota_row_is_safe(
+    row: Any,
+    *,
+    now: datetime,
+    oldest_allowed: datetime,
+    minimum_safety_buffer: float,
+) -> bool:
     evidence = row["evidence"] if isinstance(row["evidence"], dict) else {}
-    safety_buffer = float(evidence.get("safety_buffer") or 0)
+    safety_buffer = max(float(evidence.get("safety_buffer") or 0), minimum_safety_buffer)
     return (
         row["status"] == "confirmed"
         and row["hard_stop_capable"] is True
+        and evidence.get("remaining_source") == "live_observed"
         and _remaining_requests(row["effective_remaining"]) > safety_buffer
         and row["reset_at"] is not None
         and row["reset_at"] > now

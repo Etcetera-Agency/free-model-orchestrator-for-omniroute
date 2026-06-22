@@ -6,14 +6,5 @@
 # Active proposal slices awaiting TDD implementation (see openspec/TODO.md and
 # openspec/changes/<id>/). Each line is dropped when its test lands.
 #
-# harden-pipeline-resilience
-pipeline-orchestration::Stale stage does not abort the run
-pipeline-orchestration::Apply still excludes stale evidence
-pipeline-orchestration::Stale stage yields exit 2 while later stages run
-quota-research::One endpoint error does not stop research for the rest
-quota-research::Per-endpoint failures mark the run partial
-combo-applier::Assumed remaining does not satisfy the apply gate
-combo-applier::Zero safety buffer does not satisfy the apply gate
-#
 # add-rollback-idempotency
 combo-applier::Revert write carries an idempotency key

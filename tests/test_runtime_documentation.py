@@ -8,14 +8,6 @@ ROOT = Path(__file__).resolve().parents[1]
 # tests/spec_coverage_pending.txt (and here) when its test lands. Slices are
 # listed in openspec/TODO.md and openspec/changes/<id>/.
 EXPECTED_ACTIVE_PENDING = {
-    # harden-pipeline-resilience
-    "pipeline-orchestration::Stale stage does not abort the run",
-    "pipeline-orchestration::Apply still excludes stale evidence",
-    "pipeline-orchestration::Stale stage yields exit 2 while later stages run",
-    "quota-research::One endpoint error does not stop research for the rest",
-    "quota-research::Per-endpoint failures mark the run partial",
-    "combo-applier::Assumed remaining does not satisfy the apply gate",
-    "combo-applier::Zero safety buffer does not satisfy the apply gate",
     # add-rollback-idempotency
     "combo-applier::Revert write carries an idempotency key",
 }

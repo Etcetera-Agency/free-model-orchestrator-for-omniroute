@@ -117,7 +117,9 @@ def test_failed_safety_gate_stops_downstream_apply(repository):
 
 
 @pytest.mark.spec("pipeline-orchestration::Partial data not consumed")
-def test_partial_stale_output_is_not_consumed_by_dependent_stages(repository):
+@pytest.mark.spec("pipeline-orchestration::Stale stage does not abort the run")
+@pytest.mark.spec("pipeline-orchestration::Stale stage yields exit 2 while later stages run")
+def test_partial_stale_output_does_not_abort_dependent_stages(repository):
     calls = []
 
     def discovery(context):
@@ -136,7 +138,7 @@ def test_partial_stale_output_is_not_consumed_by_dependent_stages(repository):
         ],
     ).run(trigger="manual")
 
-    assert calls == ["discovery"]
+    assert calls == ["discovery", "matcher"]
     assert result.exit_code == 2
     assert result.status == "partial_stale"
 

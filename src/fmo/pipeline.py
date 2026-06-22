@@ -39,7 +39,6 @@ CANONICAL_STAGE_NAMES = [
 ]
 
 STOP_STATUSES = {
-    "partial_stale",
     "validation_failed",
     "not_implemented",
     "external_dependency_failed",

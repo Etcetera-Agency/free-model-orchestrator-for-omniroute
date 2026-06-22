@@ -1,5 +1,10 @@
 # Completion Review
 
+- `harden-pipeline-resilience` is archived: pipeline partial/stale results now
+  continue through later stages while preserving exit 2, quota research degrades
+  per endpoint, and apply rejects stale, assumed, or zero-buffer quota evidence.
+  Code Simplifier review wired the configured apply safety-buffer value through
+  the apply gate instead of leaving the config field unused.
 - `fix-selection-correctness` is archived: production role scoring now derives
   benchmark, latency, health, stability, quota headroom, and uncertainty from
   persisted AA/telemetry/quota evidence; allocation consumes shared pool

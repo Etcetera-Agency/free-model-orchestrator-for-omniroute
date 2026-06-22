@@ -233,6 +233,22 @@ class PipelineOpsClient(QuotaSearchClient):
         raise AssertionError(f"unexpected GET {path}")
 
 
+class PartiallyFailingQuotaSearchClient(PipelineOpsClient):
+    def __init__(self, *, failing_model):
+        super().__init__()
+        self.failing_model = failing_model
+        self.attempted_models = []
+
+    def post(self, path, payload, headers=None, idempotency_key=None):
+        if path == "/v1/search":
+            query = str(payload["query"])
+            model_id = query.split(" free tier quota for ", 1)[1].split(" today ", 1)[0]
+            self.attempted_models.append(model_id)
+            if model_id == self.failing_model:
+                raise OmniRouteRequestError("POST", path, 503)
+        return super().post(path, payload, headers=headers, idempotency_key=idempotency_key)
+
+
 class MultiComboOpsClient(PipelineOpsClient):
     def __init__(self, repository, *, fail_smoke_for=None, restore_fail_for=None):
         super().__init__()
@@ -618,12 +634,16 @@ def seed_confirmed_llm_candidate(
             )
             VALUES (
               %(endpoint_id)s, 'confirmed', 'free_quota_available',
-              %(remaining)s, now() + interval '1 day', true, '{}'::jsonb
+              %(remaining)s, now() + interval '1 day', true, %(evidence)s
             )
             ON CONFLICT (endpoint_id)
             DO UPDATE SET effective_remaining = EXCLUDED.effective_remaining
             """,
-            {"endpoint_id": endpoint["id"], "remaining": Jsonb({"requests": remaining})},
+            {
+                "endpoint_id": endpoint["id"],
+                "remaining": Jsonb({"requests": remaining}),
+                "evidence": Jsonb({"remaining_source": "live_observed", "safety_buffer": 1.0}),
+            },
         )
         transaction.execute(
             """
@@ -852,6 +872,33 @@ def test_new_reachable_free_model_triggers_full_recalc_and_uses_quota_total_hint
     assert result.exit_code == 0
     assert [call[0] for call in client.calls if call[0] == "/v1/search"] == ["/v1/search", "/v1/search"]
     assert [row["limits"]["requests"] for row in rule_rows] == [50.0, 50.0]
+
+
+@pytest.mark.spec("quota-research::One endpoint error does not stop research for the rest")
+@pytest.mark.spec("quota-research::Per-endpoint failures mark the run partial")
+def test_quota_research_continues_after_one_endpoint_error(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    for model_id in ["good-free", "bad-free", "later-free"]:
+        seed_endpoint(repository, model_id=model_id)
+    run_composed_stage(repository, "model-matching")
+    now = datetime.now(timezone.utc)
+    seed_free_registry_snapshot(repository, models=[("provider-a", "good-free")], created_at=now - timedelta(days=1))
+    seed_free_registry_snapshot(
+        repository,
+        models=[("provider-a", "good-free"), ("provider-a", "bad-free"), ("provider-a", "later-free")],
+        created_at=now,
+    )
+    client = PartiallyFailingQuotaSearchClient(failing_model="bad-free")
+
+    result = run_composed_stage(repository, "quota-research", client=client)
+
+    with repository.database.transaction() as transaction:
+        rules = transaction.execute("SELECT model_pattern FROM quota_rules ORDER BY model_pattern").fetchall()
+    assert result.exit_code == 2
+    assert result.status == "partial_stale"
+    assert client.attempted_models == ["bad-free", "good-free", "later-free"]
+    assert [row["model_pattern"] for row in rules] == ["good-free", "later-free"]
 
 
 @pytest.mark.spec("quota-research::New model outside our connections does not trigger")
@@ -2218,11 +2265,13 @@ def test_apply_stage_dry_run_previews_valid_plan_without_combo_mutation(postgres
 
 
 @pytest.mark.spec("combo-applier::Failing quota evidence blocks the apply stage")
+@pytest.mark.spec("pipeline-orchestration::Apply still excludes stale evidence")
 @pytest.mark.parametrize(
     "quota_update",
     [
         "UPDATE endpoint_access_states SET hard_stop_capable = false",
         "UPDATE endpoint_access_states SET reset_at = now() - interval '1 minute'",
+        "UPDATE endpoint_access_states SET classified_at = now() - interval '2 days'",
         "DELETE FROM endpoint_access_states",
     ],
 )
@@ -2237,6 +2286,57 @@ def test_apply_stage_blocks_mutation_without_current_quota_safety(postgres_url, 
     run_composed_stage(repository, "diff", client=client)
     with repository.database.transaction() as transaction:
         transaction.execute(quota_update)
+
+    result = run_composed_stage(repository, "apply", client=client)
+
+    assert result.exit_code == 5
+    assert client.combos["fmo-routing_fast"] == ["old-endpoint"]
+    assert not any(call[0].startswith("/api/combos/") for call in client.calls)
+
+
+@pytest.mark.spec("combo-applier::Assumed remaining does not satisfy the apply gate")
+def test_apply_stage_rejects_assumed_remaining_evidence(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    client = PipelineOpsClient()
+    prepare_scored_endpoint(repository, client=client)
+    run_composed_stage(repository, "role-scoring", client=client)
+    run_composed_stage(repository, "demand-forecast", client=client)
+    run_composed_stage(repository, "allocation", client=client)
+    run_composed_stage(repository, "diff", client=client)
+    with repository.database.transaction() as transaction:
+        transaction.execute(
+            """
+            UPDATE endpoint_access_states
+            SET evidence = '{"remaining_source": "assumed", "safety_buffer": 1}'::jsonb
+            """
+        )
+
+    result = run_composed_stage(repository, "apply", client=client)
+
+    assert result.exit_code == 5
+    assert client.combos["fmo-routing_fast"] == ["old-endpoint"]
+    assert not any(call[0].startswith("/api/combos/") for call in client.calls)
+
+
+@pytest.mark.spec("combo-applier::Zero safety buffer does not satisfy the apply gate")
+def test_apply_stage_uses_minimum_safety_buffer_floor(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    client = PipelineOpsClient()
+    prepare_scored_endpoint(repository, client=client)
+    run_composed_stage(repository, "role-scoring", client=client)
+    run_composed_stage(repository, "demand-forecast", client=client)
+    run_composed_stage(repository, "allocation", client=client)
+    run_composed_stage(repository, "diff", client=client)
+    with repository.database.transaction() as transaction:
+        transaction.execute(
+            """
+            UPDATE endpoint_access_states
+            SET effective_remaining = '{"requests": 1}'::jsonb,
+                evidence = '{"remaining_source": "live_observed"}'::jsonb
+            """
+        )
 
     result = run_composed_stage(repository, "apply", client=client)
 
