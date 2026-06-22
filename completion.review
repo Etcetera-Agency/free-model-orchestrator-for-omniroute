@@ -158,8 +158,14 @@
   tests now replay recorded OmniRoute/Hermes bodies as their base inputs, with
   only scenario-specific overlays kept local to the test. Code Simplifier review
   cleaned the prompt assertion formatting before commit.
-- Remaining deferred repo-level work: OmniRoute API bridge still returns 404 for
-  `/api/combos*` on `127.0.0.1:20129`; tracked in `openspec/TODO.md`.
+- OmniRoute combo management bridge routes are exposed in the fork and deployed:
+  `GET /api/combos` and `GET|PUT /api/combos/fmo-*` are allowlisted on the API
+  bridge (OmniRoute commit `886ceb750`); `POST /api/combos/test` intentionally
+  stays bridge `404` (apply uses the real `/v1` smoke path). Production
+  `/opt/apps/omniroute` is pinned to `origin/main` (`a5a77e484`) and verified live
+  on `127.0.0.1:20129` (`GET /api/combos` → `401`, not a bridge `404`). Prod
+  `apply`/`diff`/`full` can now reach combo management. Tracked in
+  `openspec/TODO.md`.
 - No-auth quota calibration now resolves `opencode -> opencode-zen` as shared
   quota/model capacity, keeps alias misses and unknown no-auth providers
   inactive, and promotes only complete operator-observed OmniRoute token usage
@@ -176,3 +182,7 @@
   coverage entries. Targeted tests cover fixture-backed pool multiplication,
   duplicate dedupe, missing-fingerprint shared fallback, scanner fanout,
   persistence, allocation, and the spec coverage gate.
+- models.dev catalog fetch now retries transient transport failures and
+  `502/503/504/429` responses with bounded injectable backoff, honors bounded
+  `Retry-After`, preserves first-response failures for non-transient status and
+  invalid JSON, and removes the retry scenarios from spec coverage pending.

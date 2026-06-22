@@ -3,7 +3,6 @@ from pathlib import Path
 
 import psycopg
 import pytest
-import pytest
 
 from fmo.accounts import group_quota_pools, usable_capacity
 from fmo.candidates import build_free_candidates
@@ -16,10 +15,11 @@ from fmo.scanner import CatalogScanner, CatalogSnapshot, diff_catalogs, should_m
 
 
 class FakeResponse:
-    def __init__(self, status_code, payload=None, json_error=None):
+    def __init__(self, status_code, payload=None, json_error=None, headers=None):
         self.status_code = status_code
         self.payload = payload
         self.json_error = json_error
+        self.headers = headers or {}
 
     def json(self):
         if self.json_error:
@@ -38,6 +38,31 @@ class FakeHttpClient:
         if self.error:
             raise self.error
         return self.response
+
+
+class SequenceHttpClient:
+    def __init__(self, steps):
+        self.steps = list(steps)
+        self.calls = []
+
+    def get(self, url, **kwargs):
+        self.calls.append((url, kwargs))
+        step = self.steps.pop(0)
+        if isinstance(step, Exception):
+            raise step
+        return step
+
+
+VALID_MODELS_DEV_BODY = {"p": {"models": {"m/free": {"cost": {"input": 0, "output": 0}}}}}
+
+
+def _recording_sleep():
+    sleeps = []
+
+    def sleep(seconds):
+        sleeps.append(seconds)
+
+    return sleeps, sleep
 
 
 @pytest.mark.spec("free-candidate-discovery::Fetch models.dev api catalog")
@@ -99,6 +124,89 @@ def test_models_dev_fetcher_rejects_network_http_json_and_payload_errors():
             assert exc.source == "models_dev"
         else:
             raise AssertionError("models.dev fetch should fail")
+
+
+@pytest.mark.spec("free-candidate-discovery::Transient network error then success")
+def test_models_dev_retries_transport_error_then_returns_catalog():
+    sleeps, sleep = _recording_sleep()
+    client = SequenceHttpClient([TimeoutError("timeout"), FakeResponse(200, VALID_MODELS_DEV_BODY)])
+
+    catalog = fetch_models_dev_catalog(client=client, sleep=sleep)
+
+    assert catalog == {"providers": VALID_MODELS_DEV_BODY}
+    assert client.calls == [
+        (MODELS_DEV_API_URL, {"timeout": 30.0}),
+        (MODELS_DEV_API_URL, {"timeout": 30.0}),
+    ]
+    assert sleeps == [0.1]
+
+
+@pytest.mark.spec("free-candidate-discovery::Transient 503 then success")
+def test_models_dev_retries_transient_503_then_returns_catalog():
+    sleeps, sleep = _recording_sleep()
+    client = SequenceHttpClient([FakeResponse(503), FakeResponse(200, VALID_MODELS_DEV_BODY)])
+
+    catalog = fetch_models_dev_catalog(client=client, sleep=sleep)
+
+    assert catalog == {"providers": VALID_MODELS_DEV_BODY}
+    assert len(client.calls) == 2
+    assert sleeps == [0.1]
+
+
+@pytest.mark.spec("free-candidate-discovery::429 honours Retry-After then succeeds")
+def test_models_dev_retries_429_after_bounded_retry_after_hint():
+    sleeps, sleep = _recording_sleep()
+    client = SequenceHttpClient(
+        [FakeResponse(429, headers={"Retry-After": "2.5"}), FakeResponse(200, VALID_MODELS_DEV_BODY)]
+    )
+
+    catalog = fetch_models_dev_catalog(client=client, sleep=sleep)
+
+    assert catalog == {"providers": VALID_MODELS_DEV_BODY}
+    assert len(client.calls) == 2
+    assert sleeps == [1.0]
+
+
+@pytest.mark.spec("free-candidate-discovery::Transient failures exhaust the attempt cap")
+def test_models_dev_transient_failures_stop_at_attempt_cap():
+    sleeps, sleep = _recording_sleep()
+    client = SequenceHttpClient([FakeResponse(503), FakeResponse(503), FakeResponse(503)])
+
+    with pytest.raises(ExternalMetadataError) as exc:
+        sync_models_dev_candidates(client=client, sleep=sleep)
+
+    assert exc.value.source == "models_dev"
+    assert exc.value.reason == "http_error"
+    assert exc.value.status_code == 503
+    assert len(client.calls) == 3
+    assert sleeps == [0.1, 0.2]
+
+
+@pytest.mark.spec("free-candidate-discovery::Non-transient status is not retried")
+def test_models_dev_non_transient_status_is_not_retried():
+    sleeps, sleep = _recording_sleep()
+    client = SequenceHttpClient([FakeResponse(404)])
+
+    with pytest.raises(ExternalMetadataError) as exc:
+        fetch_models_dev_catalog(client=client, sleep=sleep)
+
+    assert exc.value.reason == "http_error"
+    assert exc.value.status_code == 404
+    assert len(client.calls) == 1
+    assert sleeps == []
+
+
+@pytest.mark.spec("free-candidate-discovery::Invalid JSON is not retried")
+def test_models_dev_invalid_json_is_not_retried():
+    sleeps, sleep = _recording_sleep()
+    client = SequenceHttpClient([FakeResponse(200, json_error=ValueError("bad json"))])
+
+    with pytest.raises(ExternalMetadataError) as exc:
+        fetch_models_dev_catalog(client=client, sleep=sleep)
+
+    assert exc.value.reason == "invalid_json"
+    assert len(client.calls) == 1
+    assert sleeps == []
 
 
 @pytest.mark.spec("free-candidate-discovery::Zero-cost provider offering")
