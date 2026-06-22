@@ -9,6 +9,9 @@ from fmo.quota_research import (
     NoAuthCalibrationEvidence,
     QuotaClaim,
     QuotaResearchError,
+    SearchSnapshot,
+    extract_summary_claim,
+    extract_summary_claims,
     promote_noauth_calibration,
     research_quota_rule,
     resolve_noauth_quota,
@@ -41,6 +44,19 @@ class _SearchTransport:
         raise AssertionError(f"unexpected search request: {path}")
 
 
+def _snapshot(answer_text: str) -> SearchSnapshot:
+    return SearchSnapshot(
+        query="quota query",
+        answer_text=answer_text,
+        evidence_urls=("https://provider.example/free-quota",),
+        content_hash="hash",
+    )
+
+
+def _axis_tuples(claims):
+    return [(claim.metric, claim.amount, claim.window) for claim in claims]
+
+
 @pytest.mark.spec("quota-research::Live search performed")
 @pytest.mark.spec("quota-research::Endpoint absent from OmniRoute registry")
 def test_live_quota_research_calls_omniroute_search_and_extracts_summary_rule():
@@ -65,6 +81,112 @@ def test_live_quota_research_calls_omniroute_search_and_extracts_summary_rule():
     assert result.rule.claim.amount == 100
     assert result.rule.claim.window == "day"
     assert result.rule.activated_by == "summary"
+
+
+@pytest.mark.spec("quota-research::Token budget summary")
+def test_summary_token_budget_extracts_token_month_axis():
+    claim = extract_summary_claim(_snapshot("Free tier has 1,000,000 tokens per month with hard stop."))
+
+    assert claim.metric == "tokens"
+    assert claim.amount == 1_000_000
+    assert claim.window == "month"
+
+
+@pytest.mark.spec("quota-research::Request limit summary unchanged")
+def test_summary_request_budget_still_extracts_request_day_axis():
+    claim = extract_summary_claim(_snapshot("Free tier has 100 requests per day with hard stop."))
+
+    assert claim.metric == "requests"
+    assert claim.amount == 100
+    assert claim.window == "day"
+
+
+@pytest.mark.spec("quota-research::Both axes present")
+def test_summary_extracts_request_and_token_axes_when_both_present():
+    claims = extract_summary_claims(
+        _snapshot("Free tier has 100 requests per day and 1,000,000 tokens per month with hard stop.")
+    )
+
+    assert _axis_tuples(claims) == [
+        ("requests", 100, "day"),
+        ("tokens", 1_000_000, "month"),
+    ]
+
+
+@pytest.mark.spec("quota-research::Requests-per-minute only does not activate")
+def test_summary_request_rate_only_does_not_activate_capacity_rule():
+    transport = _SearchTransport(
+        body={
+            "answer": {"text": "Free tier allows 10 requests per minute with hard stop."},
+            "results": [{"url": "https://provider.example/free-quota"}],
+        }
+    )
+    client = OmniRouteClient(base_url="https://omniroute.test", api_key="search-key", transport=transport)
+
+    result = research_quota_rule(
+        client,
+        provider="kilo",
+        model_id="kilo/free-model",
+        today=datetime(2026, 6, 18, tzinfo=timezone.utc),
+        summary_confidence_cap=0.7,
+    )
+
+    assert result.rule is None
+    assert result.error is not None
+    assert result.error.reason == "missing_capacity_axis"
+
+
+@pytest.mark.spec("quota-research::Inspector token claim carried through")
+def test_inspector_token_claim_is_carried_through_to_active_rule():
+    transport = _SearchTransport()
+    client = OmniRouteClient(base_url="https://omniroute.test", api_key="search-key", transport=transport)
+
+    result = research_quota_rule(
+        client,
+        provider="kilo",
+        model_id="kilo/free-model",
+        today=datetime(2026, 6, 18, tzinfo=timezone.utc),
+        summary_confidence_cap=0.7,
+        instructor_call=lambda _payload: {
+            "metric": "tokens",
+            "amount": 1_000_000,
+            "window": "month",
+            "evidence": ["inspector fixture"],
+            "hard_stop": True,
+        },
+    )
+
+    assert result.rule is not None
+    assert result.rule.claim.metric == "tokens"
+    assert result.rule.claim.amount == 1_000_000
+    assert result.rule.claim.window == "month"
+    assert result.rule.confidence == 0.7
+    assert _axis_tuples(result.rule.axes) == [("tokens", 1_000_000, "month")]
+
+
+@pytest.mark.spec("quota-research::Inspector sub-day request claim routed out")
+def test_inspector_request_rate_claim_does_not_activate_capacity_rule():
+    transport = _SearchTransport()
+    client = OmniRouteClient(base_url="https://omniroute.test", api_key="search-key", transport=transport)
+
+    result = research_quota_rule(
+        client,
+        provider="kilo",
+        model_id="kilo/free-model",
+        today=datetime(2026, 6, 18, tzinfo=timezone.utc),
+        summary_confidence_cap=0.7,
+        instructor_call=lambda _payload: {
+            "metric": "requests",
+            "amount": 10,
+            "window": "minute",
+            "evidence": ["inspector fixture"],
+            "hard_stop": True,
+        },
+    )
+
+    assert result.rule is None
+    assert result.error is not None
+    assert result.error.reason == "reactive_rate_gate"
 
 
 @pytest.mark.spec("quota-research::Search unavailable")

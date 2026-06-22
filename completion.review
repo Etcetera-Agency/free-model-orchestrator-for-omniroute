@@ -1,5 +1,8 @@
 # Completion Review
 
+- Quota research now captures request and token axes from deterministic summaries,
+  preserves both axes on active rules, routes sub-day request rates out as
+  reactive gates, and applies the same routing to Instructor inspector claims.
 - Quota unit normalization now has explicit OpenSpec deltas for quota-manager
   and telemetry-sync, binds conversion/config/token telemetry scenarios to
   executable tests, captures OmniRoute analytics token counts without fabricating

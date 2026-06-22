@@ -5,12 +5,6 @@
 #
 # Active proposal slices awaiting TDD implementation (see openspec/TODO.md and
 # openspec/changes/<id>/). Each line is dropped when its test lands.
-quota-research::Token budget summary
-quota-research::Request limit summary unchanged
-quota-research::Both axes present
-quota-research::Requests-per-minute only does not activate
-quota-research::Inspector token claim carried through
-quota-research::Inspector sub-day request claim routed out
 quota-manager::Tightest axis binds the capacity
 quota-manager::Live token budget converted
 quota-manager::Calibrated endpoint contributes its axis

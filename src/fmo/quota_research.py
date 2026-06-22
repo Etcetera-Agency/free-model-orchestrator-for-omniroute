@@ -42,6 +42,7 @@ class ActiveQuotaRule:
     activated_by: str
     capacity_class: str
     safe_mode: bool
+    axes: tuple[QuotaClaim, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -119,11 +120,12 @@ def research_quota_rule(
     query = build_quota_query(provider, model_id, today=today)
     try:
         snapshot = run_quota_search(client, provider=provider, model_id=model_id, query=query)
-        claim = _extract_claim(snapshot, instructor_call=instructor_call)
+        claims = _extract_claims(snapshot, instructor_call=instructor_call)
         rule = activate_summary_rule(
-            claim,
+            claims[0],
             summary_confidence_cap=summary_confidence_cap,
             previous_limit=previous_limit,
+            axes=claims,
         )
     except QuotaResearchError as exc:
         return QuotaResearchResult(snapshot=None, rule=None, error=exc)
@@ -210,6 +212,7 @@ def promote_noauth_calibration(
             activated_by="operator_observed_omniroute_usage",
             capacity_class="calibrated",
             safe_mode=False,
+            axes=(claim,),
         ),
         quota_source_provider=provider,
         model_source_provider=provider,
@@ -246,13 +249,15 @@ def _complete_calibration(evidence: NoAuthCalibrationEvidence) -> bool:
     )
 
 
-def _extract_claim(snapshot: SearchSnapshot, *, instructor_call) -> QuotaClaim:
+def _extract_claims(snapshot: SearchSnapshot, *, instructor_call) -> tuple[QuotaClaim, ...]:
     if instructor_call is not None:
         try:
-            return run_quota_inspector(instructor_call, _quota_inspector_prompt(snapshot))
+            return (_capacity_claim(run_quota_inspector(instructor_call, _quota_inspector_prompt(snapshot))),)
+        except QuotaResearchError:
+            raise
         except Exception:
             pass
-    return extract_summary_claim(snapshot)
+    return extract_summary_claims(snapshot)
 
 
 def _quota_inspector_prompt(snapshot: SearchSnapshot) -> str:
@@ -266,17 +271,26 @@ def _quota_inspector_prompt(snapshot: SearchSnapshot) -> str:
 
 
 def extract_summary_claim(snapshot: SearchSnapshot) -> QuotaClaim:
-    amount = _extract_amount(snapshot.answer_text)
-    window = _extract_window(snapshot.answer_text)
+    return extract_summary_claims(snapshot)[0]
+
+
+def extract_summary_claims(snapshot: SearchSnapshot) -> tuple[QuotaClaim, ...]:
     hard_stop = "hard stop" in snapshot.answer_text.lower()
-    claim = QuotaClaim(
-        metric="requests",
-        amount=amount,
-        window=window,
-        evidence=list(snapshot.evidence_urls) or ["summary"],
-        hard_stop=hard_stop,
+    claims = tuple(
+        _capacity_claim(
+            QuotaClaim(
+                metric=metric,
+                amount=amount,
+                window=window,
+                evidence=list(snapshot.evidence_urls) or ["summary"],
+                hard_stop=hard_stop,
+            )
+        )
+        for metric, amount, window in _extract_axes(snapshot.answer_text)
     )
-    return validate_claim(claim)
+    if not claims:
+        raise QuotaResearchError("quota_research", "missing_capacity_axis")
+    return claims
 
 
 def run_quota_inspector(call_instructor, prompt: str) -> QuotaClaim:
@@ -308,6 +322,13 @@ def _complete_quota_claim(call_instructor, *, site: LlmSiteConfig, prompt: str) 
     )
 
 
+def _capacity_claim(claim: QuotaClaim) -> QuotaClaim:
+    claim = validate_claim(claim)
+    if claim.metric == "requests" and claim.window in {"minute", "hour"}:
+        raise QuotaResearchError("quota_research", "reactive_rate_gate")
+    return claim
+
+
 def validate_claim(claim: QuotaClaim) -> QuotaClaim:
     if claim.metric not in VALID_METRICS:
         raise ValueError("invalid quota metric")
@@ -321,10 +342,10 @@ def validate_claim(claim: QuotaClaim) -> QuotaClaim:
 
 
 def _extract_amount(text: str) -> float:
-    match = re.search(r"\b(\d+(?:\.\d+)?)\s+requests?\b", text, re.IGNORECASE)
+    match = re.search(r"\b(\d+(?:[,\d]*)(?:\.\d+)?)\s+(?:requests?|tokens?)\b", text, re.IGNORECASE)
     if not match:
         raise QuotaResearchError("quota_research", "missing_amount")
-    return float(match.group(1))
+    return _parse_amount(match.group(1))
 
 
 def _extract_window(text: str) -> str:
@@ -335,7 +356,39 @@ def _extract_window(text: str) -> str:
     raise QuotaResearchError("quota_research", "missing_window")
 
 
-def activate_summary_rule(claim: QuotaClaim, *, summary_confidence_cap: float, previous_limit: float | None = None) -> ActiveQuotaRule:
+def _extract_axes(text: str) -> tuple[tuple[str, float, str], ...]:
+    axes: list[tuple[str, float, str]] = []
+    pattern = re.compile(
+        r"\b(?P<amount>\d+(?:[,\d]*)(?:\.\d+)?)\s+"
+        r"(?P<metric>requests?|tokens?)\s*(?:per|/)\s*"
+        r"(?P<window>minute|hour|day|month)\b",
+        re.IGNORECASE,
+    )
+    for match in pattern.finditer(text):
+        metric = "tokens" if match.group("metric").lower().startswith("token") else "requests"
+        window = match.group("window").lower()
+        # AICODE-NOTE: sub-day request limits are reactive OmniRoute rate gates;
+        # only cumulative budgets become planning capacity axes.
+        if metric == "requests" and window in {"minute", "hour"}:
+            continue
+        axes.append((metric, _parse_amount(match.group("amount")), window))
+    if not axes:
+        _extract_amount(text)
+        _extract_window(text)
+    return tuple(axes)
+
+
+def _parse_amount(value: str) -> float:
+    return float(value.replace(",", ""))
+
+
+def activate_summary_rule(
+    claim: QuotaClaim,
+    *,
+    summary_confidence_cap: float,
+    previous_limit: float | None = None,
+    axes: tuple[QuotaClaim, ...] = (),
+) -> ActiveQuotaRule:
     validate_claim(claim)
     safe_mode = previous_limit is not None and claim.amount < previous_limit
     return ActiveQuotaRule(
@@ -344,4 +397,5 @@ def activate_summary_rule(claim: QuotaClaim, *, summary_confidence_cap: float, p
         activated_by="summary",
         capacity_class="opportunistic",
         safe_mode=safe_mode,
+        axes=tuple(validate_claim(axis) for axis in (axes or (claim,))),
     )
