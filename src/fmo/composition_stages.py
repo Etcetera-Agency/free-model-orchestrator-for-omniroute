@@ -1333,10 +1333,12 @@ def _latest_remaining_by_pool(transaction: Any) -> dict[str, float]:
 
 
 def _health_component(status: str | None, success_rate: Any, error_rate: Any) -> float:
+    # success_rate / error_rate are stored as fractions in [0, 1] by
+    # _insert_health_observation (1 - failure/requests), not percentages.
     if success_rate is not None:
-        return max(0.0, min(float(success_rate) / 100.0, 1.0))
+        return max(0.0, min(float(success_rate), 1.0))
     if error_rate is not None:
-        return max(0.0, min(1.0 - float(error_rate) / 100.0, 1.0))
+        return max(0.0, min(1.0 - float(error_rate), 1.0))
     if status == "active":
         return 0.9
     if status == "degraded":

@@ -1746,7 +1746,7 @@ def test_role_scoring_stage_uses_health_observation_components(postgres_url):
             INSERT INTO endpoint_health_observations (
               endpoint_id, granularity, status, success_rate, sample_count, observed_at
             )
-            VALUES (%(endpoint_id)s, 'model', 'active', 100, 10, now() + interval '1 minute')
+            VALUES (%(endpoint_id)s, 'model', 'active', 1.0, 10, now() + interval '1 minute')
             """,
             {"endpoint_id": healthy["id"]},
         )
@@ -1755,7 +1755,7 @@ def test_role_scoring_stage_uses_health_observation_components(postgres_url):
             INSERT INTO endpoint_health_observations (
               endpoint_id, granularity, status, error_rate, sample_count, observed_at
             )
-            VALUES (%(endpoint_id)s, 'model', 'degraded', 50, 1, now() + interval '1 minute')
+            VALUES (%(endpoint_id)s, 'model', 'degraded', 0.5, 1, now() + interval '1 minute')
             """,
             {"endpoint_id": degraded["id"]},
         )
@@ -1772,6 +1772,10 @@ def test_role_scoring_stage_uses_health_observation_components(postgres_url):
             """
         ).fetchall()
     components = {row["provider_model_id"]: row["component_scores"] for row in rows}
+    # success_rate/error_rate are fractions in [0, 1]; a full 1.0 success_rate
+    # must map to a full health component, not a /100-scaled 0.01.
+    assert components["healthy-model"]["health"] == pytest.approx(1.0)
+    assert components["degraded-model"]["health"] == pytest.approx(0.5)
     assert components["degraded-model"]["health"] < components["healthy-model"]["health"]
     assert components["degraded-model"]["stability"] < components["healthy-model"]["stability"]
 
