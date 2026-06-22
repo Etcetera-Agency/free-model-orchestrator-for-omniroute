@@ -2,11 +2,13 @@
 
 ## Deferred follow-up
 
-- Live OmniRoute API bridge on etc2nd-shlink (`127.0.0.1:20129`) still returns
-  bridge-level 404 for `/api/combos*`; FMO combo apply reads `/api/combos` and
-  posts `/api/combos/{id}`. Decide whether production FMO should use a different
-  OmniRoute base URL for combo apply or whether the bridge must explicitly allow
-  the required combo management routes.
+- Fingerprint-backed account quota pools: implement
+  `update-fingerprint-account-quota-pools` so any provider connection with
+  `providerSpecificData.fingerprints` expands into independent
+  provider-account quota pools without hard-coding provider names,
+  allocation/combos can use the multiplied per-account capacity, and the
+  matching `account-discovery::*` entries are removed from
+  `tests/spec_coverage_pending.txt`.
 
 ## Dropped (not needed for project essence)
 

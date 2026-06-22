@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-06-18T07:36:26.508Z",
+  "captured_at": "2026-06-22T13:23:36.393Z",
   "source": "omniroute-shlink-20129",
   "name": "omniroute_api_usage_quota",
   "method": "GET",
@@ -11,7 +11,7 @@
     "connection": "keep-alive",
     "content-security-policy": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; media-src 'self' data: blob:; connect-src 'self' http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:* https: wss:; worker-src 'self' blob:; manifest-src 'self'",
     "content-type": "application/json",
-    "date": "Thu, 18 Jun 2026 07:36:26 GMT",
+    "date": "Mon, 22 Jun 2026 13:23:36 GMT",
     "keep-alive": "timeout=5",
     "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=()",
     "referrer-policy": "strict-origin-when-cross-origin",
@@ -26,8 +26,8 @@
   "body": {
     "providers": [
       {
-        "name": "omni",
-        "provider": "longcat",
+        "name": "[EMAIL]",
+        "provider": "antigravity",
         "connectionId": "[UUID]",
         "quotaUsed": 0,
         "quotaTotal": null,
@@ -36,8 +36,108 @@
         "tokenStatus": "[REDACTED]"
       },
       {
-        "name": "[EMAIL]",
-        "provider": "antigravity",
+        "name": "omni",
+        "provider": "openai-compatible-chat-[UUID]",
+        "connectionId": "[UUID]",
+        "quotaUsed": 0,
+        "quotaTotal": null,
+        "percentRemaining": 100,
+        "resetAt": null,
+        "tokenStatus": "[REDACTED]"
+      },
+      {
+        "name": "ceod-omni",
+        "provider": "ollama-cloud",
+        "connectionId": "[UUID]",
+        "quotaUsed": 0,
+        "quotaTotal": null,
+        "percentRemaining": 100,
+        "resetAt": null,
+        "tokenStatus": "[REDACTED]"
+      },
+      {
+        "name": "Ollama Search API key",
+        "provider": "ollama-search",
+        "connectionId": "[UUID]",
+        "quotaUsed": 0,
+        "quotaTotal": null,
+        "percentRemaining": 100,
+        "resetAt": null,
+        "tokenStatus": "[REDACTED]"
+      },
+      {
+        "name": "Parallel Extract API key",
+        "provider": "parallel-extract",
+        "connectionId": "[UUID]",
+        "quotaUsed": 0,
+        "quotaTotal": null,
+        "percentRemaining": 100,
+        "resetAt": null,
+        "tokenStatus": "[REDACTED]"
+      },
+      {
+        "name": "Parallel Search API key",
+        "provider": "parallel-search",
+        "connectionId": "[UUID]",
+        "quotaUsed": 0,
+        "quotaTotal": null,
+        "percentRemaining": 100,
+        "resetAt": null,
+        "tokenStatus": "[REDACTED]"
+      },
+      {
+        "name": "Parallel API key",
+        "provider": "parallel",
+        "connectionId": "[UUID]",
+        "quotaUsed": 0,
+        "quotaTotal": null,
+        "percentRemaining": 100,
+        "resetAt": null,
+        "tokenStatus": "[REDACTED]"
+      },
+      {
+        "name": "Jina Reader API key",
+        "provider": "jina-reader",
+        "connectionId": "[UUID]",
+        "quotaUsed": 0,
+        "quotaTotal": null,
+        "percentRemaining": 100,
+        "resetAt": null,
+        "tokenStatus": "[REDACTED]"
+      },
+      {
+        "name": "def",
+        "provider": "jina-ai",
+        "connectionId": "[UUID]",
+        "quotaUsed": 0,
+        "quotaTotal": null,
+        "percentRemaining": 100,
+        "resetAt": null,
+        "tokenStatus": "[REDACTED]"
+      },
+      {
+        "name": "Firecrawl Search API key",
+        "provider": "firecrawl-search",
+        "connectionId": "[UUID]",
+        "quotaUsed": 0,
+        "quotaTotal": null,
+        "percentRemaining": 100,
+        "resetAt": null,
+        "tokenStatus": "[REDACTED]"
+      },
+      {
+        "name": "omni",
+        "provider": "exa-search",
+        "connectionId": "[UUID]",
+        "quotaUsed": 0,
+        "quotaTotal": null,
+        "percentRemaining": 100,
+        "resetAt": null,
+        "tokenStatus": "[REDACTED]"
+      },
+      {
+        "name": "omni",
+        "provider": "longcat",
         "connectionId": "[UUID]",
         "quotaUsed": 0,
         "quotaTotal": null,
@@ -166,6 +266,16 @@
         "tokenStatus": "[REDACTED]"
       },
       {
+        "name": "safonovdenis",
+        "provider": "ollama-cloud",
+        "connectionId": "[UUID]",
+        "quotaUsed": 0,
+        "quotaTotal": null,
+        "percentRemaining": 100,
+        "resetAt": null,
+        "tokenStatus": "[REDACTED]"
+      },
+      {
         "name": "chosen",
         "provider": "groq",
         "connectionId": "[UUID]",
@@ -186,6 +296,16 @@
         "tokenStatus": "[REDACTED]"
       },
       {
+        "name": "safonov@e",
+        "provider": "ollama-cloud",
+        "connectionId": "[UUID]",
+        "quotaUsed": 0,
+        "quotaTotal": null,
+        "percentRemaining": 100,
+        "resetAt": null,
+        "tokenStatus": "[REDACTED]"
+      },
+      {
         "name": "omni",
         "provider": "groq",
         "connectionId": "[UUID]",
@@ -197,12 +317,12 @@
       }
     ],
     "meta": {
-      "generatedAt": "2026-06-18T07:36:26.205Z",
+      "generatedAt": "2026-06-22T13:23:36.034Z",
       "filters": {
         "provider": null,
         "connectionId": null
       },
-      "totalProviders": 17
+      "totalProviders": 29
     }
   }
 }

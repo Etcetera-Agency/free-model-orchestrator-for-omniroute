@@ -192,6 +192,34 @@ def test_omniroute_client_post_carries_idempotency_key_and_is_not_retried():
     assert headers["X-Request-Id"]
 
 
+@pytest.mark.spec("combo-applier::Apply writes existing combos through management API bridge")
+def test_omniroute_client_put_carries_idempotency_key_and_is_not_retried():
+    transport = FakeTransport([FakeResponse(503, {"error": "busy"})])
+    client = OmniRouteClient(base_url="https://omniroute.test/api", transport=transport, max_get_retries=3)
+
+    with pytest.raises(RuntimeError, match="HTTP 503"):
+        client.put("/combos/fmo-role", {"models": []}, idempotency_key="apply:fmo-role:abc")
+
+    assert len(transport.requests) == 1
+    request = transport.requests[0]
+    assert request["method"] == "PUT"
+    assert request["headers"]["Idempotency-Key"] == "apply:fmo-role:abc"
+    assert request["headers"]["X-Request-Id"]
+
+
+@pytest.mark.spec("omniroute-client::Bridge preserves management auth failures")
+def test_omniroute_client_surfaces_combo_management_auth_failure():
+    transport = FakeTransport([FakeResponse(403, {"error": "forbidden"})])
+    client = OmniRouteClient(base_url="https://omniroute.test", api_key="bad-key", transport=transport)
+
+    with pytest.raises(RuntimeError, match="HTTP 403"):
+        client.get("/api/combos")
+
+    request = transport.requests[0]
+    assert request["url"] == "https://omniroute.test/api/combos"
+    assert request["headers"]["Authorization"] == "Bearer bad-key"
+
+
 @pytest.mark.spec("omniroute-client::Invalid Retry-After")
 @pytest.mark.parametrize("value", ["", "abc", "-2", None])
 def test_retry_after_invalid_empty_nonnumeric_or_negative_is_zero(value):

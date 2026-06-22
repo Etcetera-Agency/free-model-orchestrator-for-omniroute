@@ -14,7 +14,7 @@ from fmo.accounts import group_quota_pools, usable_capacity
 from fmo.omniroute import OmniRouteClient
 from fmo.registry import sync_free_registry
 
-from _fixtures import fixture_body
+from _fixtures import fixture_body, load_fixture
 
 # OmniRoute management path -> recorded fixture name.
 PATH_FIXTURES = {
@@ -100,9 +100,14 @@ def test_rate_limits_and_rankings_fixtures_have_expected_shape(client):
 
 
 @pytest.mark.spec("combo-applier::Non-existent combo is not created")
+@pytest.mark.spec("omniroute-client::Bridge exposes management combo routes")
 def test_live_combos_fixture_records_seeded_operator_state(client):
+    recording = load_fixture("omniroute_api_combos")
     payload = client.get("/api/combos")
 
+    assert recording["status"] == 200
+    assert recording["path"] == "/api/combos"
+    assert recording["headers"]["x-omniroute-route-class"] == "MANAGEMENT"
     combos = {combo["name"]: combo for combo in payload["combos"]}
     assert set(combos) == {
         "fmo-chat-combo",

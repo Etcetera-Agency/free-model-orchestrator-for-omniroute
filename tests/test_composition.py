@@ -186,9 +186,7 @@ class PipelineOpsClient(QuotaSearchClient):
             }
         )
 
-    def post(self, path, payload, headers=None, idempotency_key=None):
-        if path == "/v1/search":
-            return super().post(path, payload)
+    def put(self, path, payload, headers=None, idempotency_key=None):
         if path.startswith("/api/combos/"):
             combo_id = path.rsplit("/", 1)[-1]
             if self.rollback_fails and payload.get("models") == ["old-endpoint"]:
@@ -196,6 +194,13 @@ class PipelineOpsClient(QuotaSearchClient):
             self.calls.append((path, payload, headers, idempotency_key))
             self.combos[combo_id] = list(payload["models"])
             return {"ok": True}
+        raise AssertionError(f"unexpected PUT {path}")
+
+    def post(self, path, payload, headers=None, idempotency_key=None):
+        if path == "/v1/search":
+            return super().post(path, payload)
+        if path.startswith("/api/combos/"):
+            raise AssertionError("combo updates must use PUT")
         if path == "/v1/chat/completions":
             self.calls.append((path, payload, headers, idempotency_key))
             if self.smoke_status >= 400:
@@ -239,13 +244,16 @@ class MultiComboOpsClient(PipelineOpsClient):
         }
         self.applied_record_seen_before_second_mutation = False
 
-    def post(self, path, payload, headers=None, idempotency_key=None):
+    def put(self, path, payload, headers=None, idempotency_key=None):
         if path.startswith("/api/combos/"):
             combo_id = path.rsplit("/", 1)[-1]
             if combo_id == "fmo-b" and payload.get("models") != self._before_models(combo_id):
                 self.applied_record_seen_before_second_mutation = self._applied_record_exists("fmo-a")
             if combo_id in self.restore_fail_for and payload.get("models") == self._before_models(combo_id):
                 raise RuntimeError("restore failed")
+        return super().put(path, payload, headers, idempotency_key)
+
+    def post(self, path, payload, headers=None, idempotency_key=None):
         if path == "/v1/chat/completions":
             combo_id = payload["model"]
             self.calls.append((path, payload, headers, idempotency_key))
@@ -1819,6 +1827,10 @@ def test_smoke_combo_maps_non_2xx_response_to_failure():
 @pytest.mark.spec("combo-applier::Production apply smoke-tests applied combos")
 @pytest.mark.spec("combo-applier::Fabricated smoke signal rejected")
 @pytest.mark.spec("combo-applier::Smoke pass derived from OpenAI-compatible body")
+@pytest.mark.spec("combo-applier::Apply reads combos through management API bridge")
+@pytest.mark.spec("combo-applier::Apply writes existing combos through management API bridge")
+@pytest.mark.spec("combo-applier::Public combo projection is never used for management apply")
+@pytest.mark.spec("omniroute-client::Bridge denies combo test helper")
 def test_apply_stage_mutates_fmo_combo_and_reports_real_smoke_signal(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     repository = Repository(Database(postgres_url))
@@ -1834,8 +1846,10 @@ def test_apply_stage_mutates_fmo_combo_and_reports_real_smoke_signal(postgres_ur
     assert result.exit_code == 0
     assert result.stage_results[0]["details"]["combo_test_called"] is True
     assert _cli_result(result).combo_test_called is True
+    assert "/api/combos" in client.get_calls
     assert any(call[0] == "/v1/chat/completions" for call in client.calls)
     assert not any(call[0] == "/api/combos/test" for call in client.calls)
+    assert not any(call[0] == "/v1/combos" for call in client.calls)
     assert next(call for call in client.calls if call[0].startswith("/api/combos/"))[3]
     assert client.combos["fmo-routing_fast"] != ["old-endpoint"]
 

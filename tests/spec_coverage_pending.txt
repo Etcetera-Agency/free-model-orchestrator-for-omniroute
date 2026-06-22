@@ -5,3 +5,7 @@
 #
 # Active proposal slices awaiting TDD implementation (see openspec/TODO.md and
 # openspec/changes/<id>/). Each line is dropped when its test lands.
+account-discovery::Duplicate fingerprints are deduplicated
+account-discovery::Fingerprint pools feed allocation independently
+account-discovery::Fingerprints create independent pools
+account-discovery::Missing fingerprints stay shared

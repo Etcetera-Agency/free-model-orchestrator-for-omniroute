@@ -1,31 +1,37 @@
 {
-  "captured_at": "2026-06-18T07:37:02.552Z",
+  "captured_at": "2026-06-22T13:23:36.393Z",
   "redaction": {
     "secrets": "headers/body fields with key/token/secret/cookie/password/authorization redacted",
     "personal": "emails and UUID-like identifiers redacted in OmniRoute fixtures"
   },
   "notes": [
     "Artificial Analysis fixtures include the Pro-gated /api/v2/language/models 403 response plus the working paginated free-tier /api/v2/language/models/free 200 response captured with x-api-key redacted; legacy /api/v2/data/llms/models is intentionally excluded.",
-    "OmniRoute management fixtures were captured through 20129 after API bridge patch with a temporary manage-scope key deleted immediately after capture."
+    "OmniRoute management fixtures were refreshed from etc2nd-shlink via 127.0.0.1:20129 with a temporary manage-scope key deleted immediately after capture."
   ],
   "files": [
     "artificial_analysis_language_models.json",
     "artificial_analysis_language_models_free.json",
     "models_dev_api_json.json",
     "models_dev_catalog_json.json",
+    "omniroute_api_combos.json",
     "omniroute_api_free_models.json",
     "omniroute_api_free_provider_rankings.json",
     "omniroute_api_free_tier_summary.json",
-    "omniroute_api_combos.json",
     "omniroute_api_monitoring_health.json",
     "omniroute_api_providers.json",
     "omniroute_api_rate_limits.json",
+    "omniroute_api_rate_limits_http_500.json",
     "omniroute_api_usage_analytics.json",
+    "omniroute_api_usage_analytics_http_500.json",
     "omniroute_api_usage_quota.json",
+    "omniroute_api_usage_quota_http_500.json",
     "omniroute_api_v1_provider_models_openai.json",
+    "omniroute_provider_models_http_500.json",
     "omniroute_structured_llm_completions.json",
-    "omniroute_web_cookie_sessions.json",
     "omniroute_v1_models.json",
-    "omniroute_v1_search_providers.json"
+    "omniroute_v1_search_http_500.json",
+    "omniroute_v1_search_providers.json",
+    "omniroute_v1_search_quota_gemini_grounded.json",
+    "omniroute_web_cookie_sessions.json"
   ]
 }

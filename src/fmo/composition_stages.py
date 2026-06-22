@@ -593,7 +593,7 @@ def _access_classification_stage(_dependencies: StageDependencies, context: Pipe
             return StageResult(status="partial_stale", reason="quota_rule_missing")
         written = 0
         for row in [item for item in rows if item["quota_rule_id"] is not None]:
-            limit = _quota_limit(row["limits"])
+            metric, limit = _quota_metric(row["limits"])
             reset_at = datetime.now(timezone.utc) + timedelta(days=1)
             evidence = {
                 "quota_rule": True,
@@ -631,7 +631,7 @@ def _access_classification_stage(_dependencies: StageDependencies, context: Pipe
                     "quota_rule_id": row["quota_rule_id"],
                     "status": status,
                     "reason_code": decision.reason_code,
-                    "effective_remaining": Jsonb({"requests": limit}),
+                    "effective_remaining": Jsonb({metric: limit}),
                     "reset_at": reset_at,
                     "hard_stop_capable": row["hard_stop_capable"],
                     "evidence": Jsonb({**evidence, "free_access": status == "confirmed"}),
@@ -641,12 +641,13 @@ def _access_classification_stage(_dependencies: StageDependencies, context: Pipe
                 """
                 INSERT INTO quota_attribution_groups (
                   provider_id, scope_type, scope_key, status, source, limit_type,
-                  request_limit, reset_rule_json, confidence, capacity_weight, evidence_json
+                  request_limit, token_limit, reset_rule_json, confidence,
+                  capacity_weight, evidence_json
                 )
                 VALUES (
                   %(provider_id)s, 'account', %(scope_key)s, %(status)s, 'quota-research',
-                  'requests', %(request_limit)s, %(reset_rule_json)s, %(confidence)s,
-                  %(capacity_weight)s, %(evidence_json)s
+                  %(limit_type)s, %(request_limit)s, %(token_limit)s, %(reset_rule_json)s,
+                  %(confidence)s, %(capacity_weight)s, %(evidence_json)s
                 )
                 RETURNING *
                 """,
@@ -654,7 +655,9 @@ def _access_classification_stage(_dependencies: StageDependencies, context: Pipe
                     "provider_id": row["omniroute_provider_id"],
                     "scope_key": str(row["provider_account_id"]),
                     "status": status,
-                    "request_limit": limit,
+                    "limit_type": metric,
+                    "request_limit": limit if metric == "requests" else None,
+                    "token_limit": limit if metric == "tokens" else None,
                     "reset_rule_json": Jsonb(row["reset_policy"]),
                     "confidence": row["confidence"],
                     "capacity_weight": _capacity_weight(status),
@@ -1524,7 +1527,7 @@ def _apply_stage(dependencies: StageDependencies, context: PipelineContext) -> S
         if dry_run:
             continue
         expected_hash = applier.state_hash(combo_id)
-        dependencies.omniroute_client.post(
+        dependencies.omniroute_client.put(
             f"/api/combos/{combo_id}",
             {"models": desired},
             idempotency_key=expected_hash,
@@ -1579,7 +1582,7 @@ def _rollback_apply_mutations(
     rollback_failed = False
     for combo_id, before in rollback_targets:
         try:
-            client.post(f"/api/combos/{combo_id}", {"models": before})
+            client.put(f"/api/combos/{combo_id}", {"models": before})
         except Exception:
             rollback_failed = True
     return not rollback_failed
@@ -1682,7 +1685,7 @@ def _rollback_stage(dependencies: StageDependencies, context: PipelineContext) -
         combo_id = snapshot["omniroute_combo_id"]
         before = list(snapshot["state_json"].get("before", []))
         try:
-            dependencies.omniroute_client.post(f"/api/combos/{combo_id}", {"models": before})
+            dependencies.omniroute_client.put(f"/api/combos/{combo_id}", {"models": before})
         except Exception:
             rollback_failed = True
             continue
@@ -1919,20 +1922,53 @@ def _hash_parts(*parts: str) -> str:
     return hashlib.sha256(":".join(parts).encode("utf-8")).hexdigest()
 
 
+# Metric precedence mirrors the SQL COALESCE(requests, tokens) in
+# aa_index_runtime.py: requests is canonical, tokens is the no-auth
+# calibration fallback. requests and tokens are not interconvertible, so the
+# actual metric is carried through the pipeline rather than collapsed.
+_QUOTA_METRICS = ("requests", "tokens")
+
+
+def _quota_metric(limits: Any) -> tuple[str, float]:
+    """Return (metric, amount) from a quota_rules.limits payload.
+
+    Picks the metric actually present in ``limits`` instead of assuming
+    "requests"; "window" and other non-metric keys are ignored.
+    """
+    mapping = limits if isinstance(limits, dict) else None
+    for metric in _QUOTA_METRICS:
+        if mapping is not None:
+            if metric in mapping:
+                return metric, float(mapping[metric] or 0)
+        else:
+            try:
+                return metric, float(limits[metric] or 0)
+            except (KeyError, TypeError):
+                continue
+    return "requests", 0.0
+
+
 def _quota_limit(limits: Any) -> float:
-    if isinstance(limits, dict):
-        value = limits.get("requests", 0)
-    else:
-        value = limits["requests"]
-    return float(value)
+    return _quota_metric(limits)[1]
 
 
-def _remaining_requests(effective_remaining: Any) -> float:
+def _remaining_amount(effective_remaining: Any) -> float:
+    """Remaining quota regardless of which metric key is stored."""
     if isinstance(effective_remaining, dict):
-        value = effective_remaining.get("requests", 0)
-    else:
-        value = effective_remaining["requests"]
-    return float(value or 0)
+        for metric in _QUOTA_METRICS:
+            if metric in effective_remaining:
+                return float(effective_remaining[metric] or 0)
+        return 0.0
+    for metric in _QUOTA_METRICS:
+        try:
+            return float(effective_remaining[metric] or 0)
+        except (KeyError, TypeError):
+            continue
+    return 0.0
+
+
+# Back-compat alias: readers previously assumed the "requests" metric.
+_remaining_requests = _remaining_amount
 
 
 def _canonical_access_status(access_status: str) -> str:
