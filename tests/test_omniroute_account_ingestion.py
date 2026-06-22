@@ -3,11 +3,10 @@ from urllib.parse import urlsplit
 
 import pytest
 
-from fmo.accounts import discover_live_accounts, usable_capacity
+from fmo.accounts import discover_live_accounts, group_quota_pools, usable_capacity
 from fmo.omniroute import OmniRouteClient
 
 from _fixtures import fixture_body
-import pytest
 
 
 class _FixtureResponse:
@@ -48,7 +47,7 @@ def test_live_account_discovery_fetches_connections_and_rate_limits_before_group
 
     assert transport.requested_paths == ["/api/providers", "/api/rate-limits"]
     assert outcome.rate_limits_available is True
-    assert len(outcome.connections) == len(fixture_body("omniroute_api_providers")["connections"])
+    assert len(outcome.connections) > len(fixture_body("omniroute_api_providers")["connections"])
     assert usable_capacity(outcome.pools) == 0.0
     windsurf = next(connection for connection in outcome.connections if connection["provider"] == "windsurf")
     assert windsurf["rate_limit"]["enabled"] is False
@@ -76,3 +75,55 @@ def test_live_account_discovery_rate_limit_failure_is_conservative():
     assert outcome.rate_limits_available is False
     assert all(connection["status"] != "confirmed" for connection in outcome.connections)
     assert usable_capacity(outcome.pools) == 0.0
+
+
+@pytest.mark.spec("account-discovery::Fingerprints create independent pools")
+def test_fingerprint_fixture_connection_creates_independent_quota_pools():
+    providers_body = deepcopy(fixture_body("omniroute_api_providers"))
+    connection = next(
+        item
+        for item in providers_body["connections"]
+        if item.get("providerSpecificData", {}).get("fingerprints")
+    )
+    connection.update({"quota": 100, "status": "confirmed"})
+
+    pools = group_quota_pools([connection])
+
+    unique_pools = {key: pool for key, pool in pools.items() if key == pool.pool_key}
+    assert len(unique_pools) == 3
+    assert usable_capacity(pools) == 300.0
+    assert all(pool.independence_status == "confirmed" for pool in unique_pools.values())
+
+
+@pytest.mark.spec("account-discovery::Duplicate fingerprints are deduplicated")
+def test_duplicate_fingerprints_create_one_scope_per_unique_fingerprint():
+    connection = {
+        "id": "conn-fp",
+        "provider": "provider-a",
+        "providerSpecificData": {"fingerprints": ["fp-a", "fp-b", "fp-a"]},
+        "quota": 50,
+        "status": "confirmed",
+    }
+
+    pools = group_quota_pools([connection])
+
+    unique_pools = {key: pool for key, pool in pools.items() if key == pool.pool_key}
+    assert sorted(unique_pools) == ["provider-a:fingerprint:fp-a", "provider-a:fingerprint:fp-b"]
+    assert usable_capacity(pools) == 100.0
+
+
+@pytest.mark.spec("account-discovery::Missing fingerprints stay shared")
+def test_missing_fingerprints_stay_on_shared_pool_path():
+    connection = {
+        "id": "conn-shared",
+        "provider": "provider-a",
+        "providerSpecificData": {},
+        "quota": 50,
+        "status": "confirmed",
+    }
+
+    pools = group_quota_pools([connection])
+
+    unique_pools = {key: pool for key, pool in pools.items() if key == pool.pool_key}
+    assert list(unique_pools) == ["provider-a:shared"]
+    assert usable_capacity(pools) == 50.0

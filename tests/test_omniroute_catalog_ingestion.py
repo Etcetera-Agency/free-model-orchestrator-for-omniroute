@@ -23,7 +23,8 @@ class _FixtureResponse:
 
 
 class _CatalogTransport:
-    def __init__(self, *, models_status=200, models_body=None):
+    def __init__(self, *, providers_body=None, models_status=200, models_body=None):
+        self.providers_body = providers_body if providers_body is not None else fixture_body("omniroute_api_providers")
         self.models_status = models_status
         self.models_body = models_body if models_body is not None else fixture_body("omniroute_v1_models")
         self.requested_paths = []
@@ -32,7 +33,7 @@ class _CatalogTransport:
         path = urlsplit(url).path
         self.requested_paths.append(path)
         if path == "/api/providers":
-            return _FixtureResponse(200, fixture_body("omniroute_api_providers"))
+            return _FixtureResponse(200, self.providers_body)
         if path == "/v1/models":
             return _FixtureResponse(self.models_status, self.models_body)
         raise AssertionError(f"unexpected catalog request: {path}")
@@ -71,6 +72,44 @@ def test_live_catalog_scan_fetches_omniroute_fixtures_before_snapshot(postgres_u
 
     assert endpoint is not None
     assert endpoint[1:] == ("discovered", "access_pending", "not_run")
+
+
+@pytest.mark.spec("account-discovery::Fingerprint pools feed allocation independently")
+def test_live_catalog_scan_fans_models_out_to_fingerprint_accounts(postgres_url):
+    scanner = _prepare_scanner(postgres_url)
+    providers_body = fixture_body("omniroute_api_providers")
+    provider = next(
+        connection
+        for connection in providers_body["connections"]
+        if connection.get("provider") == "mimocode"
+        and connection.get("providerSpecificData", {}).get("fingerprints")
+    )
+    models_body = {"object": "list", "data": [{"id": "mimocode/mimo-auto"}]}
+    transport = _CatalogTransport(providers_body={"connections": [provider]}, models_body=models_body)
+    client = OmniRouteClient(base_url="https://omniroute.test", api_key="manage-key", transport=transport)
+
+    result = scan_live_omniroute_catalogs(scanner, client, omniroute_instance_id="local")
+
+    assert result["mimocode"].fetch_status == "success"
+    with psycopg.connect(postgres_url) as connection:
+        rows = connection.execute(
+            """
+            SELECT pa.omniroute_connection_id, pa.external_account_ref, pe.provider_model_id
+            FROM provider_accounts pa
+            JOIN provider_endpoints pe ON pe.provider_account_id = pa.id
+            JOIN providers p ON p.id = pa.provider_id
+            WHERE p.omniroute_provider_id = 'mimocode'
+            ORDER BY pa.external_account_ref
+            """
+        ).fetchall()
+
+    assert len(rows) == 3
+    assert {row[1] for row in rows} == {
+        "mimocode:fingerprint:309782c1e8194398b096ecd9e38c68bb",
+        "mimocode:fingerprint:ae68882817134ba3afad0cc4df9f1901",
+        "mimocode:fingerprint:c40304c36c0c4698be90fa47063a5566",
+    }
+    assert {row[2] for row in rows} == {"mimocode/mimo-auto"}
 
 
 @pytest.mark.spec("provider-scanner::Fetch failure does not overwrite")

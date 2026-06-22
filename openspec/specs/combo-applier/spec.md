@@ -182,3 +182,73 @@ rolled back, and `rollback_failed` (exit 7) when any restore call fails.
 - **WHEN** the rollback runs
 - **THEN** the stage reports `rollback_failed` (exit 7)
 
+### Requirement: Rebalance only existing combos; never create or delete
+
+The system SHALL rebalance the membership of OmniRoute combos that already exist
+in the live combo set and SHALL NOT create or delete any combo. Combo existence
+SHALL be decided only from the live OmniRoute combo set
+(`_read_current_combos`), never from persisted state, because the operator may
+create a combo by hand and a known combo may have been removed upstream.
+
+A desired `fmo-` change whose combo id is absent from the live set SHALL be
+skipped and reported as `unmanaged_combo`; skipping an absent combo SHALL NOT
+fail the run, and every other present combo in the same apply SHALL still be
+rebalanced. The applier SHALL issue no DELETE on any path (success, drift, or
+rollback). Drift protection, the smoke path, rollback, and the `fmo-` scoping all
+remain in force for combos that exist.
+
+#### Scenario: Non-existent combo is not created
+- GIVEN a desired `fmo-` diff whose combo id is absent from the live OmniRoute
+  combo set
+- WHEN apply runs
+- THEN no `POST /api/combos/{id}` is issued for that combo
+- AND it is reported as `unmanaged_combo`
+
+#### Scenario: Absent combo is skipped without failing the run
+- GIVEN one desired combo that exists and one that is absent
+- WHEN apply runs
+- THEN the existing combo is rebalanced and smoke-tested
+- AND the absent combo is skipped, and the run is not failed by the skip
+
+#### Scenario: Combos are never deleted
+- GIVEN any apply outcome (success, drift, or rollback)
+- WHEN apply runs
+- THEN no combo delete request is issued to OmniRoute
+
+### Requirement: Apply uses management combo API through the live bridge
+
+The combo applier SHALL read and write live OmniRoute combo state through the
+management combo API exposed by the live API bridge. Apply SHALL read the live
+combo set with `GET /api/combos` before mutation, SHALL update only existing
+`fmo-` combos through the management write route under `/api/combos/{id}`, and
+SHALL preserve drift protection, idempotency, read-back verification, smoke
+testing through the OpenAI-compatible combo model, rollback, and rebalance-only
+behavior.
+
+#### Scenario: Apply reads combos through management API bridge
+- GIVEN the apply stage is configured with the live API bridge base URL
+- WHEN apply starts
+- THEN it reads the live combo set through `GET /api/combos`
+- AND it uses that response as the source of truth for existing managed combos
+
+#### Scenario: Apply writes existing combos through management API bridge
+- GIVEN an `fmo-` combo exists in the live combo set
+- WHEN apply rebalances that combo
+- THEN it sends the membership update through the management route under
+  `/api/combos/{id}`
+- AND it reads the combo back through the management API before reporting
+  success
+
+### Requirement: Public combo projection is never used for management apply
+
+FMO SHALL NOT use `/v1/combos` or any other public/projected combo endpoint to
+read, write, validate, or roll back managed combo state. Public combo projections
+are not a substitute for OmniRoute management auth, management route validation,
+or persisted operator-owned combo state.
+
+#### Scenario: Public combo projection is never used for management apply
+- GIVEN combo apply needs to read, write, validate, or roll back live combo
+  state
+- WHEN the applier performs the operation
+- THEN every combo-management operation uses `/api/combos*`
+- AND no request is sent to `/v1/combos`

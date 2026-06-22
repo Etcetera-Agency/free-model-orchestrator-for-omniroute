@@ -3,17 +3,28 @@
 ## Purpose
 TBD - created by archiving change add-role-lifecycle. Update Purpose after archive.
 ## Requirements
-### Requirement: Daily and unknown-role inventory
+### Requirement: Daily and event-triggered inventory
 
-The system SHALL run a full Hermes inventory daily, and SHALL run an immediate
-full inventory (never a partial single-agent lookup) whenever a role name appears
-in Hermes usage, cron, config or an OmniRoute request that is absent from the
-registry.
+The system SHALL run a full Hermes inventory daily. Manual or event-driven runs
+MAY request a full Hermes inventory, but an unknown role name alone SHALL NOT
+force an immediate inventory run or create a new combo.
 
-#### Scenario: Unknown role observed
-- GIVEN an OmniRoute request references a role not in the registry
-- WHEN the orchestrator detects it
-- THEN it runs a full Hermes inventory immediately, not a partial scan
+#### Scenario: Daily run performs full inventory
+- GIVEN the daily scheduler reaches the Hermes inventory window
+- WHEN the inventory trigger is evaluated
+- THEN a full Hermes inventory is requested
+
+#### Scenario: Manual run can request full inventory
+- GIVEN an operator starts a manual run with full Hermes inventory requested
+- WHEN the inventory trigger is evaluated
+- THEN a full Hermes inventory is requested
+
+#### Scenario: Unknown role event does not create inventory or combo
+- GIVEN an event-driven run references an unknown role name
+- AND no explicit full inventory request is present
+- WHEN the inventory trigger is evaluated
+- THEN no immediate inventory run is forced by that role name alone
+- AND no new combo is created from the unknown role name
 
 ### Requirement: Consumer registry
 
@@ -171,3 +182,68 @@ path. The stage SHALL report `success` only when inventory rows are persisted.
 - **WHEN** required Hermes env is missing
 - **THEN** the stage fails closed and no inventory is written
 
+### Requirement: Model slots are read from per-profile config
+
+The system SHALL read every Hermes profile's model slots from that profile's own
+`<profile_dir>/config.yaml`, not from the `hermes profile list` summary. The
+profile list (`ProfileInfo`) SHALL be used only to enumerate profile name, path
+and `gateway_running`; it does not carry auxiliary slots and therefore is not the
+slot source.
+
+The reader SHALL resolve the main combo from the `model` key in two shapes: a
+mapping (`model.default` is the combo id) and the legacy bare string. An
+unconfigured profile whose `model` is the empty-string sentinel `""` SHALL yield
+no main combo without error. The reader SHALL carry the raw `auxiliary` mapping
+through unchanged for downstream consumer enumeration.
+
+#### Scenario: Model slots are read from per-profile config
+- GIVEN a profile whose `config.yaml` sets `model.default` to a combo id
+- WHEN the inventory reads that profile
+- THEN the main combo is taken from `config.yaml` (`model.default`), not from the
+  profile-list summary `model` field
+- AND the profile's `auxiliary` mapping is available unchanged to later stages
+
+#### Scenario: Auxiliary slots are absent from the profile list
+- GIVEN the `hermes profile list` summary (`ProfileInfo`) for a profile that has
+  an `auxiliary:` block in its `config.yaml`
+- WHEN the inventory enumerates profiles
+- THEN the list summary is used only for name, path and gateway state
+- AND the auxiliary slots are obtained from the profile's `config.yaml`, since
+  the list summary carries none
+
+#### Scenario: Unconfigured profile model is tolerated
+- GIVEN a fresh profile whose `config.yaml` has `model: ""`
+- WHEN the inventory reads that profile
+- THEN the main combo resolves to none without raising
+- AND the profile is still enumerated for its auxiliary slots and gateway state
+
+### Requirement: Auxiliary model slots are consumers
+
+The system SHALL emit a consumer for each profile's main combo and for each
+profile `auxiliary.<slot>` whose route resolves to an OmniRoute combo other than
+the main combo. An auxiliary slot whose `provider` is `auto` or whose `model` is
+empty SHALL NOT produce a separate consumer, because it falls back to the
+profile's main combo, which is already counted.
+
+Auxiliary consumers SHALL carry `consumer_type = auxiliary`, a `consumer` key of
+`"{profile}:{slot}"`, and the slot name so downstream stages can derive the
+slot's capability. Auxiliary overrides configured at the gateway or per-platform
+level SHALL be emitted the same way, keyed by `"gateway:{platform}:{slot}"`.
+
+#### Scenario: Auxiliary override becomes a consumer
+- GIVEN a profile whose `config.yaml` has `auxiliary.vision` pointing at an
+  OmniRoute combo distinct from the main combo
+- WHEN the inventory runs
+- THEN an `auxiliary` consumer is recorded for that combo keyed `"{profile}:vision"`
+
+#### Scenario: Auto auxiliary slot is not a separate consumer
+- GIVEN an `auxiliary.compression` slot with `provider: auto` or empty `model`
+- WHEN the inventory runs
+- THEN no separate consumer is recorded for that slot
+- AND its load is attributed to the profile's main combo consumer
+
+#### Scenario: Gateway auxiliary overrides are consumers
+- GIVEN a gateway config with a top-level or per-platform `auxiliary` override to
+  a distinct combo
+- WHEN the gateway source is parsed
+- THEN an `auxiliary` consumer is recorded keyed `"gateway:{platform}:{slot}"`

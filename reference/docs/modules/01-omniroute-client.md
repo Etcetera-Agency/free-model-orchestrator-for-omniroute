@@ -29,7 +29,9 @@ GET  /api/usage/request-logs
 GET  /api/usage/{connectionId}
 GET  /api/usage/budget
 GET  /api/resilience
-GET  /api/combos...
+GET  /api/combos
+GET  /api/combos/{id}
+PUT  /api/combos/{id}
 GET  /api/evals
 POST /api/evals
 GET  /api/compliance/audit-log
@@ -37,7 +39,10 @@ GET  /v1/models
 POST /v1/providers/{provider}/chat/completions
 ```
 
-Точные формы `/api/combos*` должны быть зафиксированы integration fixture из установленной версии OmniRoute до реализации writer-части.
+FMO использует management combo API только для существующих `fmo-*` combo:
+`GET /api/combos` читает live state, `PUT /api/combos/{id}` обновляет
+membership. `/v1/combos` — public projection, не источник truth для apply.
+`/api/combos/test`, create и delete не используются.
 
 ## Входы
 
@@ -59,7 +64,8 @@ POST /v1/providers/{provider}/chat/completions
 4. логирует method/path/status/duration;
 5. сохраняет sanitized response при ошибке;
 6. повторяет только idempotent GET;
-7. не повторяет POST apply без idempotency protection.
+7. не повторяет combo update (`PUT /api/combos/{id}`) без idempotency
+   protection.
 
 ### Version handshake
 

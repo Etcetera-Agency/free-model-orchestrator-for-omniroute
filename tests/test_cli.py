@@ -63,6 +63,38 @@ def test_aa_index_failure_surfaces_handler_exit_code():
     assert result.changed is False
 
 
+@pytest.mark.spec("cli-and-operations::Normalize command dispatches to normalization")
+def test_normalize_profiles_command_dispatches_to_normalizer():
+    calls = []
+
+    def normalizer(args):
+        calls.append(args)
+        return CliResult(exit_code=EXIT_CODES["partial_stale"], changed=True, output="rewrote")
+
+    result = run_cli(["normalize-profiles"], preconditions_ok=True, profile_normalizer=normalizer)
+
+    assert result.exit_code == EXIT_CODES["partial_stale"]
+    assert result.changed is True
+    assert result.output == "rewrote"
+    assert len(calls) == 1
+
+
+@pytest.mark.spec("cli-and-operations::Normalize dry-run reports without writing")
+def test_normalize_profiles_dry_run_passes_through_and_reports_result():
+    calls = []
+
+    def normalizer(args):
+        calls.append(args)
+        return CliResult(exit_code=0, changed=False, output="planned rewrite")
+
+    result = run_cli(["normalize-profiles", "--dry-run"], preconditions_ok=True, profile_normalizer=normalizer)
+
+    assert result.exit_code == 0
+    assert result.changed is False
+    assert result.output == "planned rewrite"
+    assert calls[0].dry_run is True
+
+
 @pytest.mark.spec("cli-and-operations::Apply surfaces gating outcomes")
 @pytest.mark.parametrize("exit_code", [5, 6, 7])
 def test_apply_and_rollback_surface_guarded_runner_outcomes(exit_code):

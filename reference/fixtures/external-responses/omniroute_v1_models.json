@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-06-18T07:36:26.470Z",
+  "captured_at": "2026-06-22T13:23:36.393Z",
   "source": "omniroute-shlink-20129",
   "name": "omniroute_v1_models",
   "method": "GET",
@@ -11,7 +11,7 @@
     "connection": "keep-alive",
     "content-security-policy": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; media-src 'self' data: blob:; connect-src 'self' http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:* https: wss:; worker-src 'self' blob:; manifest-src 'self'",
     "content-type": "application/json",
-    "date": "Thu, 18 Jun 2026 07:36:11 GMT",
+    "date": "Mon, 22 Jun 2026 13:23:35 GMT",
     "keep-alive": "timeout=5",
     "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=()",
     "referrer-policy": "strict-origin-when-cross-origin",
@@ -28,9 +28,191 @@
     "object": "list",
     "data": [
       {
+        "id": "fmo-chat-combo",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "combo",
+        "permission": [],
+        "root": "fmo-chat-combo",
+        "parent": null,
+        "context_length": 200000,
+        "max_input_tokens": 200000,
+        "capabilities": {
+          "reasoning": true
+        }
+      },
+      {
+        "id": "fmo-research-combo",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "combo",
+        "permission": [],
+        "root": "fmo-research-combo",
+        "parent": null,
+        "context_length": 200000,
+        "max_input_tokens": 200000,
+        "capabilities": {
+          "reasoning": true
+        }
+      },
+      {
+        "id": "fmo-coding-combo",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "combo",
+        "permission": [],
+        "root": "fmo-coding-combo",
+        "parent": null,
+        "context_length": 200000,
+        "max_input_tokens": 200000,
+        "capabilities": {
+          "reasoning": true
+        }
+      },
+      {
+        "id": "fmo-title-generation",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "combo",
+        "permission": [],
+        "root": "fmo-title-generation",
+        "parent": null,
+        "context_length": 200000,
+        "max_input_tokens": 200000,
+        "capabilities": {
+          "reasoning": true
+        }
+      },
+      {
+        "id": "fmo-vision",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "combo",
+        "permission": [],
+        "root": "fmo-vision",
+        "parent": null,
+        "context_length": 200000,
+        "max_input_tokens": 200000,
+        "capabilities": {
+          "reasoning": true
+        }
+      },
+      {
+        "id": "fmo-compression",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "combo",
+        "permission": [],
+        "root": "fmo-compression",
+        "parent": null,
+        "context_length": 200000,
+        "max_input_tokens": 200000,
+        "capabilities": {
+          "reasoning": true
+        }
+      },
+      {
+        "id": "fmo-approval",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "combo",
+        "permission": [],
+        "root": "fmo-approval",
+        "parent": null,
+        "context_length": 200000,
+        "max_input_tokens": 200000,
+        "capabilities": {
+          "reasoning": true
+        }
+      },
+      {
+        "id": "fmo-skills",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "combo",
+        "permission": [],
+        "root": "fmo-skills",
+        "parent": null,
+        "context_length": 200000,
+        "max_input_tokens": 200000,
+        "capabilities": {
+          "reasoning": true
+        }
+      },
+      {
+        "id": "fmo-mcp",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "combo",
+        "permission": [],
+        "root": "fmo-mcp",
+        "parent": null,
+        "context_length": 200000,
+        "max_input_tokens": 200000,
+        "capabilities": {
+          "reasoning": true
+        }
+      },
+      {
+        "id": "fmo-triage-specifier",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "combo",
+        "permission": [],
+        "root": "fmo-triage-specifier",
+        "parent": null,
+        "context_length": 200000,
+        "max_input_tokens": 200000,
+        "capabilities": {
+          "reasoning": true
+        }
+      },
+      {
+        "id": "fmo-kanban-decomposer",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "combo",
+        "permission": [],
+        "root": "fmo-kanban-decomposer",
+        "parent": null,
+        "context_length": 200000,
+        "max_input_tokens": 200000,
+        "capabilities": {
+          "reasoning": true
+        }
+      },
+      {
+        "id": "fmo-profile-describer",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "combo",
+        "permission": [],
+        "root": "fmo-profile-describer",
+        "parent": null,
+        "context_length": 200000,
+        "max_input_tokens": 200000,
+        "capabilities": {
+          "reasoning": true
+        }
+      },
+      {
+        "id": "fmo-curator",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "combo",
+        "permission": [],
+        "root": "fmo-curator",
+        "parent": null,
+        "context_length": 200000,
+        "max_input_tokens": 200000,
+        "capabilities": {
+          "reasoning": true
+        }
+      },
+      {
         "id": "antigravity/claude-opus-4-6-thinking",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "antigravity",
         "permission": [],
         "root": "claude-opus-4-6-thinking",
@@ -56,7 +238,7 @@
       {
         "id": "antigravity/claude-sonnet-4-6",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "antigravity",
         "permission": [],
         "root": "claude-sonnet-4-6",
@@ -82,7 +264,7 @@
       {
         "id": "antigravity/gemini-3.5-flash-low",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "antigravity",
         "permission": [],
         "root": "gemini-3.5-flash-low",
@@ -108,7 +290,7 @@
       {
         "id": "antigravity/gemini-3.5-flash-medium",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "antigravity",
         "permission": [],
         "root": "gemini-3.5-flash-medium",
@@ -134,7 +316,7 @@
       {
         "id": "antigravity/gemini-3.5-flash-high",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "antigravity",
         "permission": [],
         "root": "gemini-3.5-flash-high",
@@ -160,7 +342,7 @@
       {
         "id": "antigravity/gemini-3-pro-preview",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "antigravity",
         "permission": [],
         "root": "gemini-3-pro-preview",
@@ -186,7 +368,7 @@
       {
         "id": "antigravity/gemini-3.1-pro-high",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "antigravity",
         "permission": [],
         "root": "gemini-3.1-pro-high",
@@ -212,7 +394,7 @@
       {
         "id": "antigravity/gemini-3.1-pro-low",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "antigravity",
         "permission": [],
         "root": "gemini-3.1-pro-low",
@@ -238,7 +420,7 @@
       {
         "id": "antigravity/gemini-3.1-flash-lite",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "antigravity",
         "permission": [],
         "root": "gemini-3.1-flash-lite",
@@ -264,7 +446,7 @@
       {
         "id": "antigravity/gemini-2.5-pro",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "antigravity",
         "permission": [],
         "root": "gemini-2.5-pro",
@@ -290,7 +472,7 @@
       {
         "id": "antigravity/gemini-2.5-flash",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "antigravity",
         "permission": [],
         "root": "gemini-2.5-flash",
@@ -316,7 +498,7 @@
       {
         "id": "antigravity/gemini-2.5-flash-lite",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "antigravity",
         "permission": [],
         "root": "gemini-2.5-flash-lite",
@@ -342,7 +524,7 @@
       {
         "id": "antigravity/gemini-2.5-flash-thinking",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "antigravity",
         "permission": [],
         "root": "gemini-2.5-flash-thinking",
@@ -368,7 +550,7 @@
       {
         "id": "antigravity/gemini-pro-agent",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "antigravity",
         "permission": [],
         "root": "gemini-pro-agent",
@@ -394,7 +576,7 @@
       {
         "id": "antigravity/gpt-oss-120b-medium",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "antigravity",
         "permission": [],
         "root": "gpt-oss-120b-medium",
@@ -412,7 +594,7 @@
       {
         "id": "antigravity/gemini-3-pro-image-preview",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "antigravity",
         "permission": [],
         "root": "gemini-3-pro-image-preview",
@@ -437,7 +619,7 @@
       {
         "id": "antigravity/gemini-3.1-flash-image",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "antigravity",
         "permission": [],
         "root": "gemini-3.1-flash-image",
@@ -462,7 +644,7 @@
       {
         "id": "antigravity/gemini-2.5-computer-use-preview-10-2025",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "antigravity",
         "permission": [],
         "root": "gemini-2.5-computer-use-preview-10-2025",
@@ -487,7 +669,7 @@
       {
         "id": "oc/big-pickle",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "opencode",
         "permission": [],
         "root": "big-pickle",
@@ -504,7 +686,7 @@
       {
         "id": "oc/deepseek-v4-flash-free",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "opencode",
         "permission": [],
         "root": "deepseek-v4-flash-free",
@@ -522,7 +704,7 @@
       {
         "id": "oc/minimax-m3-free",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "opencode",
         "permission": [],
         "root": "minimax-m3-free",
@@ -540,7 +722,7 @@
       {
         "id": "oc/minimax-m2.5-free",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "opencode",
         "permission": [],
         "root": "minimax-m2.5-free",
@@ -558,7 +740,7 @@
       {
         "id": "oc/ling-2.6-1t-free",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "opencode",
         "permission": [],
         "root": "ling-2.6-1t-free",
@@ -574,7 +756,7 @@
       {
         "id": "oc/trinity-large-preview-free",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "opencode",
         "permission": [],
         "root": "trinity-large-preview-free",
@@ -590,7 +772,7 @@
       {
         "id": "oc/nemotron-3-super-free",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "opencode",
         "permission": [],
         "root": "nemotron-3-super-free",
@@ -607,7 +789,7 @@
       {
         "id": "oc/qwen3.6-plus-free",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "opencode",
         "permission": [],
         "root": "qwen3.6-plus-free",
@@ -633,7 +815,7 @@
       {
         "id": "kc/openrouter/free",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "kilocode",
         "permission": [],
         "root": "openrouter/free",
@@ -649,7 +831,7 @@
       {
         "id": "kilocode/openrouter/free",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "kilocode",
         "permission": [],
         "root": "openrouter/free",
@@ -665,7 +847,7 @@
       {
         "id": "publicai/aisingapore/Qwen-SEA-LION-v4-32B-IT",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "publicai",
         "permission": [],
         "root": "aisingapore/Qwen-SEA-LION-v4-32B-IT",
@@ -681,7 +863,7 @@
       {
         "id": "codestral/codestral-latest",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "codestral",
         "permission": [],
         "root": "codestral-latest",
@@ -697,7 +879,7 @@
       {
         "id": "mcode/mimo-auto",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mimocode",
         "permission": [],
         "root": "mimo-auto",
@@ -714,7 +896,7 @@
       {
         "id": "mimocode/mimo-auto",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mimocode",
         "permission": [],
         "root": "mimo-auto",
@@ -731,7 +913,7 @@
       {
         "id": "gemini/gemini-2.5-flash",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "gemini-2.5-flash",
@@ -757,7 +939,7 @@
       {
         "id": "gemini/gemini-2.5-pro",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "gemini-2.5-pro",
@@ -781,7 +963,7 @@
       {
         "id": "gemini/gemini-2.0-flash",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "gemini-2.0-flash",
@@ -805,7 +987,7 @@
       {
         "id": "gemini/gemini-2.0-flash-001",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "gemini-2.0-flash-001",
@@ -821,7 +1003,7 @@
       {
         "id": "gemini/gemini-2.0-flash-lite-001",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "gemini-2.0-flash-lite-001",
@@ -837,7 +1019,7 @@
       {
         "id": "gemini/gemini-2.0-flash-lite",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "gemini-2.0-flash-lite",
@@ -853,7 +1035,7 @@
       {
         "id": "gemini/gemini-2.5-flash-preview-tts",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "gemini-2.5-flash-preview-tts",
@@ -879,7 +1061,7 @@
       {
         "id": "gemini/gemini-2.5-pro-preview-tts",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "gemini-2.5-pro-preview-tts",
@@ -895,7 +1077,7 @@
       {
         "id": "gemini/gemma-4-26b-a4b-it",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "gemma-4-26b-a4b-it",
@@ -911,7 +1093,7 @@
       {
         "id": "gemini/gemma-4-31b-it",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "gemma-4-31b-it",
@@ -927,7 +1109,7 @@
       {
         "id": "gemini/gemini-flash-latest",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "gemini-flash-latest",
@@ -943,7 +1125,7 @@
       {
         "id": "gemini/gemini-flash-lite-latest",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "gemini-flash-lite-latest",
@@ -959,7 +1141,7 @@
       {
         "id": "gemini/gemini-pro-latest",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "gemini-pro-latest",
@@ -975,7 +1157,7 @@
       {
         "id": "gemini/gemini-2.5-flash-lite",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "gemini-2.5-flash-lite",
@@ -1001,7 +1183,7 @@
       {
         "id": "gemini/gemini-2.5-flash-image",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "gemini-2.5-flash-image",
@@ -1027,7 +1209,7 @@
       {
         "id": "gemini/gemini-3-pro-preview",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "gemini-3-pro-preview",
@@ -1053,7 +1235,7 @@
       {
         "id": "gemini/gemini-3-flash-preview",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "gemini-3-flash-preview",
@@ -1079,7 +1261,7 @@
       {
         "id": "gemini/gemini-3.1-pro-preview",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "gemini-3.1-pro-preview",
@@ -1105,7 +1287,7 @@
       {
         "id": "gemini/gemini-3.1-pro-preview-customtools",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "gemini-3.1-pro-preview-customtools",
@@ -1131,7 +1313,7 @@
       {
         "id": "gemini/gemini-3.1-flash-lite-preview",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "gemini-3.1-flash-lite-preview",
@@ -1157,7 +1339,7 @@
       {
         "id": "gemini/gemini-3.1-flash-lite",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "gemini-3.1-flash-lite",
@@ -1173,7 +1355,7 @@
       {
         "id": "gemini/gemini-3-pro-image-preview",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "gemini-3-pro-image-preview",
@@ -1189,7 +1371,7 @@
       {
         "id": "gemini/gemini-3-pro-image",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "gemini-3-pro-image",
@@ -1205,7 +1387,7 @@
       {
         "id": "gemini/nano-banana-pro-preview",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "nano-banana-pro-preview",
@@ -1221,7 +1403,7 @@
       {
         "id": "gemini/gemini-3.1-flash-image-preview",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "gemini-3.1-flash-image-preview",
@@ -1237,7 +1419,7 @@
       {
         "id": "gemini/gemini-3.1-flash-image",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "gemini-3.1-flash-image",
@@ -1253,7 +1435,7 @@
       {
         "id": "gemini/gemini-3.5-flash",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "gemini-3.5-flash",
@@ -1279,7 +1461,7 @@
       {
         "id": "gemini/lyria-3-clip-preview",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "lyria-3-clip-preview",
@@ -1295,7 +1477,7 @@
       {
         "id": "gemini/lyria-3-pro-preview",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "lyria-3-pro-preview",
@@ -1311,7 +1493,7 @@
       {
         "id": "gemini/gemini-3.1-flash-tts-preview",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "gemini-3.1-flash-tts-preview",
@@ -1327,7 +1509,7 @@
       {
         "id": "gemini/gemini-robotics-er-1.5-preview",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "gemini-robotics-er-1.5-preview",
@@ -1343,7 +1525,7 @@
       {
         "id": "gemini/gemini-robotics-er-1.6-preview",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "gemini-robotics-er-1.6-preview",
@@ -1359,7 +1541,7 @@
       {
         "id": "gemini/gemini-2.5-computer-use-preview-10-2025",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "gemini-2.5-computer-use-preview-10-2025",
@@ -1375,7 +1557,7 @@
       {
         "id": "gemini/antigravity-preview-05-2026",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "antigravity-preview-05-2026",
@@ -1391,7 +1573,7 @@
       {
         "id": "gemini/deep-research-max-preview-04-2026",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "deep-research-max-preview-04-2026",
@@ -1407,7 +1589,7 @@
       {
         "id": "gemini/deep-research-preview-04-2026",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "deep-research-preview-04-2026",
@@ -1423,7 +1605,7 @@
       {
         "id": "gemini/deep-research-pro-preview-12-2025",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "deep-research-pro-preview-12-2025",
@@ -1439,7 +1621,7 @@
       {
         "id": "gemini/gemini-embedding-001",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "gemini-embedding-001",
@@ -1459,7 +1641,7 @@
       {
         "id": "gemini/gemini-embedding-2-preview",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "gemini-embedding-2-preview",
@@ -1479,7 +1661,7 @@
       {
         "id": "gemini/gemini-embedding-2",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "gemini-embedding-2",
@@ -1499,7 +1681,7 @@
       {
         "id": "gemini/aqa",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "aqa",
@@ -1515,7 +1697,7 @@
       {
         "id": "gemini/imagen-4.0-generate-001",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "imagen-4.0-generate-001",
@@ -1535,7 +1717,7 @@
       {
         "id": "gemini/imagen-4.0-ultra-generate-001",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "imagen-4.0-ultra-generate-001",
@@ -1555,7 +1737,7 @@
       {
         "id": "gemini/imagen-4.0-fast-generate-001",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "imagen-4.0-fast-generate-001",
@@ -1575,7 +1757,7 @@
       {
         "id": "gemini/veo-2.0-generate-001",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "veo-2.0-generate-001",
@@ -1594,7 +1776,7 @@
       {
         "id": "gemini/veo-3.0-generate-001",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "veo-3.0-generate-001",
@@ -1613,7 +1795,7 @@
       {
         "id": "gemini/veo-3.0-fast-generate-001",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "veo-3.0-fast-generate-001",
@@ -1632,7 +1814,7 @@
       {
         "id": "gemini/veo-3.1-generate-preview",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "veo-3.1-generate-preview",
@@ -1651,7 +1833,7 @@
       {
         "id": "gemini/veo-3.1-fast-generate-preview",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "veo-3.1-fast-generate-preview",
@@ -1670,7 +1852,7 @@
       {
         "id": "gemini/veo-3.1-lite-generate-preview",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "veo-3.1-lite-generate-preview",
@@ -1689,7 +1871,7 @@
       {
         "id": "gemini/gemini-2.5-flash-native-audio-latest",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "gemini-2.5-flash-native-audio-latest",
@@ -1720,7 +1902,7 @@
       {
         "id": "gemini/gemini-2.5-flash-native-audio-latest",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "gemini-2.5-flash-native-audio-latest",
@@ -1751,7 +1933,7 @@
       {
         "id": "gemini/gemini-2.5-flash-native-audio-preview-09-2025",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "gemini-2.5-flash-native-audio-preview-09-2025",
@@ -1782,7 +1964,7 @@
       {
         "id": "gemini/gemini-2.5-flash-native-audio-preview-09-2025",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "gemini-2.5-flash-native-audio-preview-09-2025",
@@ -1813,7 +1995,7 @@
       {
         "id": "gemini/gemini-2.5-flash-native-audio-preview-12-2025",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "gemini-2.5-flash-native-audio-preview-12-2025",
@@ -1844,7 +2026,7 @@
       {
         "id": "gemini/gemini-2.5-flash-native-audio-preview-12-2025",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "gemini-2.5-flash-native-audio-preview-12-2025",
@@ -1875,7 +2057,7 @@
       {
         "id": "gemini/gemini-3.1-flash-live-preview",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "gemini-3.1-flash-live-preview",
@@ -1896,7 +2078,7 @@
       {
         "id": "gemini/gemini-3.1-flash-live-preview",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "gemini-3.1-flash-live-preview",
@@ -1917,7 +2099,7 @@
       {
         "id": "gemini/gemini-3.5-live-translate-preview",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "gemini-3.5-live-translate-preview",
@@ -1938,7 +2120,7 @@
       {
         "id": "gemini/gemini-3.5-live-translate-preview",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "permission": [],
         "root": "gemini-3.5-live-translate-preview",
@@ -1959,281 +2141,281 @@
       {
         "id": "groq/meta-llama/llama-prompt-guard-2-22m",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "groq",
         "permission": [],
         "root": "meta-llama/llama-prompt-guard-2-22m",
         "parent": null,
+        "context_length": 512,
         "capabilities": {
           "tool_calling": true,
           "reasoning": true
         },
         "max_output_tokens": 8192,
-        "name": "meta-llama/llama-prompt-guard-2-22m",
-        "context_length": 128000
+        "name": "meta-llama/llama-prompt-guard-2-22m"
       },
       {
         "id": "groq/meta-llama/llama-4-scout-17b-16e-instruct",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "groq",
         "permission": [],
         "root": "meta-llama/llama-4-scout-17b-16e-instruct",
         "parent": null,
+        "context_length": 131072,
         "capabilities": {
           "tool_calling": true,
           "reasoning": false,
           "thinking": false
         },
         "max_output_tokens": 8192,
-        "name": "Llama 4 Scout",
-        "context_length": 128000
+        "name": "Llama 4 Scout"
       },
       {
         "id": "groq/openai/gpt-oss-20b",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "groq",
         "permission": [],
         "root": "openai/gpt-oss-20b",
         "parent": null,
+        "context_length": 131072,
         "capabilities": {
           "tool_calling": true,
           "reasoning": true
         },
         "max_output_tokens": 8192,
-        "name": "GPT-OSS 20B",
-        "context_length": 400000
+        "name": "GPT-OSS 20B"
       },
       {
         "id": "groq/meta-llama/llama-prompt-guard-2-86m",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "groq",
         "permission": [],
         "root": "meta-llama/llama-prompt-guard-2-86m",
         "parent": null,
+        "context_length": 512,
         "capabilities": {
           "tool_calling": true,
           "reasoning": true
         },
         "max_output_tokens": 8192,
-        "name": "meta-llama/llama-prompt-guard-2-86m",
-        "context_length": 128000
+        "name": "meta-llama/llama-prompt-guard-2-86m"
       },
       {
         "id": "groq/qwen/qwen3.6-27b",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "groq",
         "permission": [],
         "root": "qwen/qwen3.6-27b",
         "parent": null,
+        "context_length": 131072,
         "capabilities": {
           "tool_calling": true,
           "reasoning": true
         },
         "max_output_tokens": 8192,
-        "name": "qwen/qwen3.6-27b",
-        "context_length": 128000
+        "name": "qwen/qwen3.6-27b"
       },
       {
         "id": "groq/llama-3.3-70b-versatile",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "groq",
         "permission": [],
         "root": "llama-3.3-70b-versatile",
         "parent": null,
+        "context_length": 131072,
         "capabilities": {
           "tool_calling": true,
           "reasoning": false,
           "thinking": false
         },
         "max_output_tokens": 8192,
-        "name": "Llama 3.3 70B",
-        "context_length": 128000
+        "name": "Llama 3.3 70B"
       },
       {
         "id": "groq/openai/gpt-oss-safeguard-20b",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "groq",
         "permission": [],
         "root": "openai/gpt-oss-safeguard-20b",
         "parent": null,
+        "context_length": 131072,
         "capabilities": {
           "tool_calling": true,
           "reasoning": true
         },
         "max_output_tokens": 8192,
-        "name": "openai/gpt-oss-safeguard-20b",
-        "context_length": 400000
+        "name": "openai/gpt-oss-safeguard-20b"
       },
       {
         "id": "groq/llama-3.1-8b-instant",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "groq",
         "permission": [],
         "root": "llama-3.1-8b-instant",
         "parent": null,
+        "context_length": 131072,
         "capabilities": {
           "tool_calling": true,
           "reasoning": true
         },
         "max_output_tokens": 8192,
-        "name": "llama-3.1-8b-instant",
-        "context_length": 128000
+        "name": "llama-3.1-8b-instant"
       },
       {
         "id": "groq/qwen/qwen3-32b",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "groq",
         "permission": [],
         "root": "qwen/qwen3-32b",
         "parent": null,
+        "context_length": 131072,
         "capabilities": {
           "tool_calling": true,
           "reasoning": true
         },
         "max_output_tokens": 8192,
-        "name": "Qwen3 32B",
-        "context_length": 128000
+        "name": "Qwen3 32B"
       },
       {
         "id": "groq/allam-2-7b",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "groq",
         "permission": [],
         "root": "allam-2-7b",
         "parent": null,
+        "context_length": 4096,
         "capabilities": {
           "tool_calling": true,
           "reasoning": true
         },
         "max_output_tokens": 8192,
-        "name": "allam-2-7b",
-        "context_length": 128000
+        "name": "allam-2-7b"
       },
       {
         "id": "groq/groq/compound",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "groq",
         "permission": [],
         "root": "groq/compound",
         "parent": null,
+        "context_length": 131072,
         "capabilities": {
           "tool_calling": true,
           "reasoning": true
         },
         "max_output_tokens": 8192,
-        "name": "groq/compound",
-        "context_length": 128000
+        "name": "groq/compound"
       },
       {
         "id": "groq/whisper-large-v3",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "groq",
         "permission": [],
         "root": "whisper-large-v3",
         "parent": null,
+        "context_length": 448,
         "capabilities": {
           "tool_calling": true,
           "reasoning": true
         },
         "max_output_tokens": 8192,
-        "name": "whisper-large-v3",
-        "context_length": 128000
+        "name": "whisper-large-v3"
       },
       {
         "id": "groq/openai/gpt-oss-120b",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "groq",
         "permission": [],
         "root": "openai/gpt-oss-120b",
         "parent": null,
+        "context_length": 131072,
         "capabilities": {
           "tool_calling": true,
           "reasoning": true
         },
         "max_output_tokens": 8192,
-        "name": "GPT-OSS 120B",
-        "context_length": 400000
+        "name": "GPT-OSS 120B"
       },
       {
         "id": "groq/canopylabs/orpheus-arabic-saudi",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "groq",
         "permission": [],
         "root": "canopylabs/orpheus-arabic-saudi",
         "parent": null,
+        "context_length": 4000,
         "capabilities": {
           "tool_calling": true,
           "reasoning": true
         },
         "max_output_tokens": 8192,
-        "name": "canopylabs/orpheus-arabic-saudi",
-        "context_length": 128000
+        "name": "canopylabs/orpheus-arabic-saudi"
       },
       {
         "id": "groq/canopylabs/orpheus-v1-english",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "groq",
         "permission": [],
         "root": "canopylabs/orpheus-v1-english",
         "parent": null,
+        "context_length": 4000,
         "capabilities": {
           "tool_calling": true,
           "reasoning": true
         },
         "max_output_tokens": 8192,
-        "name": "canopylabs/orpheus-v1-english",
-        "context_length": 128000
+        "name": "canopylabs/orpheus-v1-english"
       },
       {
         "id": "groq/whisper-large-v3-turbo",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "groq",
         "permission": [],
         "root": "whisper-large-v3-turbo",
         "parent": null,
+        "context_length": 448,
         "capabilities": {
           "tool_calling": true,
           "reasoning": true
         },
         "max_output_tokens": 8192,
-        "name": "whisper-large-v3-turbo",
-        "context_length": 128000
+        "name": "whisper-large-v3-turbo"
       },
       {
         "id": "groq/groq/compound-mini",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "groq",
         "permission": [],
         "root": "groq/compound-mini",
         "parent": null,
+        "context_length": 131072,
         "capabilities": {
           "tool_calling": true,
           "reasoning": true
         },
         "max_output_tokens": 8192,
-        "name": "groq/compound-mini",
-        "context_length": 128000
+        "name": "groq/compound-mini"
       },
       {
         "id": "mistral/mistral-medium-2505",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "mistral-medium-2505",
@@ -2249,7 +2431,7 @@
       {
         "id": "mistral/mistral-medium-2508",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "mistral-medium-2508",
@@ -2265,7 +2447,7 @@
       {
         "id": "mistral/open-mistral-nemo",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "open-mistral-nemo",
@@ -2281,7 +2463,7 @@
       {
         "id": "mistral/open-mistral-nemo-2407",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "open-mistral-nemo-2407",
@@ -2297,7 +2479,7 @@
       {
         "id": "mistral/mistral-tiny-2407",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "mistral-tiny-2407",
@@ -2313,7 +2495,7 @@
       {
         "id": "mistral/mistral-tiny-latest",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "mistral-tiny-latest",
@@ -2329,7 +2511,7 @@
       {
         "id": "mistral/codestral-2508",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "codestral-2508",
@@ -2345,7 +2527,7 @@
       {
         "id": "mistral/codestral-latest",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "codestral-latest",
@@ -2361,7 +2543,7 @@
       {
         "id": "mistral/mistral-code-latest",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "mistral-code-latest",
@@ -2377,7 +2559,7 @@
       {
         "id": "mistral/mistral-code-fim-latest",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "mistral-code-fim-latest",
@@ -2393,7 +2575,7 @@
       {
         "id": "mistral/devstral-2512",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "devstral-2512",
@@ -2409,7 +2591,7 @@
       {
         "id": "mistral/devstral-medium-latest",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "devstral-medium-latest",
@@ -2425,7 +2607,7 @@
       {
         "id": "mistral/devstral-latest",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "devstral-latest",
@@ -2441,7 +2623,7 @@
       {
         "id": "mistral/mistral-code-agent-latest",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "mistral-code-agent-latest",
@@ -2457,7 +2639,7 @@
       {
         "id": "mistral/mistral-small-2603",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "mistral-small-2603",
@@ -2473,7 +2655,7 @@
       {
         "id": "mistral/mistral-small-latest",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "mistral-small-latest",
@@ -2489,7 +2671,7 @@
       {
         "id": "mistral/mistral-vibe-cli-fast",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "mistral-vibe-cli-fast",
@@ -2505,7 +2687,7 @@
       {
         "id": "mistral/magistral-small-latest",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "magistral-small-latest",
@@ -2521,7 +2703,7 @@
       {
         "id": "mistral/magistral-medium-2509",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "magistral-medium-2509",
@@ -2537,7 +2719,7 @@
       {
         "id": "mistral/magistral-medium-latest",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "magistral-medium-latest",
@@ -2553,7 +2735,7 @@
       {
         "id": "mistral/voxtral-small-2507",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "voxtral-small-2507",
@@ -2569,7 +2751,7 @@
       {
         "id": "mistral/voxtral-small-latest",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "voxtral-small-latest",
@@ -2585,7 +2767,7 @@
       {
         "id": "mistral/labs-leanstral-2603",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "labs-leanstral-2603",
@@ -2601,7 +2783,7 @@
       {
         "id": "mistral/mistral-large-2512",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "mistral-large-2512",
@@ -2617,7 +2799,7 @@
       {
         "id": "mistral/mistral-large-latest",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "mistral-large-latest",
@@ -2633,7 +2815,7 @@
       {
         "id": "mistral/ministral-3b-2512",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "ministral-3b-2512",
@@ -2649,7 +2831,7 @@
       {
         "id": "mistral/ministral-3b-latest",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "ministral-3b-latest",
@@ -2665,7 +2847,7 @@
       {
         "id": "mistral/ministral-8b-2512",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "ministral-8b-2512",
@@ -2681,7 +2863,7 @@
       {
         "id": "mistral/ministral-8b-latest",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "ministral-8b-latest",
@@ -2697,7 +2879,7 @@
       {
         "id": "mistral/ministral-14b-2512",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "ministral-14b-2512",
@@ -2713,7 +2895,7 @@
       {
         "id": "mistral/ministral-14b-latest",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "ministral-14b-latest",
@@ -2729,7 +2911,7 @@
       {
         "id": "mistral/mistral-medium-latest",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "mistral-medium-latest",
@@ -2745,7 +2927,7 @@
       {
         "id": "mistral/mistral-medium",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "mistral-medium",
@@ -2761,7 +2943,7 @@
       {
         "id": "mistral/mistral-medium-3-5",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "mistral-medium-3-5",
@@ -2777,7 +2959,7 @@
       {
         "id": "mistral/mistral-medium-3.5",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "mistral-medium-3.5",
@@ -2793,7 +2975,7 @@
       {
         "id": "mistral/mistral-medium-3",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "mistral-medium-3",
@@ -2809,7 +2991,7 @@
       {
         "id": "mistral/mistral-medium-2604",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "mistral-medium-2604",
@@ -2825,7 +3007,7 @@
       {
         "id": "mistral/mistral-vibe-cli-latest",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "mistral-vibe-cli-latest",
@@ -2841,7 +3023,7 @@
       {
         "id": "mistral/mistral-vibe-cli-with-tools",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "mistral-vibe-cli-with-tools",
@@ -2857,7 +3039,7 @@
       {
         "id": "mistral/voxtral-mini-2507",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "voxtral-mini-2507",
@@ -2873,7 +3055,7 @@
       {
         "id": "mistral/voxtral-mini-latest",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "voxtral-mini-latest",
@@ -2889,7 +3071,7 @@
       {
         "id": "mistral/magistral-small-2509",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "magistral-small-2509",
@@ -2905,7 +3087,7 @@
       {
         "id": "mistral/mistral-small-2506",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "mistral-small-2506",
@@ -2921,7 +3103,7 @@
       {
         "id": "mistral/mistral-embed-2312",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "mistral-embed-2312",
@@ -2937,7 +3119,7 @@
       {
         "id": "mistral/mistral-embed",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "mistral-embed",
@@ -2953,7 +3135,7 @@
       {
         "id": "mistral/codestral-embed",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "codestral-embed",
@@ -2969,7 +3151,7 @@
       {
         "id": "mistral/codestral-embed-2505",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "codestral-embed-2505",
@@ -2985,7 +3167,7 @@
       {
         "id": "mistral/mistral-moderation-2603",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "mistral-moderation-2603",
@@ -3001,7 +3183,7 @@
       {
         "id": "mistral/mistral-moderation-2411",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "mistral-moderation-2411",
@@ -3017,7 +3199,7 @@
       {
         "id": "mistral/mistral-moderation-latest",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "mistral-moderation-latest",
@@ -3033,7 +3215,7 @@
       {
         "id": "mistral/mistral-ocr-2512",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "mistral-ocr-2512",
@@ -3049,7 +3231,7 @@
       {
         "id": "mistral/mistral-ocr-latest",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "mistral-ocr-latest",
@@ -3065,7 +3247,7 @@
       {
         "id": "mistral/mistral-ocr-3-0",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "mistral-ocr-3-0",
@@ -3081,7 +3263,7 @@
       {
         "id": "mistral/mistral-ocr-3",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "mistral-ocr-3",
@@ -3097,7 +3279,7 @@
       {
         "id": "mistral/voxtral-mini-2602",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "voxtral-mini-2602",
@@ -3113,7 +3295,7 @@
       {
         "id": "mistral/voxtral-mini-transcribe-realtime-2602",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "voxtral-mini-transcribe-realtime-2602",
@@ -3129,7 +3311,7 @@
       {
         "id": "mistral/voxtral-mini-realtime-2602",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "voxtral-mini-realtime-2602",
@@ -3145,7 +3327,7 @@
       {
         "id": "mistral/voxtral-mini-realtime-latest",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "voxtral-mini-realtime-latest",
@@ -3161,7 +3343,7 @@
       {
         "id": "mistral/voxtral-mini-tts-2603",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "voxtral-mini-tts-2603",
@@ -3177,7 +3359,7 @@
       {
         "id": "mistral/voxtral-mini-tts-latest",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "mistral",
         "permission": [],
         "root": "voxtral-mini-tts-latest",
@@ -3193,7 +3375,7 @@
       {
         "id": "nvidia/01-ai/yi-large",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "01-ai/yi-large",
@@ -3209,7 +3391,7 @@
       {
         "id": "nvidia/abacusai/dracarys-llama-3.1-70b-instruct",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "abacusai/dracarys-llama-3.1-70b-instruct",
@@ -3225,7 +3407,7 @@
       {
         "id": "nvidia/adept/fuyu-8b",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "adept/fuyu-8b",
@@ -3241,7 +3423,7 @@
       {
         "id": "nvidia/ai21labs/jamba-1.5-large-instruct",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "ai21labs/jamba-1.5-large-instruct",
@@ -3257,7 +3439,7 @@
       {
         "id": "nvidia/aisingapore/sea-lion-7b-instruct",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "aisingapore/sea-lion-7b-instruct",
@@ -3273,7 +3455,7 @@
       {
         "id": "nvidia/baai/bge-m3",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "baai/bge-m3",
@@ -3289,7 +3471,7 @@
       {
         "id": "nvidia/bigcode/starcoder2-15b",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "bigcode/starcoder2-15b",
@@ -3305,7 +3487,7 @@
       {
         "id": "nvidia/bytedance/seed-oss-36b-instruct",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "bytedance/seed-oss-36b-instruct",
@@ -3321,7 +3503,7 @@
       {
         "id": "nvidia/databricks/dbrx-instruct",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "databricks/dbrx-instruct",
@@ -3337,7 +3519,7 @@
       {
         "id": "nvidia/deepseek-ai/deepseek-coder-6.7b-instruct",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "deepseek-ai/deepseek-coder-6.7b-instruct",
@@ -3353,7 +3535,7 @@
       {
         "id": "nvidia/deepseek-ai/deepseek-v4-flash",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "deepseek-ai/deepseek-v4-flash",
@@ -3369,7 +3551,7 @@
       {
         "id": "nvidia/deepseek-ai/deepseek-v4-pro",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "deepseek-ai/deepseek-v4-pro",
@@ -3386,7 +3568,7 @@
       {
         "id": "nvidia/google/codegemma-1.1-7b",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "google/codegemma-1.1-7b",
@@ -3402,7 +3584,7 @@
       {
         "id": "nvidia/google/codegemma-7b",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "google/codegemma-7b",
@@ -3418,7 +3600,7 @@
       {
         "id": "nvidia/google/deplot",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "google/deplot",
@@ -3434,7 +3616,7 @@
       {
         "id": "nvidia/google/diffusiongemma-26b-a4b-it",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "google/diffusiongemma-26b-a4b-it",
@@ -3450,7 +3632,7 @@
       {
         "id": "nvidia/google/gemma-2-2b-it",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "google/gemma-2-2b-it",
@@ -3466,7 +3648,7 @@
       {
         "id": "nvidia/google/gemma-2b",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "google/gemma-2b",
@@ -3482,7 +3664,7 @@
       {
         "id": "nvidia/google/gemma-3-12b-it",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "google/gemma-3-12b-it",
@@ -3498,7 +3680,7 @@
       {
         "id": "nvidia/google/gemma-3-4b-it",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "google/gemma-3-4b-it",
@@ -3514,7 +3696,7 @@
       {
         "id": "nvidia/google/gemma-3n-e2b-it",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "google/gemma-3n-e2b-it",
@@ -3530,7 +3712,7 @@
       {
         "id": "nvidia/google/gemma-3n-e4b-it",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "google/gemma-3n-e4b-it",
@@ -3546,7 +3728,7 @@
       {
         "id": "nvidia/google/gemma-4-31b-it",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "google/gemma-4-31b-it",
@@ -3562,7 +3744,7 @@
       {
         "id": "nvidia/google/recurrentgemma-2b",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "google/recurrentgemma-2b",
@@ -3578,7 +3760,7 @@
       {
         "id": "nvidia/ibm/granite-3.0-3b-a800m-instruct",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "ibm/granite-3.0-3b-a800m-instruct",
@@ -3594,7 +3776,7 @@
       {
         "id": "nvidia/ibm/granite-3.0-8b-instruct",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "ibm/granite-3.0-8b-instruct",
@@ -3610,7 +3792,7 @@
       {
         "id": "nvidia/ibm/granite-34b-code-instruct",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "ibm/granite-34b-code-instruct",
@@ -3626,7 +3808,7 @@
       {
         "id": "nvidia/ibm/granite-8b-code-instruct",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "ibm/granite-8b-code-instruct",
@@ -3642,7 +3824,7 @@
       {
         "id": "nvidia/meta/codellama-70b",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "meta/codellama-70b",
@@ -3658,7 +3840,7 @@
       {
         "id": "nvidia/meta/llama-3.1-70b-instruct",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "meta/llama-3.1-70b-instruct",
@@ -3674,7 +3856,7 @@
       {
         "id": "nvidia/meta/llama-3.1-8b-instruct",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "meta/llama-3.1-8b-instruct",
@@ -3690,7 +3872,7 @@
       {
         "id": "nvidia/meta/llama-3.2-11b-vision-instruct",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "meta/llama-3.2-11b-vision-instruct",
@@ -3706,7 +3888,7 @@
       {
         "id": "nvidia/meta/llama-3.2-1b-instruct",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "meta/llama-3.2-1b-instruct",
@@ -3722,7 +3904,7 @@
       {
         "id": "nvidia/meta/llama-3.2-3b-instruct",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "meta/llama-3.2-3b-instruct",
@@ -3738,7 +3920,7 @@
       {
         "id": "nvidia/meta/llama-3.2-90b-vision-instruct",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "meta/llama-3.2-90b-vision-instruct",
@@ -3754,7 +3936,7 @@
       {
         "id": "nvidia/meta/llama-3.3-70b-instruct",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "meta/llama-3.3-70b-instruct",
@@ -3770,7 +3952,7 @@
       {
         "id": "nvidia/meta/llama-4-maverick-17b-128e-instruct",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "meta/llama-4-maverick-17b-128e-instruct",
@@ -3786,7 +3968,7 @@
       {
         "id": "nvidia/meta/llama-guard-4-12b",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "meta/llama-guard-4-12b",
@@ -3802,7 +3984,7 @@
       {
         "id": "nvidia/meta/llama2-70b",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "meta/llama2-70b",
@@ -3818,7 +4000,7 @@
       {
         "id": "nvidia/microsoft/kosmos-2",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "microsoft/kosmos-2",
@@ -3834,7 +4016,7 @@
       {
         "id": "nvidia/microsoft/phi-3-vision-128k-instruct",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "microsoft/phi-3-vision-128k-instruct",
@@ -3850,7 +4032,7 @@
       {
         "id": "nvidia/microsoft/phi-3.5-moe-instruct",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "microsoft/phi-3.5-moe-instruct",
@@ -3866,7 +4048,7 @@
       {
         "id": "nvidia/microsoft/phi-4-mini-instruct",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "microsoft/phi-4-mini-instruct",
@@ -3882,7 +4064,7 @@
       {
         "id": "nvidia/microsoft/phi-4-multimodal-instruct",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "microsoft/phi-4-multimodal-instruct",
@@ -3898,7 +4080,7 @@
       {
         "id": "nvidia/minimaxai/minimax-m2.7",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "minimaxai/minimax-m2.7",
@@ -3916,7 +4098,7 @@
       {
         "id": "nvidia/minimaxai/minimax-m3",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "minimaxai/minimax-m3",
@@ -3934,7 +4116,7 @@
       {
         "id": "nvidia/mistralai/codestral-22b-instruct-v0.1",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "mistralai/codestral-22b-instruct-v0.1",
@@ -3950,7 +4132,7 @@
       {
         "id": "nvidia/mistralai/ministral-14b-instruct-2512",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "mistralai/ministral-14b-instruct-2512",
@@ -3966,7 +4148,7 @@
       {
         "id": "nvidia/mistralai/mistral-7b-instruct-v0.3",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "mistralai/mistral-7b-instruct-v0.3",
@@ -3982,7 +4164,7 @@
       {
         "id": "nvidia/mistralai/mistral-large",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "mistralai/mistral-large",
@@ -3998,7 +4180,7 @@
       {
         "id": "nvidia/mistralai/mistral-large-2-instruct",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "mistralai/mistral-large-2-instruct",
@@ -4014,7 +4196,7 @@
       {
         "id": "nvidia/mistralai/mistral-large-3-675b-instruct-2512",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "mistralai/mistral-large-3-675b-instruct-2512",
@@ -4030,7 +4212,7 @@
       {
         "id": "nvidia/mistralai/mistral-medium-3.5-128b",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "mistralai/mistral-medium-3.5-128b",
@@ -4046,7 +4228,7 @@
       {
         "id": "nvidia/mistralai/mistral-nemotron",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "mistralai/mistral-nemotron",
@@ -4062,7 +4244,7 @@
       {
         "id": "nvidia/mistralai/mistral-small-4-119b-2603",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "mistralai/mistral-small-4-119b-2603",
@@ -4078,7 +4260,7 @@
       {
         "id": "nvidia/mistralai/mixtral-8x22b-v0.1",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "mistralai/mixtral-8x22b-v0.1",
@@ -4094,7 +4276,7 @@
       {
         "id": "nvidia/mistralai/mixtral-8x7b-instruct-v0.1",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "mistralai/mixtral-8x7b-instruct-v0.1",
@@ -4110,7 +4292,7 @@
       {
         "id": "nvidia/moonshotai/kimi-k2.6",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "moonshotai/kimi-k2.6",
@@ -4126,7 +4308,7 @@
       {
         "id": "nvidia/nv-mistralai/mistral-nemo-12b-instruct",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "nv-mistralai/mistral-nemo-12b-instruct",
@@ -4142,7 +4324,7 @@
       {
         "id": "nvidia/nvidia/ai-synthetic-video-detector",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "nvidia/ai-synthetic-video-detector",
@@ -4158,7 +4340,7 @@
       {
         "id": "nvidia/nvidia/cosmos-reason2-8b",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "nvidia/cosmos-reason2-8b",
@@ -4174,7 +4356,7 @@
       {
         "id": "nvidia/nvidia/embed-qa-4",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "nvidia/embed-qa-4",
@@ -4190,7 +4372,7 @@
       {
         "id": "nvidia/nvidia/gliner-pii",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "nvidia/gliner-pii",
@@ -4206,7 +4388,7 @@
       {
         "id": "nvidia/nvidia/ising-calibration-1-35b-a3b",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "nvidia/ising-calibration-1-35b-a3b",
@@ -4222,7 +4404,7 @@
       {
         "id": "nvidia/nvidia/llama-3.1-nemoguard-8b-content-safety",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "nvidia/llama-3.1-nemoguard-8b-content-safety",
@@ -4238,7 +4420,7 @@
       {
         "id": "nvidia/nvidia/llama-3.1-nemoguard-8b-topic-control",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "nvidia/llama-3.1-nemoguard-8b-topic-control",
@@ -4254,7 +4436,7 @@
       {
         "id": "nvidia/nvidia/llama-3.1-nemotron-51b-instruct",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "nvidia/llama-3.1-nemotron-51b-instruct",
@@ -4270,7 +4452,7 @@
       {
         "id": "nvidia/nvidia/llama-3.1-nemotron-70b-instruct",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "nvidia/llama-3.1-nemotron-70b-instruct",
@@ -4286,7 +4468,7 @@
       {
         "id": "nvidia/nvidia/llama-3.1-nemotron-nano-8b-v1",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "nvidia/llama-3.1-nemotron-nano-8b-v1",
@@ -4302,7 +4484,7 @@
       {
         "id": "nvidia/nvidia/llama-3.1-nemotron-nano-vl-8b-v1",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "nvidia/llama-3.1-nemotron-nano-vl-8b-v1",
@@ -4318,7 +4500,7 @@
       {
         "id": "nvidia/nvidia/llama-3.1-nemotron-safety-guard-8b-v3",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "nvidia/llama-3.1-nemotron-safety-guard-8b-v3",
@@ -4334,7 +4516,7 @@
       {
         "id": "nvidia/nvidia/llama-3.1-nemotron-ultra-253b-v1",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "nvidia/llama-3.1-nemotron-ultra-253b-v1",
@@ -4350,7 +4532,7 @@
       {
         "id": "nvidia/nvidia/llama-3.2-nemoretriever-1b-vlm-embed-v1",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "nvidia/llama-3.2-nemoretriever-1b-vlm-embed-v1",
@@ -4366,7 +4548,7 @@
       {
         "id": "nvidia/nvidia/llama-3.2-nv-embedqa-1b-v1",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "nvidia/llama-3.2-nv-embedqa-1b-v1",
@@ -4382,7 +4564,7 @@
       {
         "id": "nvidia/nvidia/llama-3.3-nemotron-super-49b-v1",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "nvidia/llama-3.3-nemotron-super-49b-v1",
@@ -4398,7 +4580,7 @@
       {
         "id": "nvidia/nvidia/llama-3.3-nemotron-super-49b-v1.5",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "nvidia/llama-3.3-nemotron-super-49b-v1.5",
@@ -4414,7 +4596,7 @@
       {
         "id": "nvidia/nvidia/llama-nemotron-embed-1b-v2",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "nvidia/llama-nemotron-embed-1b-v2",
@@ -4430,7 +4612,7 @@
       {
         "id": "nvidia/nvidia/llama-nemotron-embed-vl-1b-v2",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "nvidia/llama-nemotron-embed-vl-1b-v2",
@@ -4446,7 +4628,7 @@
       {
         "id": "nvidia/nvidia/llama3-chatqa-1.5-70b",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "nvidia/llama3-chatqa-1.5-70b",
@@ -4462,7 +4644,7 @@
       {
         "id": "nvidia/nvidia/mistral-nemo-minitron-8b-8k-instruct",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "nvidia/mistral-nemo-minitron-8b-8k-instruct",
@@ -4478,7 +4660,7 @@
       {
         "id": "nvidia/nvidia/nemoretriever-parse",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "nvidia/nemoretriever-parse",
@@ -4494,7 +4676,7 @@
       {
         "id": "nvidia/nvidia/nemotron-3-content-safety",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "nvidia/nemotron-3-content-safety",
@@ -4510,7 +4692,7 @@
       {
         "id": "nvidia/nvidia/nemotron-3-nano-30b-a3b",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "nvidia/nemotron-3-nano-30b-a3b",
@@ -4526,7 +4708,7 @@
       {
         "id": "nvidia/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
@@ -4542,7 +4724,7 @@
       {
         "id": "nvidia/nvidia/nemotron-3-super-120b-a12b",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "nvidia/nemotron-3-super-120b-a12b",
@@ -4558,7 +4740,7 @@
       {
         "id": "nvidia/nvidia/nemotron-3-ultra-550b-a55b",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "nvidia/nemotron-3-ultra-550b-a55b",
@@ -4574,7 +4756,7 @@
       {
         "id": "nvidia/nvidia/nemotron-3.5-content-safety",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "nvidia/nemotron-3.5-content-safety",
@@ -4590,7 +4772,7 @@
       {
         "id": "nvidia/nvidia/nemotron-4-340b-instruct",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "nvidia/nemotron-4-340b-instruct",
@@ -4606,7 +4788,7 @@
       {
         "id": "nvidia/nvidia/nemotron-4-340b-reward",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "nvidia/nemotron-4-340b-reward",
@@ -4622,7 +4804,7 @@
       {
         "id": "nvidia/nvidia/nemotron-content-safety-reasoning-4b",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "nvidia/nemotron-content-safety-reasoning-4b",
@@ -4638,7 +4820,7 @@
       {
         "id": "nvidia/nvidia/nemotron-mini-4b-instruct",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "nvidia/nemotron-mini-4b-instruct",
@@ -4654,7 +4836,7 @@
       {
         "id": "nvidia/nvidia/nemotron-nano-12b-v2-vl",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "nvidia/nemotron-nano-12b-v2-vl",
@@ -4670,7 +4852,7 @@
       {
         "id": "nvidia/nvidia/nemotron-nano-3-30b-a3b",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "nvidia/nemotron-nano-3-30b-a3b",
@@ -4686,7 +4868,7 @@
       {
         "id": "nvidia/nvidia/nemotron-parse",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "nvidia/nemotron-parse",
@@ -4702,7 +4884,7 @@
       {
         "id": "nvidia/nvidia/neva-22b",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "nvidia/neva-22b",
@@ -4718,7 +4900,7 @@
       {
         "id": "nvidia/nvidia/nv-embed-v1",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "nvidia/nv-embed-v1",
@@ -4734,7 +4916,7 @@
       {
         "id": "nvidia/nvidia/nv-embedcode-7b-v1",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "nvidia/nv-embedcode-7b-v1",
@@ -4750,7 +4932,7 @@
       {
         "id": "nvidia/nvidia/nv-embedqa-e5-v5",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "nvidia/nv-embedqa-e5-v5",
@@ -4766,7 +4948,7 @@
       {
         "id": "nvidia/nvidia/nv-embedqa-mistral-7b-v2",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "nvidia/nv-embedqa-mistral-7b-v2",
@@ -4782,7 +4964,7 @@
       {
         "id": "nvidia/nvidia/nvclip",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "nvidia/nvclip",
@@ -4798,7 +4980,7 @@
       {
         "id": "nvidia/nvidia/nvidia-nemotron-nano-9b-v2",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "nvidia/nvidia-nemotron-nano-9b-v2",
@@ -4814,7 +4996,7 @@
       {
         "id": "nvidia/nvidia/riva-translate-4b-instruct",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "nvidia/riva-translate-4b-instruct",
@@ -4830,7 +5012,7 @@
       {
         "id": "nvidia/nvidia/riva-translate-4b-instruct-v1.1",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "nvidia/riva-translate-4b-instruct-v1.1",
@@ -4846,7 +5028,7 @@
       {
         "id": "nvidia/nvidia/vila",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "nvidia/vila",
@@ -4862,7 +5044,7 @@
       {
         "id": "nvidia/openai/gpt-oss-120b",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "openai/gpt-oss-120b",
@@ -4878,7 +5060,7 @@
       {
         "id": "nvidia/openai/gpt-oss-20b",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "openai/gpt-oss-20b",
@@ -4894,7 +5076,7 @@
       {
         "id": "nvidia/qwen/qwen3-next-80b-a3b-instruct",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "qwen/qwen3-next-80b-a3b-instruct",
@@ -4910,7 +5092,7 @@
       {
         "id": "nvidia/qwen/qwen3.5-122b-a10b",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "qwen/qwen3.5-122b-a10b",
@@ -4926,7 +5108,7 @@
       {
         "id": "nvidia/qwen/qwen3.5-397b-a17b",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "qwen/qwen3.5-397b-a17b",
@@ -4942,7 +5124,7 @@
       {
         "id": "nvidia/sarvamai/sarvam-m",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "sarvamai/sarvam-m",
@@ -4958,7 +5140,7 @@
       {
         "id": "nvidia/snowflake/arctic-embed-l",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "snowflake/arctic-embed-l",
@@ -4974,7 +5156,7 @@
       {
         "id": "nvidia/stepfun-ai/step-3.5-flash",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "stepfun-ai/step-3.5-flash",
@@ -4990,7 +5172,7 @@
       {
         "id": "nvidia/stepfun-ai/step-3.7-flash",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "stepfun-ai/step-3.7-flash",
@@ -5006,7 +5188,7 @@
       {
         "id": "nvidia/stockmark/stockmark-2-100b-instruct",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "stockmark/stockmark-2-100b-instruct",
@@ -5022,7 +5204,7 @@
       {
         "id": "nvidia/upstage/solar-10.7b-instruct",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "upstage/solar-10.7b-instruct",
@@ -5038,7 +5220,7 @@
       {
         "id": "nvidia/writer/palmyra-creative-122b",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "writer/palmyra-creative-122b",
@@ -5054,7 +5236,7 @@
       {
         "id": "nvidia/writer/palmyra-fin-70b-32k",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "writer/palmyra-fin-70b-32k",
@@ -5070,7 +5252,7 @@
       {
         "id": "nvidia/writer/palmyra-med-70b",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "writer/palmyra-med-70b",
@@ -5086,7 +5268,7 @@
       {
         "id": "nvidia/writer/palmyra-med-70b-32k",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "writer/palmyra-med-70b-32k",
@@ -5102,7 +5284,7 @@
       {
         "id": "nvidia/z-ai/glm-5.1",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "z-ai/glm-5.1",
@@ -5118,7 +5300,7 @@
       {
         "id": "nvidia/zyphra/zamba2-7b-instruct",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "permission": [],
         "root": "zyphra/zamba2-7b-instruct",
@@ -5132,9 +5314,1778 @@
         "context_length": 128000
       },
       {
+        "id": "ollamacloud/glm-4.7",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "glm-4.7",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "glm-4.7",
+        "context_length": 128000
+      },
+      {
+        "id": "ollama-cloud/glm-4.7",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "glm-4.7",
+        "parent": "ollamacloud/glm-4.7",
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "glm-4.7",
+        "context_length": 128000
+      },
+      {
+        "id": "ollamacloud/nemotron-3-nano:30b",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "nemotron-3-nano:30b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nemotron-3-nano:30b",
+        "context_length": 128000
+      },
+      {
+        "id": "ollama-cloud/nemotron-3-nano:30b",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "nemotron-3-nano:30b",
+        "parent": "ollamacloud/nemotron-3-nano:30b",
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nemotron-3-nano:30b",
+        "context_length": 128000
+      },
+      {
+        "id": "ollamacloud/devstral-small-2:24b",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "devstral-small-2:24b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "devstral-small-2:24b",
+        "context_length": 128000
+      },
+      {
+        "id": "ollama-cloud/devstral-small-2:24b",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "devstral-small-2:24b",
+        "parent": "ollamacloud/devstral-small-2:24b",
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "devstral-small-2:24b",
+        "context_length": 128000
+      },
+      {
+        "id": "ollamacloud/gemma3:27b",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "gemma3:27b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "gemma3:27b",
+        "context_length": 128000
+      },
+      {
+        "id": "ollama-cloud/gemma3:27b",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "gemma3:27b",
+        "parent": "ollamacloud/gemma3:27b",
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "gemma3:27b",
+        "context_length": 128000
+      },
+      {
+        "id": "ollamacloud/qwen3-coder-next",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "qwen3-coder-next",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "qwen3-coder-next",
+        "context_length": 128000
+      },
+      {
+        "id": "ollama-cloud/qwen3-coder-next",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "qwen3-coder-next",
+        "parent": "ollamacloud/qwen3-coder-next",
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "qwen3-coder-next",
+        "context_length": 128000
+      },
+      {
+        "id": "ollamacloud/gemini-3-flash-preview",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "gemini-3-flash-preview",
+        "parent": null,
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": false,
+          "thinking": false
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "context_length": 1048576,
+        "max_output_tokens": 65536,
+        "max_input_tokens": 1048576,
+        "name": "gemini-3-flash-preview"
+      },
+      {
+        "id": "ollama-cloud/gemini-3-flash-preview",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "gemini-3-flash-preview",
+        "parent": "ollamacloud/gemini-3-flash-preview",
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": false,
+          "thinking": false
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "context_length": 1048576,
+        "max_output_tokens": 65536,
+        "max_input_tokens": 1048576,
+        "name": "gemini-3-flash-preview"
+      },
+      {
+        "id": "ollamacloud/gemma4:31b",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "gemma4:31b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "Gemma 4 31B",
+        "context_length": 128000
+      },
+      {
+        "id": "ollama-cloud/gemma4:31b",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "gemma4:31b",
+        "parent": "ollamacloud/gemma4:31b",
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "Gemma 4 31B",
+        "context_length": 128000
+      },
+      {
+        "id": "ollamacloud/glm-5.1",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "glm-5.1",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true,
+          "thinking": true
+        },
+        "context_length": 200000,
+        "max_output_tokens": 128000,
+        "max_input_tokens": 200000,
+        "name": "GLM 5.1"
+      },
+      {
+        "id": "ollama-cloud/glm-5.1",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "glm-5.1",
+        "parent": "ollamacloud/glm-5.1",
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true,
+          "thinking": true
+        },
+        "context_length": 200000,
+        "max_output_tokens": 128000,
+        "max_input_tokens": 200000,
+        "name": "GLM 5.1"
+      },
+      {
+        "id": "ollamacloud/kimi-k2.5",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "kimi-k2.5",
+        "parent": null,
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": true,
+          "thinking": true
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "context_length": 262144,
+        "max_output_tokens": 262144,
+        "max_input_tokens": 262144,
+        "name": "kimi-k2.5"
+      },
+      {
+        "id": "ollama-cloud/kimi-k2.5",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "kimi-k2.5",
+        "parent": "ollamacloud/kimi-k2.5",
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": true,
+          "thinking": true
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "context_length": 262144,
+        "max_output_tokens": 262144,
+        "max_input_tokens": 262144,
+        "name": "kimi-k2.5"
+      },
+      {
+        "id": "ollamacloud/gpt-oss:120b",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "gpt-oss:120b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "gpt-oss:120b",
+        "context_length": 400000
+      },
+      {
+        "id": "ollama-cloud/gpt-oss:120b",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "gpt-oss:120b",
+        "parent": "ollamacloud/gpt-oss:120b",
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "gpt-oss:120b",
+        "context_length": 400000
+      },
+      {
+        "id": "ollamacloud/devstral-2:123b",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "devstral-2:123b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "devstral-2:123b",
+        "context_length": 128000
+      },
+      {
+        "id": "ollama-cloud/devstral-2:123b",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "devstral-2:123b",
+        "parent": "ollamacloud/devstral-2:123b",
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "devstral-2:123b",
+        "context_length": 128000
+      },
+      {
+        "id": "ollamacloud/glm-5",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "glm-5",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true,
+          "thinking": true
+        },
+        "context_length": 200000,
+        "max_output_tokens": 128000,
+        "max_input_tokens": 200000,
+        "name": "glm-5"
+      },
+      {
+        "id": "ollama-cloud/glm-5",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "glm-5",
+        "parent": "ollamacloud/glm-5",
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true,
+          "thinking": true
+        },
+        "context_length": 200000,
+        "max_output_tokens": 128000,
+        "max_input_tokens": 200000,
+        "name": "glm-5"
+      },
+      {
+        "id": "ollamacloud/deepseek-v3.2",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "deepseek-v3.2",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "deepseek-v3.2",
+        "context_length": 128000
+      },
+      {
+        "id": "ollama-cloud/deepseek-v3.2",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "deepseek-v3.2",
+        "parent": "ollamacloud/deepseek-v3.2",
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "deepseek-v3.2",
+        "context_length": 128000
+      },
+      {
+        "id": "ollamacloud/deepseek-v4-flash",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "deepseek-v4-flash",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true,
+          "thinking": true
+        },
+        "context_length": 1000000,
+        "max_output_tokens": 384000,
+        "max_input_tokens": 1000000,
+        "name": "DeepSeek V4 Flash"
+      },
+      {
+        "id": "ollama-cloud/deepseek-v4-flash",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "deepseek-v4-flash",
+        "parent": "ollamacloud/deepseek-v4-flash",
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true,
+          "thinking": true
+        },
+        "context_length": 1000000,
+        "max_output_tokens": 384000,
+        "max_input_tokens": 1000000,
+        "name": "DeepSeek V4 Flash"
+      },
+      {
+        "id": "ollamacloud/minimax-m3",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "minimax-m3",
+        "parent": null,
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": true,
+          "thinking": true
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "context_length": 1048576,
+        "max_output_tokens": 512000,
+        "max_input_tokens": 1048576,
+        "name": "MiniMax M3"
+      },
+      {
+        "id": "ollama-cloud/minimax-m3",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "minimax-m3",
+        "parent": "ollamacloud/minimax-m3",
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": true,
+          "thinking": true
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "context_length": 1048576,
+        "max_output_tokens": 512000,
+        "max_input_tokens": 1048576,
+        "name": "MiniMax M3"
+      },
+      {
+        "id": "ollamacloud/gpt-oss:20b",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "gpt-oss:20b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "gpt-oss:20b",
+        "context_length": 400000
+      },
+      {
+        "id": "ollama-cloud/gpt-oss:20b",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "gpt-oss:20b",
+        "parent": "ollamacloud/gpt-oss:20b",
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "gpt-oss:20b",
+        "context_length": 400000
+      },
+      {
+        "id": "ollamacloud/minimax-m2.5",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "minimax-m2.5",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true,
+          "thinking": true
+        },
+        "context_length": 200000,
+        "max_output_tokens": 131072,
+        "max_input_tokens": 200000,
+        "name": "minimax-m2.5"
+      },
+      {
+        "id": "ollama-cloud/minimax-m2.5",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "minimax-m2.5",
+        "parent": "ollamacloud/minimax-m2.5",
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true,
+          "thinking": true
+        },
+        "context_length": 200000,
+        "max_output_tokens": 131072,
+        "max_input_tokens": 200000,
+        "name": "minimax-m2.5"
+      },
+      {
+        "id": "ollamacloud/ministral-3:8b",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "ministral-3:8b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "ministral-3:8b",
+        "context_length": 128000
+      },
+      {
+        "id": "ollama-cloud/ministral-3:8b",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "ministral-3:8b",
+        "parent": "ollamacloud/ministral-3:8b",
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "ministral-3:8b",
+        "context_length": 128000
+      },
+      {
+        "id": "ollamacloud/qwen3.5:397b",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "qwen3.5:397b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "Qwen 3.5 397B",
+        "context_length": 128000
+      },
+      {
+        "id": "ollama-cloud/qwen3.5:397b",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "qwen3.5:397b",
+        "parent": "ollamacloud/qwen3.5:397b",
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "Qwen 3.5 397B",
+        "context_length": 128000
+      },
+      {
+        "id": "ollamacloud/minimax-m2.1",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "minimax-m2.1",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "minimax-m2.1",
+        "context_length": 128000
+      },
+      {
+        "id": "ollama-cloud/minimax-m2.1",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "minimax-m2.1",
+        "parent": "ollamacloud/minimax-m2.1",
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "minimax-m2.1",
+        "context_length": 128000
+      },
+      {
+        "id": "ollamacloud/minimax-m2.7",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "minimax-m2.7",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true,
+          "thinking": true
+        },
+        "context_length": 204800,
+        "max_output_tokens": 131072,
+        "max_input_tokens": 204800,
+        "name": "MiniMax M2.7"
+      },
+      {
+        "id": "ollama-cloud/minimax-m2.7",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "minimax-m2.7",
+        "parent": "ollamacloud/minimax-m2.7",
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true,
+          "thinking": true
+        },
+        "context_length": 204800,
+        "max_output_tokens": 131072,
+        "max_input_tokens": 204800,
+        "name": "MiniMax M2.7"
+      },
+      {
+        "id": "ollamacloud/mistral-large-3:675b",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "mistral-large-3:675b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "mistral-large-3:675b",
+        "context_length": 128000
+      },
+      {
+        "id": "ollama-cloud/mistral-large-3:675b",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "mistral-large-3:675b",
+        "parent": "ollamacloud/mistral-large-3:675b",
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "mistral-large-3:675b",
+        "context_length": 128000
+      },
+      {
+        "id": "ollamacloud/gemma3:4b",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "gemma3:4b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "gemma3:4b",
+        "context_length": 128000
+      },
+      {
+        "id": "ollama-cloud/gemma3:4b",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "gemma3:4b",
+        "parent": "ollamacloud/gemma3:4b",
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "gemma3:4b",
+        "context_length": 128000
+      },
+      {
+        "id": "ollamacloud/rnj-1:8b",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "rnj-1:8b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "rnj-1:8b",
+        "context_length": 128000
+      },
+      {
+        "id": "ollama-cloud/rnj-1:8b",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "rnj-1:8b",
+        "parent": "ollamacloud/rnj-1:8b",
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "rnj-1:8b",
+        "context_length": 128000
+      },
+      {
+        "id": "ollamacloud/nemotron-3-super",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "nemotron-3-super",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "NVIDIA Nemotron 3 Super",
+        "context_length": 128000
+      },
+      {
+        "id": "ollama-cloud/nemotron-3-super",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "nemotron-3-super",
+        "parent": "ollamacloud/nemotron-3-super",
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "NVIDIA Nemotron 3 Super",
+        "context_length": 128000
+      },
+      {
+        "id": "ollamacloud/nemotron-3-ultra",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "nemotron-3-ultra",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nemotron-3-ultra",
+        "context_length": 128000
+      },
+      {
+        "id": "ollama-cloud/nemotron-3-ultra",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "nemotron-3-ultra",
+        "parent": "ollamacloud/nemotron-3-ultra",
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "nemotron-3-ultra",
+        "context_length": 128000
+      },
+      {
+        "id": "ollamacloud/kimi-k2.6",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "kimi-k2.6",
+        "parent": null,
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": true,
+          "thinking": true
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "context_length": 262144,
+        "max_output_tokens": 262144,
+        "max_input_tokens": 262144,
+        "name": "Kimi K2.6"
+      },
+      {
+        "id": "ollama-cloud/kimi-k2.6",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "kimi-k2.6",
+        "parent": "ollamacloud/kimi-k2.6",
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": true,
+          "thinking": true
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "context_length": 262144,
+        "max_output_tokens": 262144,
+        "max_input_tokens": 262144,
+        "name": "Kimi K2.6"
+      },
+      {
+        "id": "ollamacloud/qwen3-coder:480b",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "qwen3-coder:480b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "qwen3-coder:480b",
+        "context_length": 128000
+      },
+      {
+        "id": "ollama-cloud/qwen3-coder:480b",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "qwen3-coder:480b",
+        "parent": "ollamacloud/qwen3-coder:480b",
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "qwen3-coder:480b",
+        "context_length": 128000
+      },
+      {
+        "id": "ollamacloud/ministral-3:3b",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "ministral-3:3b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "ministral-3:3b",
+        "context_length": 128000
+      },
+      {
+        "id": "ollama-cloud/ministral-3:3b",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "ministral-3:3b",
+        "parent": "ollamacloud/ministral-3:3b",
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "ministral-3:3b",
+        "context_length": 128000
+      },
+      {
+        "id": "ollamacloud/ministral-3:14b",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "ministral-3:14b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "ministral-3:14b",
+        "context_length": 128000
+      },
+      {
+        "id": "ollama-cloud/ministral-3:14b",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "ministral-3:14b",
+        "parent": "ollamacloud/ministral-3:14b",
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "ministral-3:14b",
+        "context_length": 128000
+      },
+      {
+        "id": "ollamacloud/gemma3:12b",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "gemma3:12b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "gemma3:12b",
+        "context_length": 128000
+      },
+      {
+        "id": "ollama-cloud/gemma3:12b",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "gemma3:12b",
+        "parent": "ollamacloud/gemma3:12b",
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "gemma3:12b",
+        "context_length": 128000
+      },
+      {
+        "id": "ollamacloud/glm-5.2",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "glm-5.2",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true,
+          "thinking": true
+        },
+        "context_length": 200000,
+        "max_output_tokens": 128000,
+        "max_input_tokens": 200000,
+        "name": "glm-5.2"
+      },
+      {
+        "id": "ollama-cloud/glm-5.2",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "glm-5.2",
+        "parent": "ollamacloud/glm-5.2",
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true,
+          "thinking": true
+        },
+        "context_length": 200000,
+        "max_output_tokens": 128000,
+        "max_input_tokens": 200000,
+        "name": "glm-5.2"
+      },
+      {
+        "id": "ollamacloud/kimi-k2.7-code",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "kimi-k2.7-code",
+        "parent": null,
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": true,
+          "thinking": true
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "context_length": 262144,
+        "max_output_tokens": 262144,
+        "max_input_tokens": 262144,
+        "name": "Kimi K2.7 Code"
+      },
+      {
+        "id": "ollama-cloud/kimi-k2.7-code",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "kimi-k2.7-code",
+        "parent": "ollamacloud/kimi-k2.7-code",
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": true,
+          "thinking": true
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "context_length": 262144,
+        "max_output_tokens": 262144,
+        "max_input_tokens": 262144,
+        "name": "Kimi K2.7 Code"
+      },
+      {
+        "id": "ollamacloud/deepseek-v4-pro",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "deepseek-v4-pro",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true,
+          "thinking": true
+        },
+        "context_length": 1000000,
+        "max_output_tokens": 384000,
+        "max_input_tokens": 1000000,
+        "name": "DeepSeek V4 Pro"
+      },
+      {
+        "id": "ollama-cloud/deepseek-v4-pro",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "deepseek-v4-pro",
+        "parent": "ollamacloud/deepseek-v4-pro",
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true,
+          "thinking": true
+        },
+        "context_length": 1000000,
+        "max_output_tokens": 384000,
+        "max_input_tokens": 1000000,
+        "name": "DeepSeek V4 Pro"
+      },
+      {
+        "id": "ollamacloud/deepseek-v3.1:671b",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "deepseek-v3.1:671b",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "deepseek-v3.1:671b",
+        "context_length": 128000
+      },
+      {
+        "id": "ollama-cloud/deepseek-v3.1:671b",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "ollama-cloud",
+        "permission": [],
+        "root": "deepseek-v3.1:671b",
+        "parent": "ollamacloud/deepseek-v3.1:671b",
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "deepseek-v3.1:671b",
+        "context_length": 128000
+      },
+      {
+        "id": "aihubmix/coding-glm-5.2-free",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "openai-compatible-chat-[UUID]",
+        "permission": [],
+        "root": "coding-glm-5.2-free",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "coding-glm-5.2-free",
+        "context_length": 128000
+      },
+      {
+        "id": "aihubmix/step-3.7-flash-free",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "openai-compatible-chat-[UUID]",
+        "permission": [],
+        "root": "step-3.7-flash-free",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "step-3.7-flash-free",
+        "context_length": 128000
+      },
+      {
+        "id": "aihubmix/coding-minimax-m3-free",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "openai-compatible-chat-[UUID]",
+        "permission": [],
+        "root": "coding-minimax-m3-free",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "coding-minimax-m3-free",
+        "context_length": 128000
+      },
+      {
+        "id": "aihubmix/gpt-5.5-free",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "openai-compatible-chat-[UUID]",
+        "permission": [],
+        "root": "gpt-5.5-free",
+        "parent": null,
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": true,
+          "thinking": true
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "context_length": 1050000,
+        "max_output_tokens": 128000,
+        "max_input_tokens": 1050000,
+        "name": "gpt-5.5-free"
+      },
+      {
+        "id": "aihubmix/gpt-image-2-free",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "openai-compatible-chat-[UUID]",
+        "permission": [],
+        "root": "gpt-image-2-free",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "gpt-image-2-free",
+        "context_length": 400000
+      },
+      {
+        "id": "aihubmix/xiaomi-mimo-v2-omni-free",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "openai-compatible-chat-[UUID]",
+        "permission": [],
+        "root": "xiaomi-mimo-v2-omni-free",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "xiaomi-mimo-v2-omni-free",
+        "context_length": 128000
+      },
+      {
+        "id": "aihubmix/xiaomi-mimo-v2-pro-free",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "openai-compatible-chat-[UUID]",
+        "permission": [],
+        "root": "xiaomi-mimo-v2-pro-free",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "xiaomi-mimo-v2-pro-free",
+        "context_length": 128000
+      },
+      {
+        "id": "aihubmix/xiaomi-mimo-v2.5-free",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "openai-compatible-chat-[UUID]",
+        "permission": [],
+        "root": "xiaomi-mimo-v2.5-free",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "xiaomi-mimo-v2.5-free",
+        "context_length": 128000
+      },
+      {
+        "id": "aihubmix/xiaomi-mimo-v2.5-pro-free",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "openai-compatible-chat-[UUID]",
+        "permission": [],
+        "root": "xiaomi-mimo-v2.5-pro-free",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "xiaomi-mimo-v2.5-pro-free",
+        "context_length": 128000
+      },
+      {
+        "id": "aihubmix/coding-glm-5.1-free",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "openai-compatible-chat-[UUID]",
+        "permission": [],
+        "root": "coding-glm-5.1-free",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "coding-glm-5.1-free",
+        "context_length": 128000
+      },
+      {
+        "id": "aihubmix/coding-minimax-m2.7-free",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "openai-compatible-chat-[UUID]",
+        "permission": [],
+        "root": "coding-minimax-m2.7-free",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "coding-minimax-m2.7-free",
+        "context_length": 128000
+      },
+      {
+        "id": "aihubmix/coding-glm-5-free",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "openai-compatible-chat-[UUID]",
+        "permission": [],
+        "root": "coding-glm-5-free",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "coding-glm-5-free",
+        "context_length": 128000
+      },
+      {
+        "id": "aihubmix/coding-glm-5-turbo-free",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "openai-compatible-chat-[UUID]",
+        "permission": [],
+        "root": "coding-glm-5-turbo-free",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "coding-glm-5-turbo-free",
+        "context_length": 128000
+      },
+      {
+        "id": "aihubmix/coding-minimax-m2.5-free",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "openai-compatible-chat-[UUID]",
+        "permission": [],
+        "root": "coding-minimax-m2.5-free",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "coding-minimax-m2.5-free",
+        "context_length": 128000
+      },
+      {
+        "id": "aihubmix/coding-step-3.7-flash-free",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "openai-compatible-chat-[UUID]",
+        "permission": [],
+        "root": "coding-step-3.7-flash-free",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "coding-step-3.7-flash-free",
+        "context_length": 128000
+      },
+      {
+        "id": "aihubmix/gemini-3-flash-preview-free",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "openai-compatible-chat-[UUID]",
+        "permission": [],
+        "root": "gemini-3-flash-preview-free",
+        "parent": null,
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": false,
+          "thinking": false
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "context_length": 1048576,
+        "max_output_tokens": 65536,
+        "max_input_tokens": 1048576,
+        "name": "gemini-3-flash-preview-free"
+      },
+      {
+        "id": "aihubmix/gpt-4.1-free",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "openai-compatible-chat-[UUID]",
+        "permission": [],
+        "root": "gpt-4.1-free",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "gpt-4.1-free",
+        "context_length": 400000
+      },
+      {
+        "id": "aihubmix/gpt-4.1-mini-free",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "openai-compatible-chat-[UUID]",
+        "permission": [],
+        "root": "gpt-4.1-mini-free",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "gpt-4.1-mini-free",
+        "context_length": 400000
+      },
+      {
+        "id": "aihubmix/gpt-4.1-nano-free",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "openai-compatible-chat-[UUID]",
+        "permission": [],
+        "root": "gpt-4.1-nano-free",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "gpt-4.1-nano-free",
+        "context_length": 400000
+      },
+      {
+        "id": "aihubmix/gpt-4o-free",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "openai-compatible-chat-[UUID]",
+        "permission": [],
+        "root": "gpt-4o-free",
+        "parent": null,
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": false,
+          "thinking": false
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "context_length": 128000,
+        "max_output_tokens": 16384,
+        "max_input_tokens": 128000,
+        "name": "gpt-4o-free"
+      },
+      {
+        "id": "aihubmix/glm-4.7-flash-free",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "openai-compatible-chat-[UUID]",
+        "permission": [],
+        "root": "glm-4.7-flash-free",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "glm-4.7-flash-free",
+        "context_length": 128000
+      },
+      {
+        "id": "aihubmix/coding-glm-4.7-free",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "openai-compatible-chat-[UUID]",
+        "permission": [],
+        "root": "coding-glm-4.7-free",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "coding-glm-4.7-free",
+        "context_length": 128000
+      },
+      {
+        "id": "aihubmix/qwen3.6-plus-preview-free",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "openai-compatible-chat-[UUID]",
+        "permission": [],
+        "root": "qwen3.6-plus-preview-free",
+        "parent": null,
+        "capabilities": {
+          "vision": true,
+          "tool_calling": true,
+          "reasoning": true,
+          "thinking": true
+        },
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "context_length": 1000000,
+        "max_output_tokens": 65536,
+        "max_input_tokens": 1000000,
+        "name": "qwen3.6-plus-preview-free"
+      },
+      {
+        "id": "aihubmix/coding-step-3.5-flash-free",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "openai-compatible-chat-[UUID]",
+        "permission": [],
+        "root": "coding-step-3.5-flash-free",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "coding-step-3.5-flash-free",
+        "context_length": 128000
+      },
+      {
+        "id": "aihubmix/k2.6-code-preview-free",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "openai-compatible-chat-[UUID]",
+        "permission": [],
+        "root": "k2.6-code-preview-free",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "k2.6-code-preview-free",
+        "context_length": 128000
+      },
+      {
+        "id": "aihubmix/coding-minimax-m2.1-free",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "openai-compatible-chat-[UUID]",
+        "permission": [],
+        "root": "coding-minimax-m2.1-free",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "coding-minimax-m2.1-free",
+        "context_length": 128000
+      },
+      {
+        "id": "aihubmix/coding-glm-4.6-free",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "openai-compatible-chat-[UUID]",
+        "permission": [],
+        "root": "coding-glm-4.6-free",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "coding-glm-4.6-free",
+        "context_length": 128000
+      },
+      {
+        "id": "aihubmix/coding-minimax-m2-free",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "openai-compatible-chat-[UUID]",
+        "permission": [],
+        "root": "coding-minimax-m2-free",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "coding-minimax-m2-free",
+        "context_length": 128000
+      },
+      {
+        "id": "aihubmix/kimi-for-coding-free",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "openai-compatible-chat-[UUID]",
+        "permission": [],
+        "root": "kimi-for-coding-free",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "kimi-for-coding-free",
+        "context_length": 128000
+      },
+      {
+        "id": "aihubmix/mimo-v2-flash-free",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "openai-compatible-chat-[UUID]",
+        "permission": [],
+        "root": "mimo-v2-flash-free",
+        "parent": null,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "context_length": 262144,
+        "max_output_tokens": 65536,
+        "max_input_tokens": 262144,
+        "name": "mimo-v2-flash-free"
+      },
+      {
         "id": "opencode-zen/deepseek-v4-flash-free",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "opencode-zen",
         "permission": [],
         "root": "deepseek-v4-flash-free",
@@ -5152,7 +7103,7 @@
       {
         "id": "opencode-zen/mimo-v2.5-free",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "opencode-zen",
         "permission": [],
         "root": "mimo-v2.5-free",
@@ -5177,7 +7128,7 @@
       {
         "id": "opencode-zen/qwen3.6-plus-free",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "opencode-zen",
         "permission": [],
         "root": "qwen3.6-plus-free",
@@ -5203,7 +7154,7 @@
       {
         "id": "opencode-zen/minimax-m3-free",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "opencode-zen",
         "permission": [],
         "root": "minimax-m3-free",
@@ -5221,7 +7172,7 @@
       {
         "id": "opencode-zen/nemotron-3-ultra-free",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "opencode-zen",
         "permission": [],
         "root": "nemotron-3-ultra-free",
@@ -5237,7 +7188,7 @@
       {
         "id": "opencode-zen/north-mini-code-free",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "opencode-zen",
         "permission": [],
         "root": "north-mini-code-free",
@@ -5253,7 +7204,7 @@
       {
         "id": "openrouter/nex-agi/nex-n2-pro:free",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "openrouter",
         "permission": [],
         "root": "nex-agi/nex-n2-pro:free",
@@ -5269,7 +7220,7 @@
       {
         "id": "openrouter/nvidia/nemotron-3.5-content-safety:free",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "openrouter",
         "permission": [],
         "root": "nvidia/nemotron-3.5-content-safety:free",
@@ -5285,7 +7236,7 @@
       {
         "id": "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "openrouter",
         "permission": [],
         "root": "nvidia/nemotron-3-ultra-550b-a55b:free",
@@ -5301,7 +7252,7 @@
       {
         "id": "openrouter/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "openrouter",
         "permission": [],
         "root": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
@@ -5317,7 +7268,7 @@
       {
         "id": "openrouter/poolside/laguna-xs.2:free",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "openrouter",
         "permission": [],
         "root": "poolside/laguna-xs.2:free",
@@ -5333,7 +7284,7 @@
       {
         "id": "openrouter/poolside/laguna-m.1:free",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "openrouter",
         "permission": [],
         "root": "poolside/laguna-m.1:free",
@@ -5349,7 +7300,7 @@
       {
         "id": "openrouter/google/gemma-4-26b-a4b-it:free",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "openrouter",
         "permission": [],
         "root": "google/gemma-4-26b-a4b-it:free",
@@ -5365,7 +7316,7 @@
       {
         "id": "openrouter/google/gemma-4-31b-it:free",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "openrouter",
         "permission": [],
         "root": "google/gemma-4-31b-it:free",
@@ -5381,7 +7332,7 @@
       {
         "id": "openrouter/nvidia/nemotron-3-super-120b-a12b:free",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "openrouter",
         "permission": [],
         "root": "nvidia/nemotron-3-super-120b-a12b:free",
@@ -5397,7 +7348,7 @@
       {
         "id": "openrouter/openrouter/free",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "openrouter",
         "permission": [],
         "root": "openrouter/free",
@@ -5413,7 +7364,7 @@
       {
         "id": "openrouter/liquid/lfm-2.5-1.2b-thinking:free",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "openrouter",
         "permission": [],
         "root": "liquid/lfm-2.5-1.2b-thinking:free",
@@ -5429,7 +7380,7 @@
       {
         "id": "openrouter/liquid/lfm-2.5-1.2b-instruct:free",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "openrouter",
         "permission": [],
         "root": "liquid/lfm-2.5-1.2b-instruct:free",
@@ -5445,7 +7396,7 @@
       {
         "id": "openrouter/nvidia/nemotron-3-nano-30b-a3b:free",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "openrouter",
         "permission": [],
         "root": "nvidia/nemotron-3-nano-30b-a3b:free",
@@ -5461,7 +7412,7 @@
       {
         "id": "openrouter/nvidia/nemotron-nano-12b-v2-vl:free",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "openrouter",
         "permission": [],
         "root": "nvidia/nemotron-nano-12b-v2-vl:free",
@@ -5477,7 +7428,7 @@
       {
         "id": "openrouter/qwen/qwen3-next-80b-a3b-instruct:free",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "openrouter",
         "permission": [],
         "root": "qwen/qwen3-next-80b-a3b-instruct:free",
@@ -5493,7 +7444,7 @@
       {
         "id": "openrouter/nvidia/nemotron-nano-9b-v2:free",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "openrouter",
         "permission": [],
         "root": "nvidia/nemotron-nano-9b-v2:free",
@@ -5509,7 +7460,7 @@
       {
         "id": "openrouter/openai/gpt-oss-120b:free",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "openrouter",
         "permission": [],
         "root": "openai/gpt-oss-120b:free",
@@ -5525,7 +7476,7 @@
       {
         "id": "openrouter/openai/gpt-oss-20b:free",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "openrouter",
         "permission": [],
         "root": "openai/gpt-oss-20b:free",
@@ -5541,7 +7492,7 @@
       {
         "id": "openrouter/qwen/qwen3-coder:free",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "openrouter",
         "permission": [],
         "root": "qwen/qwen3-coder:free",
@@ -5557,7 +7508,7 @@
       {
         "id": "openrouter/cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "openrouter",
         "permission": [],
         "root": "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
@@ -5573,7 +7524,7 @@
       {
         "id": "openrouter/meta-llama/llama-3.3-70b-instruct:free",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "openrouter",
         "permission": [],
         "root": "meta-llama/llama-3.3-70b-instruct:free",
@@ -5589,7 +7540,7 @@
       {
         "id": "openrouter/meta-llama/llama-3.2-3b-instruct:free",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "openrouter",
         "permission": [],
         "root": "meta-llama/llama-3.2-3b-instruct:free",
@@ -5605,7 +7556,7 @@
       {
         "id": "openrouter/nousresearch/hermes-3-llama-3.1-405b:free",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "openrouter",
         "permission": [],
         "root": "nousresearch/hermes-3-llama-3.1-405b:free",
@@ -5621,7 +7572,7 @@
       {
         "id": "siliconflow/nex-agi/Nex-N2-Pro",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "siliconflow",
         "permission": [],
         "root": "nex-agi/Nex-N2-Pro",
@@ -5637,7 +7588,7 @@
       {
         "id": "nvidia/nv-embedqa-e5-v5",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "root": "nv-embedqa-e5-v5",
         "type": "embedding",
@@ -5652,7 +7603,7 @@
       {
         "id": "openrouter/openai/text-embedding-3-small",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "openrouter",
         "root": "text-embedding-3-small",
         "type": "embedding",
@@ -5667,7 +7618,7 @@
       {
         "id": "openrouter/openai/text-embedding-3-large",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "openrouter",
         "root": "text-embedding-3-large",
         "type": "embedding",
@@ -5682,7 +7633,7 @@
       {
         "id": "openrouter/openai/text-embedding-ada-002",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "openrouter",
         "root": "text-embedding-ada-002",
         "type": "embedding",
@@ -5697,7 +7648,7 @@
       {
         "id": "gemini/text-embedding-004",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "gemini",
         "root": "text-embedding-004",
         "type": "embedding",
@@ -5710,9 +7661,114 @@
         "name": "text-embedding-004"
       },
       {
+        "id": "jina-ai/jina-embeddings-v5-text-small",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "jina-ai",
+        "root": "jina-embeddings-v5-text-small",
+        "type": "embedding",
+        "dimensions": 1024,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "jina-embeddings-v5-text-small"
+      },
+      {
+        "id": "jina-ai/jina-embeddings-v5-text-nano",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "jina-ai",
+        "root": "jina-embeddings-v5-text-nano",
+        "type": "embedding",
+        "dimensions": 768,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "jina-embeddings-v5-text-nano"
+      },
+      {
+        "id": "jina-ai/jina-code-embeddings-1.5b",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "jina-ai",
+        "root": "jina-code-embeddings-1.5b",
+        "type": "embedding",
+        "dimensions": 1536,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "jina-code-embeddings-1.5b"
+      },
+      {
+        "id": "jina-ai/jina-code-embeddings-0.5b",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "jina-ai",
+        "root": "jina-code-embeddings-0.5b",
+        "type": "embedding",
+        "dimensions": 896,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "jina-code-embeddings-0.5b"
+      },
+      {
+        "id": "jina-ai/jina-embeddings-v4",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "jina-ai",
+        "root": "jina-embeddings-v4",
+        "type": "embedding",
+        "dimensions": 2048,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "jina-embeddings-v4"
+      },
+      {
+        "id": "jina-ai/jina-clip-v2",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "jina-ai",
+        "root": "jina-clip-v2",
+        "type": "embedding",
+        "dimensions": 1024,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "jina-clip-v2"
+      },
+      {
+        "id": "jina-ai/jina-colbert-v2",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "jina-ai",
+        "root": "jina-colbert-v2",
+        "type": "embedding",
+        "dimensions": 128,
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "jina-colbert-v2"
+      },
+      {
         "id": "antigravity/gemini-3.1-flash-image",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "antigravity",
         "type": "image",
         "supported_sizes": [
@@ -5735,7 +7791,7 @@
       {
         "id": "openrouter/openai/gpt-5.4-image-2",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "openrouter",
         "type": "image",
         "supported_sizes": [
@@ -5759,7 +7815,7 @@
       {
         "id": "openrouter/openai/gpt-5-image-mini",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "openrouter",
         "type": "image",
         "supported_sizes": [
@@ -5783,7 +7839,7 @@
       {
         "id": "openrouter/google/gemini-3.1-flash-image-preview",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "openrouter",
         "type": "image",
         "supported_sizes": [
@@ -5807,7 +7863,7 @@
       {
         "id": "openrouter/google/gemini-3-pro-image-preview",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "openrouter",
         "type": "image",
         "supported_sizes": [
@@ -5831,7 +7887,7 @@
       {
         "id": "openrouter/black-forest-labs/flux.2-max",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "openrouter",
         "type": "image",
         "supported_sizes": [
@@ -5855,7 +7911,7 @@
       {
         "id": "openrouter/black-forest-labs/flux.2-pro",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "openrouter",
         "type": "image",
         "supported_sizes": [
@@ -5879,7 +7935,7 @@
       {
         "id": "openrouter/black-forest-labs/flux.2-flex",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "openrouter",
         "type": "image",
         "supported_sizes": [
@@ -5903,7 +7959,7 @@
       {
         "id": "nvidia/nv-rerankqa-mistral-4b-v3",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "root": "nv-rerankqa-mistral-4b-v3",
         "type": "rerank",
@@ -5915,9 +7971,37 @@
         "name": "nv-rerankqa-mistral-4b-v3"
       },
       {
+        "id": "jina-ai/jina-reranker-v3",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "jina-ai",
+        "root": "jina-reranker-v3",
+        "type": "rerank",
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "jina-reranker-v3"
+      },
+      {
+        "id": "jina-ai/jina-reranker-m0",
+        "object": "model",
+        "created": 1782134615,
+        "owned_by": "jina-ai",
+        "root": "jina-reranker-m0",
+        "type": "rerank",
+        "capabilities": {
+          "tool_calling": true,
+          "reasoning": true
+        },
+        "max_output_tokens": 8192,
+        "name": "jina-reranker-m0"
+      },
+      {
         "id": "groq/whisper-large-v3",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "groq",
         "type": "audio",
         "subtype": "transcription",
@@ -5931,7 +8015,7 @@
       {
         "id": "groq/whisper-large-v3-turbo",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "groq",
         "type": "audio",
         "subtype": "transcription",
@@ -5945,7 +8029,7 @@
       {
         "id": "groq/distil-whisper-large-v3-en",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "groq",
         "type": "audio",
         "subtype": "transcription",
@@ -5959,7 +8043,7 @@
       {
         "id": "nvidia/parakeet-ctc-1.1b-asr",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "type": "audio",
         "subtype": "transcription",
@@ -5973,7 +8057,7 @@
       {
         "id": "nvidia/openai/whisper-large-v3",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "type": "audio",
         "subtype": "transcription",
@@ -5987,7 +8071,7 @@
       {
         "id": "nvidia/fastpitch",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "type": "audio",
         "subtype": "speech",
@@ -6001,7 +8085,7 @@
       {
         "id": "nvidia/tacotron2",
         "object": "model",
-        "created": 1781768170,
+        "created": 1782134615,
         "owned_by": "nvidia",
         "type": "audio",
         "subtype": "speech",

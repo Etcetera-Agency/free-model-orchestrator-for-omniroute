@@ -17,10 +17,10 @@ from fmo.allocation import allocate_globally, build_priority_combo, validate_pla
 from fmo.applier import ComboApplier
 from fmo.apply_guard import ApplyPreconditions, check_apply_preconditions
 from fmo.aa_migration import run_migration_agent
-from fmo.config import StartupConfig
+from fmo.config import DEFAULT_AUTO_ROUTER_TAIL, StartupConfig, configured_router_entry, is_configured_router
 from fmo.context import context_eligible, effective_context_window
 from fmo.external_metadata import ExternalMetadataError
-from fmo.forecast import apply_historical_reserve, cold_start_demand, protected_demand
+from fmo.forecast import apply_historical_reserve, cold_start_demand, protected_demand, quality_band_for_demand
 from fmo.hermes_inventory import (
     HermesInventoryError,
     Inventory,
@@ -34,6 +34,7 @@ from fmo.hermes_inventory import (
 from fmo.llm_runtime import LlmProviderConfig, SharedInstructorRuntime, build_instructor_runtime
 from fmo.matcher import match_model
 from fmo.metadata_sync import sync_external_metadata
+from fmo.model_registration import register_new_free_models
 from fmo.omniroute import OmniRouteClient, OmniRouteRequestError
 from fmo.persistence import Database, Repository
 from fmo.pipeline import CANONICAL_STAGE_NAMES, PipelineContext, PipelineRunner, PipelineRunResult, Stage, StageResult
@@ -80,6 +81,17 @@ class StageAdapters:
     openai_client_factory: Any | None = None
 
 
+@dataclass(frozen=True)
+class FreeModelChanges:
+    gained: set[tuple[str, str]]
+    lost: set[tuple[str, str]]
+    known: bool = True
+
+    @property
+    def triggered(self) -> bool:
+        return not self.known or bool(self.gained or self.lost)
+
+
 def _metadata_stage(sync: MetadataSync) -> Callable[[PipelineContext], StageResult]:
     def run(context: PipelineContext) -> StageResult:
         try:
@@ -107,6 +119,8 @@ def _free_candidate_stage(dependencies: StageDependencies, adapters: StageAdapte
         try:
             if command in {"sync-free-registry", "full"}:
                 outcome = adapters.registry_sync(dependencies.omniroute_client)
+                if dependencies.omniroute_client is not None:
+                    register_new_free_models(context.repository, dependencies.omniroute_client, outcome.free_models_payload)
                 persist_free_registry_outcome(context.repository, outcome)
             if command in {"scan-providers", "full"}:
                 scanner = CatalogScanner(context.repository)
@@ -196,7 +210,12 @@ def _persist_account_discovery(context: PipelineContext, transaction: Any, outco
             transaction,
             provider_id=provider["id"],
             omniroute_connection_id=connection_id,
-            external_account_ref=str(connection.get("upstream_account_id") or connection_id),
+            external_account_ref=str(
+                connection.get("external_account_ref")
+                or connection.get("upstream_account_id")
+                or connection.get("credential_fingerprint")
+                or connection_id
+            ),
             metadata=connection,
             enabled=bool(connection.get("enabled", True)),
         )
@@ -221,7 +240,7 @@ def _persist_account_discovery(context: PipelineContext, transaction: Any, outco
             {
                 "quota_pool_id": quota_pool_id,
                 "account_id": account["id"],
-                "reason": "account-discovery",
+                "reason": str(connection.get("membership_reason") or "account-discovery"),
                 "confidence": 1.0 if pool.independence_status == "confirmed" else 0.0,
             },
         )
@@ -354,10 +373,13 @@ def _quota_research_stage(dependencies: StageDependencies, context: PipelineCont
     if dependencies.omniroute_client is None:
         return StageResult(status="external_dependency_failed", reason="omniroute_client_required")
     with context.repository.database.transaction() as transaction:
+        changes = _detect_free_model_changes(transaction, dependencies.omniroute_client)
+        if not changes.triggered:
+            return _quota_research_skipped_result()
         endpoints = transaction.execute(
             """
-            SELECT pe.id, pe.provider_model_id, pa.id AS account_id, p.id AS provider_id,
-                   p.omniroute_provider_id
+            SELECT pe.id, pe.provider_model_id, pa.id AS account_id,
+                   pa.omniroute_connection_id, p.id AS provider_id, p.omniroute_provider_id
             FROM provider_endpoints pe
             JOIN provider_accounts pa ON pa.id = pe.provider_account_id
             JOIN providers p ON p.id = pa.provider_id
@@ -365,6 +387,7 @@ def _quota_research_stage(dependencies: StageDependencies, context: PipelineCont
             ORDER BY pe.provider_model_id
             """
         ).fetchall()
+    quota_limit_hints = _quota_limit_hints(dependencies.omniroute_client)
     written = 0
     today = datetime.now(timezone.utc)
     for endpoint in endpoints:
@@ -375,6 +398,12 @@ def _quota_research_stage(dependencies: StageDependencies, context: PipelineCont
             today=today,
             summary_confidence_cap=0.70,
             instructor_call=dependencies.llm_runtime,
+            previous_limit=quota_limit_hints.get(
+                _quota_hint_key(
+                    endpoint["omniroute_provider_id"],
+                    endpoint["omniroute_connection_id"],
+                )
+            ),
         )
         if result.error is not None:
             return StageResult(status="external_dependency_failed", reason=result.error.reason)
@@ -408,7 +437,126 @@ def _quota_research_stage(dependencies: StageDependencies, context: PipelineCont
                 rule_hash=_hash_parts(str(endpoint["id"]), snapshot["content_hash"], str(rule.confidence)),
             )
         written += 1
+    if changes.lost:
+        with context.repository.database.transaction() as transaction:
+            _deactivate_lost_free_models(transaction, changes.lost)
     return _effect_result("quota-research", changed=written > 0)
+
+
+def _quota_research_skipped_result() -> StageResult:
+    return StageResult(
+        status="success",
+        changed=False,
+        idempotency_key="quota-research:production",
+        details={
+            "adapter": "quota-research",
+            "effect": "idempotent_no_change",
+            "reason": "no_free_model_change",
+        },
+    )
+
+
+def _detect_free_model_changes(transaction: Any, client: Any) -> FreeModelChanges:
+    snapshots = transaction.execute(
+        """
+        SELECT raw_json
+        FROM free_provider_registry_snapshots
+        WHERE raw_json ? 'free_models'
+        ORDER BY created_at DESC, id DESC
+        LIMIT 2
+        """
+    ).fetchall()
+    if len(snapshots) < 2:
+        return FreeModelChanges(gained=set(), lost=set(), known=False)
+    reachable = _reachable_providers(client)
+    if reachable is None:
+        return FreeModelChanges(gained=set(), lost=set(), known=False)
+    current = _free_models_from_registry_snapshot(snapshots[0]["raw_json"])
+    previous = _free_models_from_registry_snapshot(snapshots[1]["raw_json"])
+    gained = {model for model in current - previous if model[0] in reachable}
+    lost = {model for model in previous - current if model[0] in reachable}
+    return FreeModelChanges(gained=gained, lost=lost)
+
+
+def _free_models_from_registry_snapshot(raw_json: dict[str, Any]) -> set[tuple[str, str]]:
+    free_models = raw_json.get("free_models", {})
+    models = free_models.get("models", []) if isinstance(free_models, dict) else []
+    return {
+        (str(item["provider"]), str(item["modelId"]))
+        for item in models
+        if isinstance(item, dict) and item.get("provider") and item.get("modelId")
+    }
+
+
+def _reachable_providers(client: Any) -> set[str] | None:
+    try:
+        payload = client.get("/api/rate-limits")
+    except Exception:
+        return None
+    connections = payload.get("connections") if isinstance(payload, dict) else None
+    if not isinstance(connections, list):
+        return None
+    return {
+        str(connection["provider"])
+        for connection in connections
+        if isinstance(connection, dict) and connection.get("provider") and connection.get("enabled", True)
+    }
+
+
+def _quota_limit_hints(client: Any) -> dict[str, float]:
+    try:
+        snapshot = fetch_live_quota_snapshot(client)
+    except (QuotaFetchError, AttributeError, NotImplementedError):
+        return {}
+    except Exception:
+        return {}
+    return {
+        _quota_hint_key(quota.provider, quota.connection_id): quota.limit
+        for quota in snapshot.quotas.values()
+        if quota.limit is not None
+    }
+
+
+def _quota_hint_key(provider: Any, connection_id: Any) -> str:
+    return f"{provider}:{connection_id}"
+
+
+def _deactivate_lost_free_models(transaction: Any, lost_models: set[tuple[str, str]]) -> None:
+    for provider_id, model_id in lost_models:
+        # AICODE-NOTE: lost-free detection is the only path that turns quota
+        # rules inactive; provider-model rows stay additive and are not deleted.
+        transaction.execute(
+            """
+            UPDATE quota_rules qr
+            SET status = 'inactive'
+            FROM providers p
+            WHERE qr.provider_id = p.id
+              AND p.omniroute_provider_id = %(provider_id)s
+              AND qr.model_pattern = %(model_id)s
+            """,
+            {"provider_id": provider_id, "model_id": model_id},
+        )
+        transaction.execute(
+            """
+            UPDATE provider_endpoints pe
+            SET access_status = 'rejected'
+            FROM provider_accounts pa
+            JOIN providers p ON p.id = pa.provider_id
+            WHERE pe.provider_account_id = pa.id
+              AND p.omniroute_provider_id = %(provider_id)s
+              AND pe.provider_model_id = %(model_id)s
+            """,
+            {"provider_id": provider_id, "model_id": model_id},
+        )
+        transaction.execute(
+            """
+            UPDATE free_model_definitions
+            SET status = 'inactive'
+            WHERE provider_id = %(provider_id)s
+              AND provider_model_id = %(model_id)s
+            """,
+            {"provider_id": provider_id, "model_id": model_id},
+        )
 
 
 def _access_classification_stage(_dependencies: StageDependencies, context: PipelineContext) -> StageResult:
@@ -418,10 +566,14 @@ def _access_classification_stage(_dependencies: StageDependencies, context: Pipe
             SELECT DISTINCT ON (pe.id)
                    pe.id AS endpoint_id, pe.provider_account_id, pe.provider_model_id,
                    p.omniroute_provider_id, qr.id AS quota_rule_id, qr.limits,
-                   qr.reset_policy, qr.hard_stop_capable, qr.confidence
+                   qr.reset_policy, qr.hard_stop_capable, qr.confidence,
+                   fmd.status AS free_definition_status
             FROM provider_endpoints pe
             JOIN provider_accounts pa ON pa.id = pe.provider_account_id
             JOIN providers p ON p.id = pa.provider_id
+            LEFT JOIN free_model_definitions fmd
+              ON fmd.provider_id = p.omniroute_provider_id
+             AND fmd.provider_model_id = pe.provider_model_id
             LEFT JOIN quota_rules qr
               ON qr.provider_id = p.id
              AND qr.model_pattern = pe.provider_model_id
@@ -430,11 +582,23 @@ def _access_classification_stage(_dependencies: StageDependencies, context: Pipe
             ORDER BY pe.id, qr.created_at DESC NULLS LAST
             """
         ).fetchall()
-        if any(row["quota_rule_id"] is None for row in rows):
+        lost_free_rows = [
+            row
+            for row in rows
+            if row["quota_rule_id"] is None and row["free_definition_status"] == "inactive"
+        ]
+        missing_rows = [
+            row
+            for row in rows
+            if row["quota_rule_id"] is None and row["free_definition_status"] != "inactive"
+        ]
+        for row in lost_free_rows:
+            _record_lost_free_access_state(transaction, row["endpoint_id"])
+        if missing_rows:
             return StageResult(status="partial_stale", reason="quota_rule_missing")
         written = 0
-        for row in rows:
-            limit = _quota_limit(row["limits"])
+        for row in [item for item in rows if item["quota_rule_id"] is not None]:
+            metric, limit = _quota_metric(row["limits"])
             reset_at = datetime.now(timezone.utc) + timedelta(days=1)
             evidence = {
                 "quota_rule": True,
@@ -472,7 +636,7 @@ def _access_classification_stage(_dependencies: StageDependencies, context: Pipe
                     "quota_rule_id": row["quota_rule_id"],
                     "status": status,
                     "reason_code": decision.reason_code,
-                    "effective_remaining": Jsonb({"requests": limit}),
+                    "effective_remaining": Jsonb({metric: limit}),
                     "reset_at": reset_at,
                     "hard_stop_capable": row["hard_stop_capable"],
                     "evidence": Jsonb({**evidence, "free_access": status == "confirmed"}),
@@ -482,12 +646,13 @@ def _access_classification_stage(_dependencies: StageDependencies, context: Pipe
                 """
                 INSERT INTO quota_attribution_groups (
                   provider_id, scope_type, scope_key, status, source, limit_type,
-                  request_limit, reset_rule_json, confidence, capacity_weight, evidence_json
+                  request_limit, token_limit, reset_rule_json, confidence,
+                  capacity_weight, evidence_json
                 )
                 VALUES (
                   %(provider_id)s, 'account', %(scope_key)s, %(status)s, 'quota-research',
-                  'requests', %(request_limit)s, %(reset_rule_json)s, %(confidence)s,
-                  %(capacity_weight)s, %(evidence_json)s
+                  %(limit_type)s, %(request_limit)s, %(token_limit)s, %(reset_rule_json)s,
+                  %(confidence)s, %(capacity_weight)s, %(evidence_json)s
                 )
                 RETURNING *
                 """,
@@ -495,7 +660,9 @@ def _access_classification_stage(_dependencies: StageDependencies, context: Pipe
                     "provider_id": row["omniroute_provider_id"],
                     "scope_key": str(row["provider_account_id"]),
                     "status": status,
-                    "request_limit": limit,
+                    "limit_type": metric,
+                    "request_limit": limit if metric == "requests" else None,
+                    "token_limit": limit if metric == "tokens" else None,
                     "reset_rule_json": Jsonb(row["reset_policy"]),
                     "confidence": row["confidence"],
                     "capacity_weight": _capacity_weight(status),
@@ -527,6 +694,39 @@ def _access_classification_stage(_dependencies: StageDependencies, context: Pipe
             )
             written += 1
     return _effect_result("access-classification", changed=written > 0)
+
+
+def _record_lost_free_access_state(transaction: Any, endpoint_id: Any) -> None:
+    transaction.execute(
+        """
+        UPDATE provider_endpoints
+        SET access_status = 'rejected'
+        WHERE id = %(endpoint_id)s
+        """,
+        {"endpoint_id": endpoint_id},
+    )
+    transaction.execute(
+        """
+        INSERT INTO endpoint_access_states (
+          endpoint_id, status, reason_code, effective_remaining,
+          reset_at, hard_stop_capable, evidence
+        )
+        VALUES (
+          %(endpoint_id)s, 'rejected', 'lost_free_status',
+          '{}'::jsonb, NULL, false, '{"free_access": false}'::jsonb
+        )
+        ON CONFLICT (endpoint_id)
+        DO UPDATE SET
+          status = EXCLUDED.status,
+          reason_code = EXCLUDED.reason_code,
+          effective_remaining = EXCLUDED.effective_remaining,
+          reset_at = EXCLUDED.reset_at,
+          hard_stop_capable = EXCLUDED.hard_stop_capable,
+          evidence = EXCLUDED.evidence,
+          classified_at = now()
+        """,
+        {"endpoint_id": endpoint_id},
+    )
 
 
 def _probing_stage(dependencies: StageDependencies, context: PipelineContext) -> StageResult:
@@ -844,10 +1044,12 @@ def _role_lifecycle_stage(_dependencies: StageDependencies, context: PipelineCon
 
 def _role_scoring_stage(_dependencies: StageDependencies, context: PipelineContext) -> StageResult:
     with context.repository.database.transaction() as transaction:
+        if _dependencies.omniroute_client is not None:
+            _seed_quality_bands(transaction, _dependencies.omniroute_client)
         roles = transaction.execute(
             """
             SELECT id, requirements, minimum_quality_metric, minimum_quality_value,
-                   quality_gate_index_version
+                   maximum_quality_metric, maximum_quality_value, quality_gate_index_version
             FROM roles
             ORDER BY id
             """
@@ -912,6 +1114,92 @@ def _role_scoring_stage(_dependencies: StageDependencies, context: PipelineConte
     return _effect_result("role-scoring", changed=written > 0)
 
 
+def _seed_quality_bands(transaction: Any, client: Any) -> None:
+    current = _read_current_combos(client)
+    latest_metrics = _latest_aa_metrics_by_model(transaction)
+    for combo_id, members in current.items():
+        if not combo_id.startswith("fmo-") or len(members) != 1:
+            continue
+        # AICODE-NOTE: A live one-member combo is the operator seed signal; a
+        # multi-member combo keeps its persisted band to avoid drift per run.
+        role_id = combo_id.removeprefix("fmo-")
+        seed = transaction.execute(
+            """
+            SELECT id, canonical_model_id
+            FROM provider_endpoints
+            WHERE id::text = %(endpoint_id)s
+            """,
+            {"endpoint_id": str(members[0])},
+        ).fetchone()
+        if seed is None:
+            continue
+        metric = "intelligence_index"
+        metrics = latest_metrics.get(seed["canonical_model_id"])
+        if not metrics or metric not in metrics["metrics"]:
+            continue
+        anchor = float(metrics["metrics"][metric])
+        candidates = _quality_band_candidates(transaction, metric)
+        protected = _latest_protected_requests(transaction, role_id)
+        band = quality_band_for_demand(
+            anchor=anchor,
+            candidates=candidates,
+            protected_requests=protected,
+            adequacy_floor=max(0, anchor - 20),
+        )
+        transaction.execute(
+            """
+            UPDATE roles
+            SET minimum_quality_metric = %(metric)s,
+                minimum_quality_value = %(minimum)s,
+                maximum_quality_metric = %(metric)s,
+                maximum_quality_value = %(maximum)s,
+                quality_gate_index_version = %(index_version)s
+            WHERE id = %(role_id)s
+            """,
+            {
+                "role_id": role_id,
+                "metric": metric,
+                "minimum": band.minimum,
+                "maximum": band.maximum,
+                "index_version": str(metrics["index_version"]),
+            },
+        )
+
+
+def _quality_band_candidates(transaction: Any, metric: str) -> list[dict[str, Any]]:
+    rows = transaction.execute(
+        f"""
+        SELECT aa.{metric} AS quality, eas.effective_remaining, eas.status, eas.hard_stop_capable
+        FROM provider_endpoints pe
+        JOIN artificial_analysis_model_metrics aa ON aa.canonical_model_id = pe.canonical_model_id
+        LEFT JOIN endpoint_access_states eas ON eas.endpoint_id = pe.id
+        WHERE aa.{metric} IS NOT NULL
+        """
+    ).fetchall()
+    return [
+        {
+            "quality": float(row["quality"]),
+            "capacity": _remaining_requests(row["effective_remaining"]) if row["effective_remaining"] is not None else 0,
+            "confirmed_free": row["status"] == "confirmed" and bool(row["hard_stop_capable"]),
+        }
+        for row in rows
+    ]
+
+
+def _latest_protected_requests(transaction: Any, role_id: str) -> float:
+    row = transaction.execute(
+        """
+        SELECT protected_requests
+        FROM role_demand_forecasts
+        WHERE role_id = %(role_id)s
+        ORDER BY created_at DESC
+        LIMIT 1
+        """,
+        {"role_id": role_id},
+    ).fetchone()
+    return float(row["protected_requests"]) if row is not None else 1.0
+
+
 def _latest_aa_metrics_by_model(transaction: Any) -> dict[Any, dict[str, Any]]:
     rows = transaction.execute(
         """
@@ -965,6 +1253,7 @@ def _quality_gate_eligibility(role: Any, metrics_row: dict[str, Any] | None, req
         (metrics_row or {}).get("metrics", {}),
         metric=role["minimum_quality_metric"],
         value=float(role["minimum_quality_value"]),
+        maximum_value=float(role["maximum_quality_value"]) if role["maximum_quality_value"] is not None else None,
         index_version=str(role["quality_gate_index_version"]),
         current_version=str(current_version),
         allow_unverified=bool(requirements.get("allow_unverified_quality_gate", False)),
@@ -1046,13 +1335,14 @@ def _demand_forecast_stage(_dependencies: StageDependencies, context: PipelineCo
 
 def _allocation_stage(_dependencies: StageDependencies, context: PipelineContext) -> StageResult:
     with context.repository.database.transaction() as transaction:
-        roles = transaction.execute("SELECT id FROM roles ORDER BY id").fetchall()
+        roles = transaction.execute("SELECT id, requirements FROM roles ORDER BY id").fetchall()
         score_rows = transaction.execute(
             """
             SELECT DISTINCT ON (rs.role_id, rs.endpoint_id)
                    rs.role_id, rs.endpoint_id, rs.total_score,
                    COALESCE(pa.quota_pool_id, pe.provider_account_id) AS quota_pool_id,
-                   eas.effective_remaining
+                   eas.effective_remaining, pe.provider_model_id, pe.capabilities,
+                   pe.effective_context_window, pe.access_status, pe.probe_status
             FROM role_scores rs
             JOIN provider_endpoints pe ON pe.id = rs.endpoint_id
             JOIN provider_accounts pa ON pa.id = pe.provider_account_id
@@ -1082,6 +1372,13 @@ def _allocation_stage(_dependencies: StageDependencies, context: PipelineContext
                 "pool": str(row["quota_pool_id"]),
                 "score": float(row["total_score"]),
                 "capacity": _remaining_requests(row["effective_remaining"]),
+                "is_router": is_configured_router(str(row["provider_model_id"])),
+                "input": _configured_router_input(str(row["provider_model_id"])),
+                "effective_context_window": int(row["effective_context_window"] or 0),
+                "access": "free_quota_available" if row["access_status"] == "confirmed" else "unknown_excluded",
+                "basic_probe": row["probe_status"] == "passed",
+                "quota": _remaining_requests(row["effective_remaining"]),
+                "breaker": "closed",
             }
             for row in score_rows
         ]
@@ -1098,11 +1395,19 @@ def _allocation_stage(_dependencies: StageDependencies, context: PipelineContext
             if role["id"] in recalibration_roles:
                 continue
             allocation = plan.allocations.get(role["id"])
-            role_scores = [endpoint for endpoint in endpoints if allocation is None or endpoint["id"] == allocation.endpoint_id]
+            role_scores = endpoints if allocation is not None else []
             validation = validate_plan(pool_reports or {"empty": {"usage": 0, "capacity": 0}}, role_has_primary=allocation is not None)
             targets = []
             if allocation is not None:
-                combo = build_priority_combo(role["id"], role_scores, per_pool_cap=2)
+                requirements = role["requirements"] or {}
+                combo = build_priority_combo(
+                    role["id"],
+                    role_scores,
+                    per_pool_cap=2,
+                    auto_router_tail=tuple(entry.id for entry in DEFAULT_AUTO_ROUTER_TAIL),
+                    required_capabilities=set(requirements.get("capabilities", [])),
+                    minimum_context=int(requirements.get("minimum_context_window") or 0),
+                )
                 targets = [
                     {"endpoint_id": endpoint_id, "priority": index + 1}
                     for index, endpoint_id in enumerate(combo.endpoints)
@@ -1134,6 +1439,11 @@ def _roles_needing_quality_recalibration(transaction: Any) -> set[str]:
         """
     ).fetchall()
     return {row["role_id"] for row in rows}
+
+
+def _configured_router_input(model_id: str) -> tuple[str, ...]:
+    entry = configured_router_entry(model_id)
+    return entry.input if entry is not None else ()
 
 
 def _diff_stage(dependencies: StageDependencies, context: PipelineContext) -> StageResult:
@@ -1220,24 +1530,30 @@ def _apply_stage(dependencies: StageDependencies, context: PipelineContext) -> S
     applier = ComboApplier(current={combo_id: list(models) for combo_id, models in current.items()})
     combo_test_called = False
     applied = []
+    unmanaged_combos = []
     dry_run = bool(context.config.get("dry_run", False))
     for diff in diffs:
         combo_id = diff["omniroute_combo_id"]
         diff_before = list(diff["state_json"].get("before", []))
-        live_baseline = list(current.get(combo_id, []))
         desired = list(diff["state_json"].get("after", []))
         if not combo_id.startswith("fmo-"):
             continue
+        # AICODE-NOTE: Live OmniRoute combo set is source of truth for whether
+        # apply may rebalance; absent desired combos are operator-managed setup.
+        if combo_id not in current:
+            unmanaged_combos.append(combo_id)
+            continue
+        live_baseline = list(current[combo_id])
         if live_baseline != diff_before:
             return StageResult(
                 status="unsafe_to_apply",
                 reason="combo_drift_detected",
-                details={"combo_test_called": combo_test_called},
+                details={"combo_test_called": combo_test_called, "unmanaged_combos": unmanaged_combos},
             )
         if dry_run:
             continue
         expected_hash = applier.state_hash(combo_id)
-        dependencies.omniroute_client.post(
+        dependencies.omniroute_client.put(
             f"/api/combos/{combo_id}",
             {"models": desired},
             idempotency_key=expected_hash,
@@ -1257,14 +1573,14 @@ def _apply_stage(dependencies: StageDependencies, context: PipelineContext) -> S
             status="success",
             changed=False,
             idempotency_key="apply:dry-run",
-            details={"combo_test_called": False, "effect": "idempotent_no_change"},
+            details={"combo_test_called": False, "effect": "idempotent_no_change", "unmanaged_combos": unmanaged_combos},
         )
     result = _effect_result("apply", changed=bool(applied))
     return StageResult(
         status=result.status,
         idempotency_key=result.idempotency_key,
         changed=result.changed,
-        details={**result.details, "combo_test_called": combo_test_called},
+        details={**result.details, "combo_test_called": combo_test_called, "unmanaged_combos": unmanaged_combos},
     )
 
 
@@ -1292,7 +1608,7 @@ def _rollback_apply_mutations(
     rollback_failed = False
     for combo_id, before in rollback_targets:
         try:
-            client.post(f"/api/combos/{combo_id}", {"models": before})
+            client.put(f"/api/combos/{combo_id}", {"models": before})
         except Exception:
             rollback_failed = True
     return not rollback_failed
@@ -1395,7 +1711,7 @@ def _rollback_stage(dependencies: StageDependencies, context: PipelineContext) -
         combo_id = snapshot["omniroute_combo_id"]
         before = list(snapshot["state_json"].get("before", []))
         try:
-            dependencies.omniroute_client.post(f"/api/combos/{combo_id}", {"models": before})
+            dependencies.omniroute_client.put(f"/api/combos/{combo_id}", {"models": before})
         except Exception:
             rollback_failed = True
             continue
@@ -1596,7 +1912,12 @@ def _ensure_quota_pool(transaction: Any, provider_id: str, connection_id: str, a
 
 
 def _ensure_named_quota_pool(transaction: Any, provider_id: str, pool_key: str) -> Any:
-    name = pool_key if pool_key.endswith(":requests") else f"{provider_id}:{pool_key}:requests"
+    if pool_key.endswith(":requests"):
+        name = pool_key
+    elif pool_key.startswith(f"{provider_id}:"):
+        name = f"{pool_key}:requests"
+    else:
+        name = f"{provider_id}:{pool_key}:requests"
     pool = transaction.execute(
         """
         INSERT INTO quota_pools (name, provider_group, reset_policy)
@@ -1632,20 +1953,53 @@ def _hash_parts(*parts: str) -> str:
     return hashlib.sha256(":".join(parts).encode("utf-8")).hexdigest()
 
 
+# Metric precedence mirrors the SQL COALESCE(requests, tokens) in
+# aa_index_runtime.py: requests is canonical, tokens is the no-auth
+# calibration fallback. requests and tokens are not interconvertible, so the
+# actual metric is carried through the pipeline rather than collapsed.
+_QUOTA_METRICS = ("requests", "tokens")
+
+
+def _quota_metric(limits: Any) -> tuple[str, float]:
+    """Return (metric, amount) from a quota_rules.limits payload.
+
+    Picks the metric actually present in ``limits`` instead of assuming
+    "requests"; "window" and other non-metric keys are ignored.
+    """
+    mapping = limits if isinstance(limits, dict) else None
+    for metric in _QUOTA_METRICS:
+        if mapping is not None:
+            if metric in mapping:
+                return metric, float(mapping[metric] or 0)
+        else:
+            try:
+                return metric, float(limits[metric] or 0)
+            except (KeyError, TypeError):
+                continue
+    return "requests", 0.0
+
+
 def _quota_limit(limits: Any) -> float:
-    if isinstance(limits, dict):
-        value = limits.get("requests", 0)
-    else:
-        value = limits["requests"]
-    return float(value)
+    return _quota_metric(limits)[1]
 
 
-def _remaining_requests(effective_remaining: Any) -> float:
+def _remaining_amount(effective_remaining: Any) -> float:
+    """Remaining quota regardless of which metric key is stored."""
     if isinstance(effective_remaining, dict):
-        value = effective_remaining.get("requests", 0)
-    else:
-        value = effective_remaining["requests"]
-    return float(value or 0)
+        for metric in _QUOTA_METRICS:
+            if metric in effective_remaining:
+                return float(effective_remaining[metric] or 0)
+        return 0.0
+    for metric in _QUOTA_METRICS:
+        try:
+            return float(effective_remaining[metric] or 0)
+        except (KeyError, TypeError):
+            continue
+    return 0.0
+
+
+# Back-compat alias: readers previously assumed the "requests" metric.
+_remaining_requests = _remaining_amount
 
 
 def _canonical_access_status(access_status: str) -> str:

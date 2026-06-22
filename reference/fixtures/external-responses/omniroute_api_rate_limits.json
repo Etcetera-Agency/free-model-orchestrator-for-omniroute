@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-06-18T07:36:26.507Z",
+  "captured_at": "2026-06-22T13:23:36.393Z",
   "source": "omniroute-shlink-20129",
   "name": "omniroute_api_rate_limits",
   "method": "GET",
@@ -11,7 +11,7 @@
     "connection": "keep-alive",
     "content-security-policy": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; media-src 'self' data: blob:; connect-src 'self' http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:* https: wss:; worker-src 'self' blob:; manifest-src 'self'",
     "content-type": "application/json",
-    "date": "Thu, 18 Jun 2026 07:36:26 GMT",
+    "date": "Mon, 22 Jun 2026 13:23:35 GMT",
     "keep-alive": "timeout=5",
     "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=()",
     "referrer-policy": "strict-origin-when-cross-origin",
@@ -27,6 +27,116 @@
     "connections": [
       {
         "connectionId": "[UUID]",
+        "provider": "antigravity",
+        "name": "[EMAIL]",
+        "rateLimitProtection": false,
+        "enabled": false,
+        "active": false,
+        "queued": 0,
+        "running": 0
+      },
+      {
+        "connectionId": "[UUID]",
+        "provider": "openai-compatible-chat-[UUID]",
+        "name": "omni",
+        "rateLimitProtection": false,
+        "enabled": false,
+        "active": false,
+        "queued": 0,
+        "running": 0
+      },
+      {
+        "connectionId": "[UUID]",
+        "provider": "ollama-cloud",
+        "name": "ceod-omni",
+        "rateLimitProtection": false,
+        "enabled": false,
+        "active": false,
+        "queued": 0,
+        "running": 0
+      },
+      {
+        "connectionId": "[UUID]",
+        "provider": "ollama-search",
+        "name": "Ollama Search API key",
+        "rateLimitProtection": false,
+        "enabled": false,
+        "active": false,
+        "queued": 0,
+        "running": 0
+      },
+      {
+        "connectionId": "[UUID]",
+        "provider": "parallel-extract",
+        "name": "Parallel Extract API key",
+        "rateLimitProtection": false,
+        "enabled": false,
+        "active": false,
+        "queued": 0,
+        "running": 0
+      },
+      {
+        "connectionId": "[UUID]",
+        "provider": "parallel-search",
+        "name": "Parallel Search API key",
+        "rateLimitProtection": false,
+        "enabled": false,
+        "active": false,
+        "queued": 0,
+        "running": 0
+      },
+      {
+        "connectionId": "[UUID]",
+        "provider": "parallel",
+        "name": "Parallel API key",
+        "rateLimitProtection": false,
+        "enabled": false,
+        "active": false,
+        "queued": 0,
+        "running": 0
+      },
+      {
+        "connectionId": "[UUID]",
+        "provider": "jina-reader",
+        "name": "Jina Reader API key",
+        "rateLimitProtection": false,
+        "enabled": false,
+        "active": false,
+        "queued": 0,
+        "running": 0
+      },
+      {
+        "connectionId": "[UUID]",
+        "provider": "jina-ai",
+        "name": "def",
+        "rateLimitProtection": false,
+        "enabled": false,
+        "active": false,
+        "queued": 0,
+        "running": 0
+      },
+      {
+        "connectionId": "[UUID]",
+        "provider": "firecrawl-search",
+        "name": "Firecrawl Search API key",
+        "rateLimitProtection": false,
+        "enabled": false,
+        "active": false,
+        "queued": 0,
+        "running": 0
+      },
+      {
+        "connectionId": "[UUID]",
+        "provider": "exa-search",
+        "name": "omni",
+        "rateLimitProtection": false,
+        "enabled": false,
+        "active": false,
+        "queued": 0,
+        "running": 0
+      },
+      {
+        "connectionId": "[UUID]",
         "provider": "windsurf",
         "name": "Account #8e87a2",
         "rateLimitProtection": false,
@@ -39,16 +149,6 @@
         "connectionId": "[UUID]",
         "provider": "longcat",
         "name": "omni",
-        "rateLimitProtection": false,
-        "enabled": false,
-        "active": false,
-        "queued": 0,
-        "running": 0
-      },
-      {
-        "connectionId": "[UUID]",
-        "provider": "antigravity",
-        "name": "[EMAIL]",
         "rateLimitProtection": false,
         "enabled": false,
         "active": false,
@@ -177,6 +277,16 @@
       },
       {
         "connectionId": "[UUID]",
+        "provider": "ollama-cloud",
+        "name": "safonovdenis",
+        "rateLimitProtection": false,
+        "enabled": false,
+        "active": false,
+        "queued": 0,
+        "running": 0
+      },
+      {
+        "connectionId": "[UUID]",
         "provider": "groq",
         "name": "chosen",
         "rateLimitProtection": false,
@@ -189,6 +299,16 @@
         "connectionId": "[UUID]",
         "provider": "mistral",
         "name": "omni",
+        "rateLimitProtection": false,
+        "enabled": false,
+        "active": false,
+        "queued": 0,
+        "running": 0
+      },
+      {
+        "connectionId": "[UUID]",
+        "provider": "ollama-cloud",
+        "name": "safonov@e",
         "rateLimitProtection": false,
         "enabled": false,
         "active": false,

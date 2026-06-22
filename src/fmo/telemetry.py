@@ -27,6 +27,7 @@ class TelemetryError(Exception):
 @dataclass(frozen=True)
 class TelemetryMetric:
     requests: int
+    tokens: int | None
     avg_latency_ms: int | None
     p95_ms: int | None
     latency_granularity: str
@@ -92,6 +93,7 @@ def _analytics_metric(item: dict[str, Any], *, granularity: str) -> TelemetryMet
     success_count = round(requests * success_rate / 100)
     return TelemetryMetric(
         requests=requests,
+        tokens=_token_count(item),
         avg_latency_ms=_optional_int_value(item.get("avgLatencyMs")),
         p95_ms=None,
         latency_granularity=granularity,
@@ -125,6 +127,18 @@ def _optional_int_value(value: Any) -> int | None:
         except ValueError:
             return None
     return None
+
+
+def _token_count(item: dict[str, Any]) -> int | None:
+    for key in ("totalTokens", "tokens", "tokenCount"):
+        parsed = _optional_int_value(item.get(key))
+        if parsed is not None:
+            return parsed
+    prompt_tokens = _optional_int_value(item.get("promptTokens"))
+    completion_tokens = _optional_int_value(item.get("completionTokens"))
+    if prompt_tokens is None and completion_tokens is None:
+        return None
+    return (prompt_tokens or 0) + (completion_tokens or 0)
 
 
 def _float_value(value: Any) -> float:

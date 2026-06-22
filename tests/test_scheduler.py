@@ -1,5 +1,6 @@
 import threading
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 import psycopg
@@ -160,6 +161,7 @@ def test_provider_and_combo_locks_are_independent(repository):
 @pytest.mark.spec("scheduler::Scheduler fires at cron time")
 @pytest.mark.spec("scheduler::Scheduled daily run")
 @pytest.mark.spec("scheduler::Service fires the daily run")
+@pytest.mark.spec("hermes-inventory::Daily run performs full inventory")
 def test_scheduler_fires_full_pipeline_at_configured_cron(repository):
     calls = []
 
@@ -176,16 +178,66 @@ def test_scheduler_fires_full_pipeline_at_configured_cron(repository):
 
     scheduler = Scheduler(repository, cron="0 4 * * *", pipeline_runner=runner)
 
-    result = scheduler.tick("2026-06-18T04:00:00Z")
+    cron_now = datetime.now(timezone.utc).replace(hour=4, minute=0, second=0, microsecond=0)
+    result = scheduler.tick(cron_now.isoformat())
 
     assert result.exit_code == 0
     assert calls == [("scheduled", "full")]
+
+
+def _recalibration_scheduler(repository, calls):
+    return Scheduler(
+        repository,
+        cron="0 4 * * *",
+        pipeline_runner=lambda _trigger, _run_type: None,
+        recalibration_cron="0 5 * * 0",
+        recalibration_job=lambda: calls.append("recalibrate") or "done",
+    )
+
+
+@pytest.mark.spec("scheduler::Weekly recalibration fires")
+def test_scheduler_fires_weekly_recalibration_at_configured_cron(repository):
+    calls = []
+    scheduler = _recalibration_scheduler(repository, calls)
+
+    cron_now = datetime.now(timezone.utc).replace(hour=5, minute=0, second=0, microsecond=0)
+    result = scheduler.tick_recalibration(cron_now.isoformat())
+
+    assert result == "done"
+    assert calls == ["recalibrate"]
+
+
+@pytest.mark.spec("scheduler::Non-matching tick is a no-op")
+def test_scheduler_weekly_recalibration_non_matching_tick_noops(repository):
+    calls = []
+    scheduler = _recalibration_scheduler(repository, calls)
+
+    cron_now = datetime.now(timezone.utc).replace(hour=5, minute=1, second=0, microsecond=0)
+
+    assert scheduler.tick_recalibration(cron_now.isoformat()) is None
+    assert calls == []
+
+
+@pytest.mark.spec("scheduler::Recalibration does not overlap a running job")
+def test_scheduler_weekly_recalibration_noops_when_daily_lock_held(repository):
+    calls = []
+    lock = RunLockManager(repository).acquire("daily")
+    scheduler = _recalibration_scheduler(repository, calls)
+
+    cron_now = datetime.now(timezone.utc).replace(hour=5, minute=0, second=0, microsecond=0)
+
+    try:
+        assert scheduler.tick_recalibration(cron_now.isoformat()) is None
+    finally:
+        lock.release()
+    assert calls == []
 
 
 @pytest.mark.spec("scheduler::Manual trigger starts a run")
 @pytest.mark.spec("scheduler::Apply pipeline runs")
 @pytest.mark.spec("scheduler::Urgent run after paid charge")
 @pytest.mark.spec("scheduler::Urgent trigger runs out of schedule")
+@pytest.mark.spec("hermes-inventory::Manual run can request full inventory")
 def test_manual_and_urgent_triggers_start_pipeline_without_combo_test(repository):
     calls = []
 
@@ -215,3 +267,33 @@ def test_manual_and_urgent_triggers_start_pipeline_without_combo_test(repository
         ("event-provider-added:anthropic", "provider"),
         ("urgent-paid-charge:qiniu", "provider"),
     ]
+
+
+@pytest.mark.spec("hermes-inventory::Unknown role event does not create inventory or combo")
+def test_unknown_role_trigger_stays_role_scoped_without_full_inventory_or_combo(repository):
+    calls = []
+    full_inventory_requests = []
+    combo_creations = []
+
+    def runner(trigger, run_type):
+        calls.append((trigger, run_type))
+        if run_type == "full":
+            full_inventory_requests.append(trigger)
+            combo_creations.append(f"fmo-{trigger}")
+        return PipelineRunResult(
+            run_id="run-role",
+            status="success",
+            exit_code=0,
+            changed=False,
+            stage_results=[],
+            skipped_stages=[],
+        )
+
+    scheduler = Scheduler(repository, cron="0 4 * * *", pipeline_runner=runner)
+
+    result = scheduler.trigger("manual-role", role="unknown-role")
+
+    assert result.exit_code == 0
+    assert calls == [("manual-role:unknown-role", "role")]
+    assert full_inventory_requests == []
+    assert combo_creations == []

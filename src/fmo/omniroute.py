@@ -60,6 +60,9 @@ class OmniRouteClient:
     def post(self, path: str, payload: dict, *, idempotency_key: str | None = None) -> dict:
         return self._request("POST", path, payload, idempotency_key=idempotency_key)
 
+    def put(self, path: str, payload: dict, *, idempotency_key: str | None = None) -> dict:
+        return self._request("PUT", path, payload, idempotency_key=idempotency_key)
+
     def _request(
         self,
         method: str,

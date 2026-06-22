@@ -1,0 +1,25 @@
+model: chat-combo
+provider: omniroute
+auxiliary:
+  vision:
+    provider: omniroute
+    model: fmo-gateway-vision
+gateway:
+  platforms:
+    github:
+      enabled: true
+      model: coding-combo
+      auxiliary:
+        approval:
+          provider: omniroute
+          model: fmo-gateway-approval
+    telegram:
+      enabled: true
+      model: chat-combo
+    slack:
+      enabled: false
+      model: research-combo
+      auxiliary:
+        vision:
+          provider: omniroute
+          model: fmo-disabled-platform

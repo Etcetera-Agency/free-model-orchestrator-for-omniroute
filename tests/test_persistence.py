@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -5,6 +6,12 @@ import pytest
 from fmo.db import MigrationRunner
 from fmo.persistence import Database, Repository
 from fmo.registry import FreeRegistry, FreeRegistrySyncOutcome
+
+# Relative probe timestamps so stored-evidence fixtures never drift past a
+# wall-clock freshness window. Computed once per run; dedup keys off request_hash,
+# not these values.
+_PROBE_STARTED_AT = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
+_PROBE_FINISHED_AT = (datetime.now(timezone.utc) - timedelta(minutes=1) + timedelta(seconds=1)).isoformat()
 
 
 @pytest.fixture()
@@ -116,8 +123,8 @@ def test_domain_repository_round_trips(repository):
             probe_type="basic",
             request_hash="probe-key",
             passed=True,
-            started_at="2026-06-18T00:00:00Z",
-            finished_at="2026-06-18T00:00:01Z",
+            started_at=_PROBE_STARTED_AT,
+            finished_at=_PROBE_FINISHED_AT,
         )
         role = repository.roles.upsert(
             transaction,
@@ -201,8 +208,8 @@ def test_idempotent_repository_writes_do_not_duplicate(repository):
             probe_type="basic",
             request_hash="same-key",
             passed=True,
-            started_at="2026-06-18T00:00:00Z",
-            finished_at="2026-06-18T00:00:01Z",
+            started_at=_PROBE_STARTED_AT,
+            finished_at=_PROBE_FINISHED_AT,
         )
         second_probe = repository.probes.record(
             transaction,
@@ -211,13 +218,42 @@ def test_idempotent_repository_writes_do_not_duplicate(repository):
             probe_type="basic",
             request_hash="same-key",
             passed=True,
-            started_at="2026-06-18T00:00:00Z",
-            finished_at="2026-06-18T00:00:01Z",
+            started_at=_PROBE_STARTED_AT,
+            finished_at=_PROBE_FINISHED_AT,
         )
 
     assert second_probe["id"] == first_probe["id"]
     with repository.database.transaction() as transaction:
         assert repository.probes.count_by_request_hash(transaction, "same-key") == 1
+
+
+@pytest.mark.spec("data-model::Role carries a maximum quality bound")
+def test_role_quality_band_upper_bound_round_trips(repository):
+    with repository.database.transaction() as transaction:
+        banded = repository.roles.upsert(
+            transaction,
+            role_id="banded",
+            requirements={"capabilities": []},
+            expected_load={"requests": 1},
+            criticality=1,
+            minimum_quality_metric="intelligence_index",
+            minimum_quality_value=40,
+            maximum_quality_metric="intelligence_index",
+            maximum_quality_value=60,
+            quality_gate_index_version="4.1",
+        )
+        unbounded = repository.roles.upsert(
+            transaction,
+            role_id="unbounded",
+            requirements={"capabilities": []},
+            expected_load={"requests": 1},
+            criticality=1,
+        )
+
+    assert banded["maximum_quality_metric"] == "intelligence_index"
+    assert float(banded["maximum_quality_value"]) == 60
+    assert unbounded["maximum_quality_metric"] is None
+    assert unbounded["maximum_quality_value"] is None
 
 
 @pytest.mark.spec("persistence::Duplicate payload is one snapshot")

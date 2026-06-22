@@ -1,0 +1,290 @@
+{
+  "captured_at": "2026-06-22T13:23:36.393Z",
+  "source": "omniroute-shlink-20129",
+  "name": "omniroute_api_combos",
+  "method": "GET",
+  "path": "/api/combos",
+  "status": 200,
+  "headers": {
+    "access-control-allow-headers": "[REDACTED]",
+    "access-control-allow-methods": "[REDACTED]",
+    "connection": "keep-alive",
+    "content-security-policy": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; media-src 'self' data: blob:; connect-src 'self' http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:* https: wss:; worker-src 'self' blob:; manifest-src 'self'",
+    "content-type": "application/json",
+    "date": "Mon, 22 Jun 2026 13:23:35 GMT",
+    "keep-alive": "timeout=5",
+    "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=()",
+    "referrer-policy": "strict-origin-when-cross-origin",
+    "strict-transport-security": "max-age=63072000; includeSubDomains; preload",
+    "transfer-encoding": "chunked",
+    "vary": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "DENY",
+    "x-omniroute-route-class": "MANAGEMENT",
+    "x-request-id": "[UUID]"
+  },
+  "body": {
+    "combos": [
+      {
+        "id": "[UUID]",
+        "name": "fmo-chat-combo",
+        "models": [
+          {
+            "id": "fmo-chat-combo-model-1-oc-big-pickle",
+            "kind": "model",
+            "model": "oc/big-pickle",
+            "providerId": "oc",
+            "weight": 0
+          }
+        ],
+        "strategy": "priority",
+        "config": {},
+        "isHidden": false,
+        "sortOrder": 1,
+        "createdAt": "2026-06-21T12:44:44.000Z",
+        "updatedAt": "2026-06-21T12:45:11.000Z",
+        "version": 2
+      },
+      {
+        "id": "[UUID]",
+        "name": "fmo-research-combo",
+        "models": [
+          {
+            "id": "fmo-research-combo-model-1-oc-big-pickle",
+            "kind": "model",
+            "model": "oc/big-pickle",
+            "providerId": "oc",
+            "weight": 0
+          }
+        ],
+        "strategy": "priority",
+        "config": {},
+        "isHidden": false,
+        "sortOrder": 2,
+        "createdAt": "2026-06-21T12:44:44.000Z",
+        "updatedAt": "2026-06-21T12:45:11.000Z",
+        "version": 2
+      },
+      {
+        "id": "[UUID]",
+        "name": "fmo-coding-combo",
+        "models": [
+          {
+            "id": "fmo-coding-combo-model-1-oc-big-pickle",
+            "kind": "model",
+            "model": "oc/big-pickle",
+            "providerId": "oc",
+            "weight": 0
+          }
+        ],
+        "strategy": "priority",
+        "config": {},
+        "isHidden": false,
+        "sortOrder": 3,
+        "createdAt": "2026-06-21T12:44:44.000Z",
+        "updatedAt": "2026-06-21T12:45:11.000Z",
+        "version": 2
+      },
+      {
+        "id": "[UUID]",
+        "name": "fmo-title-generation",
+        "models": [
+          {
+            "id": "fmo-title-generation-model-1-oc-big-pickle",
+            "kind": "model",
+            "model": "oc/big-pickle",
+            "providerId": "oc",
+            "weight": 0
+          }
+        ],
+        "strategy": "priority",
+        "config": {},
+        "isHidden": false,
+        "sortOrder": 4,
+        "createdAt": "2026-06-21T12:47:20.000Z",
+        "updatedAt": "2026-06-21T12:47:20.000Z",
+        "version": 2
+      },
+      {
+        "id": "[UUID]",
+        "name": "fmo-vision",
+        "models": [
+          {
+            "id": "fmo-vision-model-1-oc-big-pickle",
+            "kind": "model",
+            "model": "oc/big-pickle",
+            "providerId": "oc",
+            "weight": 0
+          }
+        ],
+        "strategy": "priority",
+        "config": {},
+        "isHidden": false,
+        "sortOrder": 5,
+        "createdAt": "2026-06-21T12:47:20.000Z",
+        "updatedAt": "2026-06-21T12:47:20.000Z",
+        "version": 2
+      },
+      {
+        "id": "[UUID]",
+        "name": "fmo-compression",
+        "models": [
+          {
+            "id": "fmo-compression-model-1-oc-big-pickle",
+            "kind": "model",
+            "model": "oc/big-pickle",
+            "providerId": "oc",
+            "weight": 0
+          }
+        ],
+        "strategy": "priority",
+        "config": {},
+        "isHidden": false,
+        "sortOrder": 6,
+        "createdAt": "2026-06-21T12:47:20.000Z",
+        "updatedAt": "2026-06-21T12:47:20.000Z",
+        "version": 2
+      },
+      {
+        "id": "[UUID]",
+        "name": "fmo-approval",
+        "models": [
+          {
+            "id": "fmo-approval-model-1-oc-big-pickle",
+            "kind": "model",
+            "model": "oc/big-pickle",
+            "providerId": "oc",
+            "weight": 0
+          }
+        ],
+        "strategy": "priority",
+        "config": {},
+        "isHidden": false,
+        "sortOrder": 7,
+        "createdAt": "2026-06-21T12:47:20.000Z",
+        "updatedAt": "2026-06-21T12:47:20.000Z",
+        "version": 2
+      },
+      {
+        "id": "[UUID]",
+        "name": "fmo-skills",
+        "models": [
+          {
+            "id": "fmo-skills-model-1-oc-big-pickle",
+            "kind": "model",
+            "model": "oc/big-pickle",
+            "providerId": "oc",
+            "weight": 0
+          }
+        ],
+        "strategy": "priority",
+        "config": {},
+        "isHidden": false,
+        "sortOrder": 9,
+        "createdAt": "2026-06-21T12:47:20.000Z",
+        "updatedAt": "2026-06-21T12:47:20.000Z",
+        "version": 2
+      },
+      {
+        "id": "[UUID]",
+        "name": "fmo-mcp",
+        "models": [
+          {
+            "id": "fmo-mcp-model-1-oc-big-pickle",
+            "kind": "model",
+            "model": "oc/big-pickle",
+            "providerId": "oc",
+            "weight": 0
+          }
+        ],
+        "strategy": "priority",
+        "config": {},
+        "isHidden": false,
+        "sortOrder": 10,
+        "createdAt": "2026-06-21T12:47:20.000Z",
+        "updatedAt": "2026-06-21T12:47:20.000Z",
+        "version": 2
+      },
+      {
+        "id": "[UUID]",
+        "name": "fmo-triage-specifier",
+        "models": [
+          {
+            "id": "fmo-triage-specifier-model-1-oc-big-pickle",
+            "kind": "model",
+            "model": "oc/big-pickle",
+            "providerId": "oc",
+            "weight": 0
+          }
+        ],
+        "strategy": "priority",
+        "config": {},
+        "isHidden": false,
+        "sortOrder": 11,
+        "createdAt": "2026-06-21T12:47:20.000Z",
+        "updatedAt": "2026-06-21T12:47:20.000Z",
+        "version": 2
+      },
+      {
+        "id": "[UUID]",
+        "name": "fmo-kanban-decomposer",
+        "models": [
+          {
+            "id": "fmo-kanban-decomposer-model-1-oc-big-pickle",
+            "kind": "model",
+            "model": "oc/big-pickle",
+            "providerId": "oc",
+            "weight": 0
+          }
+        ],
+        "strategy": "priority",
+        "config": {},
+        "isHidden": false,
+        "sortOrder": 12,
+        "createdAt": "2026-06-21T12:47:20.000Z",
+        "updatedAt": "2026-06-21T12:47:20.000Z",
+        "version": 2
+      },
+      {
+        "id": "[UUID]",
+        "name": "fmo-profile-describer",
+        "models": [
+          {
+            "id": "fmo-profile-describer-model-1-oc-big-pickle",
+            "kind": "model",
+            "model": "oc/big-pickle",
+            "providerId": "oc",
+            "weight": 0
+          }
+        ],
+        "strategy": "priority",
+        "config": {},
+        "isHidden": false,
+        "sortOrder": 13,
+        "createdAt": "2026-06-21T12:47:20.000Z",
+        "updatedAt": "2026-06-21T12:47:20.000Z",
+        "version": 2
+      },
+      {
+        "id": "[UUID]",
+        "name": "fmo-curator",
+        "models": [
+          {
+            "id": "fmo-curator-model-1-oc-big-pickle",
+            "kind": "model",
+            "model": "oc/big-pickle",
+            "providerId": "oc",
+            "weight": 0
+          }
+        ],
+        "strategy": "priority",
+        "config": {},
+        "isHidden": false,
+        "sortOrder": 14,
+        "createdAt": "2026-06-21T12:47:20.000Z",
+        "updatedAt": "2026-06-21T12:47:20.000Z",
+        "version": 2
+      }
+    ]
+  }
+}

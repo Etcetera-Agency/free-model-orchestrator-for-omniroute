@@ -137,6 +137,22 @@ def test_aa_subscore_missing_metric_redistributes_and_all_missing_unknown():
     assert unknown.unknown is True
 
 
+@pytest.mark.spec("role-scorer::Router skips AA quality scoring")
+def test_router_skips_aa_quality_scoring_and_uncertainty_penalty():
+    score = aa_subscore(
+        {},
+        weights={"intelligence_index": 1},
+        percentiles={"intelligence_index": (0, 100)},
+        is_router=True,
+    )
+    result = score_endpoint({"benchmark_fit": 1, "uncertainty": 1}, is_router=True)
+
+    assert score.value is None
+    assert score.uncertainty_penalty == 0
+    assert result.total == 0
+    assert result.components == {}
+
+
 @pytest.mark.spec("role-scorer::Missing metric remains missing")
 def test_normalize_degenerate_percentiles_is_zero():
     assert _normalize(50, 100, 100) == 0.0
@@ -183,13 +199,35 @@ def test_context_hard_filter_unknown_override_and_no_bonus():
 
 
 @pytest.mark.spec("quality-gate::Below the gate")
+@pytest.mark.spec("quality-gate::Endpoint above the band is excluded")
 @pytest.mark.spec("quality-gate::Missing gate metric")
 @pytest.mark.spec("quality-gate::Major index change")
 def test_quality_gate_hard_prefilter_unverifiable_and_index_change():
     assert evaluate_quality_gate({"agentic_index": 30}, metric="agentic_index", value=45, index_version="v1", current_version="v1").eligible is False
+    above = evaluate_quality_gate({"intelligence_index": 75}, metric="intelligence_index", value=40, maximum_value=60, index_version="v1", current_version="v1")
+    inside = evaluate_quality_gate({"intelligence_index": 50}, metric="intelligence_index", value=40, maximum_value=60, index_version="v1", current_version="v1")
     missing = evaluate_quality_gate({}, metric="coding_index", value=10, index_version="v1", current_version="v1")
     changed = evaluate_quality_gate({"coding_index": 50}, metric="coding_index", value=10, index_version="v1", current_version="v2")
+    assert above.status == "above_band"
+    assert above.eligible is False
+    assert inside.eligible is True
     assert missing.status == "unverifiable"
     assert missing.eligible is False
     assert changed.status == "needs_recalibration"
     assert changed.apply_new_plan is False
+
+
+@pytest.mark.spec("quality-gate::Router is exempt from the band")
+def test_router_missing_quality_metric_is_exempt_from_quality_gate():
+    decision = evaluate_quality_gate(
+        {},
+        metric="coding_index",
+        value=10,
+        index_version="v1",
+        current_version="v1",
+        allow_unverified=False,
+        is_router=True,
+    )
+
+    assert decision.eligible is True
+    assert decision.status == "router_tail"

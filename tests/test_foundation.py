@@ -5,7 +5,13 @@ import httpx
 import pytest
 
 from fmo.apply_guard import ApplyPreconditions, check_apply_preconditions
-from fmo.config import StartupConfig, validate_startup, validate_static_config
+from fmo.config import (
+    DEFAULT_AUTO_ROUTER_TAIL,
+    StartupConfig,
+    is_configured_router,
+    validate_startup,
+    validate_static_config,
+)
 from fmo.db import MigrationRunner
 from fmo.idempotency import stable_hash
 from fmo.llm_runtime import LlmSiteConfig, assemble_prompt, redact_secrets
@@ -192,6 +198,34 @@ def test_omniroute_client_post_carries_idempotency_key_and_is_not_retried():
     assert headers["X-Request-Id"]
 
 
+@pytest.mark.spec("combo-applier::Apply writes existing combos through management API bridge")
+def test_omniroute_client_put_carries_idempotency_key_and_is_not_retried():
+    transport = FakeTransport([FakeResponse(503, {"error": "busy"})])
+    client = OmniRouteClient(base_url="https://omniroute.test/api", transport=transport, max_get_retries=3)
+
+    with pytest.raises(RuntimeError, match="HTTP 503"):
+        client.put("/combos/fmo-role", {"models": []}, idempotency_key="apply:fmo-role:abc")
+
+    assert len(transport.requests) == 1
+    request = transport.requests[0]
+    assert request["method"] == "PUT"
+    assert request["headers"]["Idempotency-Key"] == "apply:fmo-role:abc"
+    assert request["headers"]["X-Request-Id"]
+
+
+@pytest.mark.spec("omniroute-client::Bridge preserves management auth failures")
+def test_omniroute_client_surfaces_combo_management_auth_failure():
+    transport = FakeTransport([FakeResponse(403, {"error": "forbidden"})])
+    client = OmniRouteClient(base_url="https://omniroute.test", api_key="bad-key", transport=transport)
+
+    with pytest.raises(RuntimeError, match="HTTP 403"):
+        client.get("/api/combos")
+
+    request = transport.requests[0]
+    assert request["url"] == "https://omniroute.test/api/combos"
+    assert request["headers"]["Authorization"] == "Bearer bad-key"
+
+
 @pytest.mark.spec("omniroute-client::Invalid Retry-After")
 @pytest.mark.parametrize("value", ["", "abc", "-2", None])
 def test_retry_after_invalid_empty_nonnumeric_or_negative_is_zero(value):
@@ -272,6 +306,29 @@ def test_static_config_rejects_bad_omniroute_url_scheme_or_empty(omniroute_url):
 def test_static_config_rejects_missing_database_url():
     with pytest.raises(ValueError, match="DATABASE_URL"):
         validate_static_config(valid_startup_config(database_url=None))
+
+
+@pytest.mark.spec("quota-manager::Tokens-per-request config validated")
+def test_static_config_rejects_non_positive_tokens_per_request():
+    with pytest.raises(ValueError, match="TOKENS_PER_REQUEST"):
+        validate_static_config(valid_startup_config(tokens_per_request=0))
+
+
+@pytest.mark.spec("role-scorer::Configured router is recognized")
+@pytest.mark.spec("role-scorer::Unlisted model is not a router")
+@pytest.mark.spec("role-scorer::Child router is independent of its parent")
+def test_auto_router_tail_defaults_and_membership_matching():
+    assert [entry.id for entry in DEFAULT_AUTO_ROUTER_TAIL] == [
+        "mimocode/mimo-auto",
+        "kilo-auto/free",
+        "openrouter/free",
+    ]
+    assert DEFAULT_AUTO_ROUTER_TAIL[0].input == ("text",)
+    assert DEFAULT_AUTO_ROUTER_TAIL[2].input == ("text", "image")
+    assert is_configured_router("OPENROUTER/FREE") is True
+    assert is_configured_router("provider:openrouter/free") is True
+    assert is_configured_router("openrouter/auto") is False
+    assert is_configured_router("mcode/mimo-auto") is False
 
 
 @pytest.mark.spec("environment-and-connections::Invalid inventory mode")

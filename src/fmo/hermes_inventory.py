@@ -27,6 +27,15 @@ class Inventory:
 
 
 @dataclass(frozen=True)
+class ProfileSlots:
+    name: str
+    path: str
+    gateway_running: bool
+    main_combo: str | None
+    auxiliary: dict[str, Any]
+
+
+@dataclass(frozen=True)
 class HermesInventoryError(Exception):
     source: str
     reason: str
@@ -77,10 +86,6 @@ def normalize_http_inventory(payload: dict, *, env: dict[str, str]) -> Inventory
     if not env.get("HERMES_INVENTORY_URL"):
         raise ValueError("HERMES_INVENTORY_URL is required")
     return _normalize(payload)
-
-
-def should_run_full_inventory(*, observed_role: str, known_roles: set[str]) -> str | None:
-    return "full" if observed_role not in known_roles else None
 
 
 def inventory_diff(old: Inventory, new: Inventory) -> InventoryDiff:
@@ -141,7 +146,7 @@ def _normalize(payload: dict) -> Inventory:
 # ---------------------------------------------------------------------------
 # Real Hermes source surfaces
 #
-# Shapes below mirror NousResearch/hermes-agent @ tag v2026.6.5 exactly:
+# Shapes below mirror NousResearch/hermes-agent @ tag v2026.6.19 exactly:
 #   - cron jobs:    ~/.hermes/cron/jobs.json -> {"jobs": [<job>], "updated_at"}
 #                   each job: cron/jobs.py:create_job (schedule = parse_schedule)
 #   - webhooks:     ~/.hermes/webhook_subscriptions.json -> {"<route>": <route>}
@@ -249,18 +254,36 @@ def parse_profiles(payload: Any, *, demand_by_role: dict[str, float] | None = No
     profiles = payload.get("profiles", []) if isinstance(payload, dict) else (payload or [])
     consumers = []
     for profile in profiles:
-        role = _combo_role(profile.get("model"))  # profile config model is the OmniRoute combo
+        slots = _profile_slots_from_record(profile)
         is_service = bool(profile.get("gateway_running"))
-        consumers.append(
-            Consumer(
-                role_id=role,
-                consumer_type="service" if is_service else "agent_profile",
-                consumer=profile["name"],
-                cadence="continuous" if is_service else "manual",
-                calls_per_run=demand_by_role.get(role, BOOTSTRAP_CALLS_PER_RUN),
+        if slots.main_combo is not None:
+            role = _combo_role(slots.main_combo)
+            consumers.append(
+                Consumer(
+                    role_id=role,
+                    consumer_type="service" if is_service else "agent_profile",
+                    consumer=profile["name"],
+                    cadence="continuous" if is_service else "manual",
+                    calls_per_run=demand_by_role.get(role, BOOTSTRAP_CALLS_PER_RUN),
+                )
+            )
+        consumers.extend(
+            _auxiliary_consumers(
+                owner=profile["name"],
+                main_combo=slots.main_combo,
+                auxiliary=slots.auxiliary,
+                demand_by_role=demand_by_role,
             )
         )
     return consumers
+
+
+# AICODE-NOTE: ProfileInfo only enumerates name/path/gateway state; model slots
+# come from each profile's config.yaml so auxiliary slots do not disappear.
+def read_profile_slots(profile_info: dict[str, Any]) -> ProfileSlots:
+    config_path = Path(profile_info["path"]) / "config.yaml"
+    config = _read_yaml_file(config_path) or {}
+    return _profile_slots_from_config(profile_info, config)
 
 
 def parse_gateway_services(payload: Any, *, demand_by_role: dict[str, float] | None = None) -> list[Consumer]:
@@ -269,6 +292,7 @@ def parse_gateway_services(payload: Any, *, demand_by_role: dict[str, float] | N
     default_model = _combo_role(config.get("model"))
     platforms = (config.get("gateway") or {}).get("platforms") or {}
     consumers = []
+    gateway_auxiliary = _auxiliary_mapping(config.get("auxiliary"))
     for name, platform in sorted(platforms.items()):
         if not platform.get("enabled"):
             continue
@@ -282,7 +306,56 @@ def parse_gateway_services(payload: Any, *, demand_by_role: dict[str, float] | N
                 calls_per_run=demand_by_role.get(role, BOOTSTRAP_CALLS_PER_RUN),
             )
         )
+        auxiliary = {**gateway_auxiliary, **_auxiliary_mapping(platform.get("auxiliary"))}
+        consumers.extend(
+            _auxiliary_consumers(
+                owner=f"gateway:{name}",
+                main_combo=role,
+                auxiliary=auxiliary,
+                demand_by_role=demand_by_role,
+            )
+        )
     return consumers
+
+
+def _auxiliary_consumers(
+    *,
+    owner: str,
+    main_combo: str | None,
+    auxiliary: dict[str, Any],
+    demand_by_role: dict[str, float],
+) -> list[Consumer]:
+    consumers = []
+    for slot, config in sorted(auxiliary.items()):
+        combo = _resolved_aux_combo(config, main_combo)
+        if combo is None:
+            continue
+        role = _combo_role(combo)
+        consumers.append(
+            Consumer(
+                role_id=role,
+                consumer_type="auxiliary",
+                consumer=f"{owner}:{slot}",
+                cadence="auxiliary",
+                calls_per_run=demand_by_role.get(role, BOOTSTRAP_CALLS_PER_RUN),
+            )
+        )
+    return consumers
+
+
+def _resolved_aux_combo(config: Any, main_combo: str | None) -> str | None:
+    if not isinstance(config, dict):
+        return None
+    if str(config.get("provider") or "").lower() == "auto":
+        return None
+    model = config.get("model")
+    if not model or model == main_combo:
+        return None
+    return str(model)
+
+
+def _auxiliary_mapping(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
 
 
 def build_hermes_inventory(
@@ -389,14 +462,53 @@ def read_gateway_config(home: str | Path) -> dict[str, Any] | None:
 
 
 def _profile_record(name: str, path: Path, config: dict[str, Any], *, is_default: bool) -> dict[str, Any]:
-    return {
+    profile_info = {
         "name": name,
         "path": str(path),
         "is_default": is_default,
         "gateway_running": False,
-        "model": config.get("model"),
         "provider": config.get("provider"),
     }
+    slots = _profile_slots_from_config(profile_info, config)
+    return {
+        **profile_info,
+        "main_combo": slots.main_combo,
+        "auxiliary": slots.auxiliary,
+    }
+
+
+def _profile_slots_from_record(profile: dict[str, Any]) -> ProfileSlots:
+    if "main_combo" in profile:
+        return ProfileSlots(
+            name=str(profile["name"]),
+            path=str(profile.get("path", "")),
+            gateway_running=bool(profile.get("gateway_running")),
+            main_combo=profile.get("main_combo"),
+            auxiliary=profile.get("auxiliary") or {},
+        )
+    return read_profile_slots(profile)
+
+
+def _profile_slots_from_config(profile_info: dict[str, Any], config: dict[str, Any]) -> ProfileSlots:
+    auxiliary = config.get("auxiliary") or {}
+    if not isinstance(auxiliary, dict):
+        raise HermesInventoryError("filesystem", "invalid_config", str(Path(profile_info["path"]) / "config.yaml"))
+    return ProfileSlots(
+        name=str(profile_info["name"]),
+        path=str(profile_info["path"]),
+        gateway_running=bool(profile_info.get("gateway_running")),
+        main_combo=_main_combo_from_config(config.get("model")),
+        auxiliary=auxiliary,
+    )
+
+
+def _main_combo_from_config(model: Any) -> str | None:
+    if isinstance(model, dict):
+        value = model.get("default")
+        return str(value) if value else None
+    if isinstance(model, str) and model:
+        return model
+    return None
 
 
 def _read_yaml_file(path: Path) -> dict[str, Any] | None:

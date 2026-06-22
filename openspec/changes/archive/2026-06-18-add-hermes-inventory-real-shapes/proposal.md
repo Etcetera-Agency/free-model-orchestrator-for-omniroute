@@ -5,7 +5,7 @@
 The TODO defers realistic Hermes inventory ingestion. The previous parser
 consumed a fabricated `{"roles": [...]}` payload that does not match any real
 Hermes artifact. The authoritative shapes live in `NousResearch/hermes-agent`
-(tag `v2026.6.5`).
+(tag `v2026.6.19`).
 
 ## What Changes
 

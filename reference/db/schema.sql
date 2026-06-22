@@ -254,6 +254,8 @@ CREATE TABLE roles (
   -- Optional single minimum quality gate per role (v3.10).
   minimum_quality_metric text,
   minimum_quality_value numeric,
+  maximum_quality_metric text,
+  maximum_quality_value numeric,
   quality_gate_index_version text,
   -- Dynamic role lifecycle (v3.19).
   role_lifecycle_status text NOT NULL DEFAULT 'active'
@@ -275,6 +277,14 @@ CREATE TABLE roles (
   CONSTRAINT roles_minimum_quality_metric_check CHECK (
     minimum_quality_metric IS NULL
     OR minimum_quality_metric IN (
+      'intelligence_index',
+      'coding_index',
+      'agentic_index'
+    )
+  ),
+  CONSTRAINT roles_maximum_quality_metric_check CHECK (
+    maximum_quality_metric IS NULL
+    OR maximum_quality_metric IN (
       'intelligence_index',
       'coding_index',
       'agentic_index'

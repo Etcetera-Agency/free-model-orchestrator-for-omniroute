@@ -6,13 +6,15 @@
 
 ## Read current state
 
-Получить combo через `/api/combos*`.
+Получить combo через management API:
 
-Поскольку документация обозначает семейство endpoints обобщённо, до реализации нужно:
+```text
+GET /api/combos
+GET /api/combos/{id}
+```
 
-1. снять fixture текущей OmniRoute версии;
-2. зафиксировать list/get/create/update/delete payload;
-3. добавить compatibility adapter.
+FMO не использует `/v1/combos`: это public projection, а не operator-owned
+management state.
 
 ## Desired combo naming
 
@@ -42,11 +44,14 @@ fmo-role-research-scout
 2. повторно прочитать current state;
 3. проверить, что hash не изменился;
 4. сохранить snapshot в PostgreSQL;
-5. применить create/update;
+5. применить update через `PUT /api/combos/{id}`;
 6. прочитать combo обратно;
 7. сравнить с desired;
 8. выполнить smoke test через combo model name;
 9. commit change record.
+
+FMO не создаёт и не удаляет combo. Если desired `fmo-*` combo отсутствует в
+live set, apply reports `unmanaged_combo` and skips it.
 
 ## Smoke test
 
@@ -55,6 +60,8 @@ POST /v1/chat/completions
 model = fmo-role-...
 X-OmniRoute-No-Cache = true
 ```
+
+`/api/combos/test` запрещён для FMO smoke path.
 
 Проверить:
 

@@ -1,13 +1,10 @@
 # OpenSpec TODO
 
-No deferred review follow-up work discovered.
+## Deferred follow-up
 
-## Active proposal slices (pending TDD implementation)
-
-Each slice carries uncovered scenarios listed in
-`tests/spec_coverage_pending.txt`. Bind a test, drop the matching line, then
-archive when implemented.
-
+- OmniRoute API bridge still returns 404 for `/api/combos*` on
+  `127.0.0.1:20129`; keep tracked until the live bridge exposes combo
+  management routes.
 
 ## Dropped (not needed for project essence)
 

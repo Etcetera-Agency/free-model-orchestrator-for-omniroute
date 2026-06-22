@@ -36,6 +36,7 @@ COMMANDS = [
     "serve",
     "explain-endpoint",
     "explain-role",
+    "normalize-profiles",
 ]
 
 EXIT_CODES = {
@@ -62,6 +63,7 @@ PipelineRunner = Callable[[str, argparse.Namespace], CliResult]
 DiagnosticsReader = Callable[[str, str], str]
 SchedulerRunner = Callable[[str], CliResult]
 AaIndexHandler = Callable[[str, argparse.Namespace], CliResult]
+ProfileNormalizer = Callable[[argparse.Namespace], CliResult]
 
 
 PIPELINE_COMMANDS = {
@@ -106,10 +108,13 @@ def run_cli(
     diagnostics_reader: DiagnosticsReader | None = None,
     scheduler_runner: SchedulerRunner | None = None,
     aa_index_handler: AaIndexHandler | None = None,
+    profile_normalizer: ProfileNormalizer | None = None,
 ) -> CliResult:
     args = parse_args(argv)
     if args.command == "aa-index":
         return _run_aa_index(args, aa_index_handler)
+    if args.command == "normalize-profiles":
+        return _run_profile_normalization(args, profile_normalizer)
     if args.command == "apply" and not preconditions_ok:
         return CliResult(exit_code=EXIT_CODES["unsafe_to_apply"], changed=False)
     if args.command == "serve":
@@ -152,6 +157,7 @@ def _dispatch_cli(argv: list[str], preconditions_ok: bool, config: StartupConfig
         diagnostics_reader=runtime.read_diagnostics,
         scheduler_runner=runtime.run_scheduler_once,
         aa_index_handler=runtime.run_aa_index,
+        profile_normalizer=runtime.normalize_profiles,
     ).exit_code
 
 
@@ -159,6 +165,12 @@ def _run_aa_index(args: argparse.Namespace, handler: AaIndexHandler | None) -> C
     if handler is None:
         return CliResult(exit_code=EXIT_CODES["validation_failed"], changed=False, error_reason="aa_index_handler_required")
     return handler(args.aa_command, args)
+
+
+def _run_profile_normalization(args: argparse.Namespace, normalizer: ProfileNormalizer | None) -> CliResult:
+    if normalizer is None:
+        return CliResult(exit_code=EXIT_CODES["validation_failed"], changed=False, error_reason="profile_normalizer_required")
+    return normalizer(args)
 
 
 def _run_diagnostics(args: argparse.Namespace, diagnostics_reader: DiagnosticsReader | None) -> CliResult:

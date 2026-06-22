@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-06-18T07:36:26.488Z",
+  "captured_at": "2026-06-22T13:23:36.393Z",
   "source": "omniroute-shlink-20129",
   "name": "omniroute_v1_search_providers",
   "method": "GET",
@@ -11,7 +11,7 @@
     "connection": "keep-alive",
     "content-security-policy": "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; media-src 'self' data: blob:; connect-src 'self' http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:* https: wss:; worker-src 'self' blob:; manifest-src 'self'",
     "content-type": "application/json",
-    "date": "Thu, 18 Jun 2026 07:36:11 GMT",
+    "date": "Mon, 22 Jun 2026 13:23:35 GMT",
     "keep-alive": "timeout=5",
     "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=()",
     "referrer-policy": "strict-origin-when-cross-origin",
@@ -29,7 +29,7 @@
       {
         "id": "serper-search",
         "object": "search_provider",
-        "created": 1781768171,
+        "created": 1782134615,
         "name": "Serper Search",
         "search_types": [
           "web",
@@ -39,7 +39,7 @@
       {
         "id": "brave-search",
         "object": "search_provider",
-        "created": 1781768171,
+        "created": 1782134615,
         "name": "Brave Search",
         "search_types": [
           "web",
@@ -49,7 +49,7 @@
       {
         "id": "perplexity-search",
         "object": "search_provider",
-        "created": 1781768171,
+        "created": 1782134615,
         "name": "Perplexity Search",
         "search_types": [
           "web"
@@ -58,7 +58,7 @@
       {
         "id": "exa-search",
         "object": "search_provider",
-        "created": 1781768171,
+        "created": 1782134615,
         "name": "Exa Search",
         "search_types": [
           "web",
@@ -68,7 +68,7 @@
       {
         "id": "tavily-search",
         "object": "search_provider",
-        "created": 1781768171,
+        "created": 1782134615,
         "name": "Tavily Search",
         "search_types": [
           "web",
@@ -78,7 +78,7 @@
       {
         "id": "google-pse-search",
         "object": "search_provider",
-        "created": 1781768171,
+        "created": 1782134615,
         "name": "Google Programmable Search",
         "search_types": [
           "web",
@@ -88,7 +88,7 @@
       {
         "id": "linkup-search",
         "object": "search_provider",
-        "created": 1781768171,
+        "created": 1782134615,
         "name": "Linkup Search",
         "search_types": [
           "web"
@@ -97,7 +97,7 @@
       {
         "id": "searchapi-search",
         "object": "search_provider",
-        "created": 1781768171,
+        "created": 1782134615,
         "name": "SearchAPI",
         "search_types": [
           "web",
@@ -107,7 +107,7 @@
       {
         "id": "youcom-search",
         "object": "search_provider",
-        "created": 1781768171,
+        "created": 1782134615,
         "name": "You.com Search",
         "search_types": [
           "web",
@@ -117,7 +117,7 @@
       {
         "id": "searxng-search",
         "object": "search_provider",
-        "created": 1781768171,
+        "created": 1782134615,
         "name": "SearXNG Search",
         "search_types": [
           "web",
@@ -127,7 +127,7 @@
       {
         "id": "ollama-search",
         "object": "search_provider",
-        "created": 1781768171,
+        "created": 1782134615,
         "name": "Ollama Search",
         "search_types": [
           "web"
@@ -136,7 +136,7 @@
       {
         "id": "zai-search",
         "object": "search_provider",
-        "created": 1781768171,
+        "created": 1782134615,
         "name": "Z.AI Coding Plan Search",
         "search_types": [
           "web"
@@ -145,7 +145,7 @@
       {
         "id": "parallel-search",
         "object": "search_provider",
-        "created": 1781768171,
+        "created": 1782134615,
         "name": "Parallel Search",
         "search_types": [
           "web",
@@ -155,7 +155,7 @@
       {
         "id": "firecrawl-search",
         "object": "search_provider",
-        "created": 1781768171,
+        "created": 1782134615,
         "name": "Firecrawl Search",
         "search_types": [
           "web",
@@ -165,7 +165,7 @@
       {
         "id": "gemini-grounded-search",
         "object": "search_provider",
-        "created": 1781768171,
+        "created": 1782134615,
         "name": "Gemini Grounded Search",
         "search_types": [
           "web"

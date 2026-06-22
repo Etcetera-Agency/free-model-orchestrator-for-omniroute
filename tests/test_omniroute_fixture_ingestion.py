@@ -14,10 +14,11 @@ from fmo.accounts import group_quota_pools, usable_capacity
 from fmo.omniroute import OmniRouteClient
 from fmo.registry import sync_free_registry
 
-from _fixtures import fixture_body
+from _fixtures import fixture_body, load_fixture
 
 # OmniRoute management path -> recorded fixture name.
 PATH_FIXTURES = {
+    "/api/combos": "omniroute_api_combos",
     "/api/providers": "omniroute_api_providers",
     "/api/free-models": "omniroute_api_free_models",
     "/api/free-provider-rankings": "omniroute_api_free_provider_rankings",
@@ -96,6 +97,34 @@ def test_rate_limits_and_rankings_fixtures_have_expected_shape(client):
     ranking = rankings["rankings"][0]
     assert {"id", "name", "topModel", "averageScore"} <= set(ranking)
     assert "modelId" in ranking["topModel"]
+
+
+@pytest.mark.spec("combo-applier::Non-existent combo is not created")
+@pytest.mark.spec("omniroute-client::Bridge exposes management combo routes")
+def test_live_combos_fixture_records_seeded_operator_state(client):
+    recording = load_fixture("omniroute_api_combos")
+    payload = client.get("/api/combos")
+
+    assert recording["status"] == 200
+    assert recording["path"] == "/api/combos"
+    assert recording["headers"]["x-omniroute-route-class"] == "MANAGEMENT"
+    combos = {combo["name"]: combo for combo in payload["combos"]}
+    assert set(combos) == {
+        "fmo-chat-combo",
+        "fmo-research-combo",
+        "fmo-coding-combo",
+        "fmo-title-generation",
+        "fmo-vision",
+        "fmo-compression",
+        "fmo-approval",
+        "fmo-skills",
+        "fmo-mcp",
+        "fmo-triage-specifier",
+        "fmo-kanban-decomposer",
+        "fmo-profile-describer",
+        "fmo-curator",
+    }
+    assert all(combo["models"][0]["model"] == "oc/big-pickle" for combo in combos.values())
 
 
 @pytest.mark.spec("omniroute-client::Module needs OmniRoute data")

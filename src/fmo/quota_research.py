@@ -12,6 +12,10 @@ from fmo.omniroute import OmniRouteRequestError
 
 VALID_METRICS = {"requests", "tokens"}
 VALID_WINDOWS = {"minute", "hour", "day", "month"}
+# AICODE-NOTE: no-auth aliases are shared quota/model pools, not independent
+# capacity; missing sibling evidence must stay inactive.
+NOAUTH_QUOTA_ALIASES = {"opencode": "opencode-zen"}
+NOAUTH_CALIBRATION_ACTION = "place_first_in_combo_and_observe_omniroute_token_usage"
 
 
 @dataclass(frozen=True)
@@ -38,6 +42,32 @@ class ActiveQuotaRule:
     activated_by: str
     capacity_class: str
     safe_mode: bool
+    axes: tuple[QuotaClaim, ...] = ()
+
+
+@dataclass(frozen=True)
+class NoAuthQuotaResolution:
+    provider: str
+    model_id: str
+    status: str
+    usable: bool
+    rule: ActiveQuotaRule | None = None
+    quota_source_provider: str | None = None
+    model_source_provider: str | None = None
+    shared_with: str | None = None
+    model_ids: tuple[str, ...] = ()
+    independence_status: str = "unknown"
+    counted_as_independent: bool = False
+    action: str | None = None
+
+
+@dataclass(frozen=True)
+class NoAuthCalibrationEvidence:
+    observed_tokens: float | None = None
+    inferred_limit: float | None = None
+    reset_window: str | None = None
+    hard_stop: bool | None = None
+    evidence: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -90,11 +120,12 @@ def research_quota_rule(
     query = build_quota_query(provider, model_id, today=today)
     try:
         snapshot = run_quota_search(client, provider=provider, model_id=model_id, query=query)
-        claim = _extract_claim(snapshot, instructor_call=instructor_call)
+        claims = _extract_claims(snapshot, instructor_call=instructor_call)
         rule = activate_summary_rule(
-            claim,
+            claims[0],
             summary_confidence_cap=summary_confidence_cap,
             previous_limit=previous_limit,
+            axes=claims,
         )
     except QuotaResearchError as exc:
         return QuotaResearchResult(snapshot=None, rule=None, error=exc)
@@ -107,13 +138,126 @@ def research_quota_rule(
     return QuotaResearchResult(snapshot=snapshot, rule=rule)
 
 
-def _extract_claim(snapshot: SearchSnapshot, *, instructor_call) -> QuotaClaim:
+def resolve_noauth_quota(
+    *,
+    provider: str,
+    model_id: str,
+    quota_rules: dict[tuple[str, str], ActiveQuotaRule],
+    provider_models: dict[str, tuple[str, ...]],
+    aliases: dict[str, str] | None = None,
+) -> NoAuthQuotaResolution:
+    aliases = NOAUTH_QUOTA_ALIASES if aliases is None else aliases
+    alias_provider = aliases.get(provider)
+    if alias_provider:
+        rule = quota_rules.get((alias_provider, model_id))
+        if rule is None:
+            return _calibration_required(provider=provider, model_id=model_id, status="alias_quota_missing")
+        return NoAuthQuotaResolution(
+            provider=provider,
+            model_id=model_id,
+            status="shared_capacity",
+            usable=True,
+            rule=rule,
+            quota_source_provider=alias_provider,
+            model_source_provider=alias_provider,
+            shared_with=alias_provider,
+            model_ids=provider_models.get(alias_provider, ()),
+            independence_status="assumed_shared",
+            counted_as_independent=False,
+        )
+
+    rule = quota_rules.get((provider, model_id))
+    if rule is not None:
+        return NoAuthQuotaResolution(
+            provider=provider,
+            model_id=model_id,
+            status="active",
+            usable=True,
+            rule=rule,
+            quota_source_provider=provider,
+            model_source_provider=provider,
+            model_ids=provider_models.get(provider, ()),
+            independence_status="confirmed",
+            counted_as_independent=True,
+        )
+
+    return _calibration_required(provider=provider, model_id=model_id)
+
+
+def promote_noauth_calibration(
+    *,
+    provider: str,
+    model_id: str,
+    evidence: NoAuthCalibrationEvidence,
+) -> NoAuthQuotaResolution:
+    if not _complete_calibration(evidence):
+        return _calibration_required(provider=provider, model_id=model_id)
+    claim = validate_claim(
+        QuotaClaim(
+            metric="tokens",
+            amount=float(evidence.inferred_limit),
+            window=str(evidence.reset_window),
+            evidence=list(evidence.evidence),
+            hard_stop=bool(evidence.hard_stop),
+        )
+    )
+    return NoAuthQuotaResolution(
+        provider=provider,
+        model_id=model_id,
+        status="active",
+        usable=True,
+        rule=ActiveQuotaRule(
+            claim=claim,
+            confidence=1.0,
+            activated_by="operator_observed_omniroute_usage",
+            capacity_class="calibrated",
+            safe_mode=False,
+            axes=(claim,),
+        ),
+        quota_source_provider=provider,
+        model_source_provider=provider,
+        model_ids=(model_id,),
+        independence_status="confirmed",
+        counted_as_independent=True,
+    )
+
+
+def _calibration_required(
+    *,
+    provider: str,
+    model_id: str,
+    status: str = "calibration_required",
+) -> NoAuthQuotaResolution:
+    return NoAuthQuotaResolution(
+        provider=provider,
+        model_id=model_id,
+        status=status,
+        usable=False,
+        action=NOAUTH_CALIBRATION_ACTION,
+    )
+
+
+def _complete_calibration(evidence: NoAuthCalibrationEvidence) -> bool:
+    return (
+        evidence.observed_tokens is not None
+        and evidence.observed_tokens > 0
+        and evidence.inferred_limit is not None
+        and evidence.inferred_limit > 0
+        and evidence.reset_window in VALID_WINDOWS
+        and evidence.hard_stop is True
+        and bool(evidence.evidence)
+    )
+
+
+def _extract_claims(snapshot: SearchSnapshot, *, instructor_call) -> tuple[QuotaClaim, ...]:
     if instructor_call is not None:
         try:
-            return run_quota_inspector(instructor_call, _quota_inspector_prompt(snapshot))
+            return (_capacity_claim(run_quota_inspector(instructor_call, _quota_inspector_prompt(snapshot))),)
+        except QuotaResearchError:
+            raise
         except Exception:
             pass
-    return extract_summary_claim(snapshot)
+    return extract_summary_claims(snapshot)
 
 
 def _quota_inspector_prompt(snapshot: SearchSnapshot) -> str:
@@ -127,17 +271,26 @@ def _quota_inspector_prompt(snapshot: SearchSnapshot) -> str:
 
 
 def extract_summary_claim(snapshot: SearchSnapshot) -> QuotaClaim:
-    amount = _extract_amount(snapshot.answer_text)
-    window = _extract_window(snapshot.answer_text)
+    return extract_summary_claims(snapshot)[0]
+
+
+def extract_summary_claims(snapshot: SearchSnapshot) -> tuple[QuotaClaim, ...]:
     hard_stop = "hard stop" in snapshot.answer_text.lower()
-    claim = QuotaClaim(
-        metric="requests",
-        amount=amount,
-        window=window,
-        evidence=list(snapshot.evidence_urls) or ["summary"],
-        hard_stop=hard_stop,
+    claims = tuple(
+        _capacity_claim(
+            QuotaClaim(
+                metric=metric,
+                amount=amount,
+                window=window,
+                evidence=list(snapshot.evidence_urls) or ["summary"],
+                hard_stop=hard_stop,
+            )
+        )
+        for metric, amount, window in _extract_axes(snapshot.answer_text)
     )
-    return validate_claim(claim)
+    if not claims:
+        raise QuotaResearchError("quota_research", "missing_capacity_axis")
+    return claims
 
 
 def run_quota_inspector(call_instructor, prompt: str) -> QuotaClaim:
@@ -169,6 +322,13 @@ def _complete_quota_claim(call_instructor, *, site: LlmSiteConfig, prompt: str) 
     )
 
 
+def _capacity_claim(claim: QuotaClaim) -> QuotaClaim:
+    claim = validate_claim(claim)
+    if claim.metric == "requests" and claim.window in {"minute", "hour"}:
+        raise QuotaResearchError("quota_research", "reactive_rate_gate")
+    return claim
+
+
 def validate_claim(claim: QuotaClaim) -> QuotaClaim:
     if claim.metric not in VALID_METRICS:
         raise ValueError("invalid quota metric")
@@ -182,10 +342,10 @@ def validate_claim(claim: QuotaClaim) -> QuotaClaim:
 
 
 def _extract_amount(text: str) -> float:
-    match = re.search(r"\b(\d+(?:\.\d+)?)\s+requests?\b", text, re.IGNORECASE)
+    match = re.search(r"\b(\d+(?:[,\d]*)(?:\.\d+)?)\s+(?:requests?|tokens?)\b", text, re.IGNORECASE)
     if not match:
         raise QuotaResearchError("quota_research", "missing_amount")
-    return float(match.group(1))
+    return _parse_amount(match.group(1))
 
 
 def _extract_window(text: str) -> str:
@@ -196,7 +356,39 @@ def _extract_window(text: str) -> str:
     raise QuotaResearchError("quota_research", "missing_window")
 
 
-def activate_summary_rule(claim: QuotaClaim, *, summary_confidence_cap: float, previous_limit: float | None = None) -> ActiveQuotaRule:
+def _extract_axes(text: str) -> tuple[tuple[str, float, str], ...]:
+    axes: list[tuple[str, float, str]] = []
+    pattern = re.compile(
+        r"\b(?P<amount>\d+(?:[,\d]*)(?:\.\d+)?)\s+"
+        r"(?P<metric>requests?|tokens?)\s*(?:per|/)\s*"
+        r"(?P<window>minute|hour|day|month)\b",
+        re.IGNORECASE,
+    )
+    for match in pattern.finditer(text):
+        metric = "tokens" if match.group("metric").lower().startswith("token") else "requests"
+        window = match.group("window").lower()
+        # AICODE-NOTE: sub-day request limits are reactive OmniRoute rate gates;
+        # only cumulative budgets become planning capacity axes.
+        if metric == "requests" and window in {"minute", "hour"}:
+            continue
+        axes.append((metric, _parse_amount(match.group("amount")), window))
+    if not axes:
+        _extract_amount(text)
+        _extract_window(text)
+    return tuple(axes)
+
+
+def _parse_amount(value: str) -> float:
+    return float(value.replace(",", ""))
+
+
+def activate_summary_rule(
+    claim: QuotaClaim,
+    *,
+    summary_confidence_cap: float,
+    previous_limit: float | None = None,
+    axes: tuple[QuotaClaim, ...] = (),
+) -> ActiveQuotaRule:
     validate_claim(claim)
     safe_mode = previous_limit is not None and claim.amount < previous_limit
     return ActiveQuotaRule(
@@ -205,4 +397,5 @@ def activate_summary_rule(claim: QuotaClaim, *, summary_confidence_cap: float, p
         activated_by="summary",
         capacity_class="opportunistic",
         safe_mode=safe_mode,
+        axes=tuple(validate_claim(axis) for axis in (axes or (claim,))),
     )

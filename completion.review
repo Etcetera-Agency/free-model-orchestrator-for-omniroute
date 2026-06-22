@@ -1,5 +1,23 @@
 # Completion Review
 
+- Auto-router fallback tail now has a structured ordered config, exact
+  membership matching, AA/quality-gate exemptions, and allocation appends
+  eligible routers after scored endpoints without consuming scored slots.
+- Weekly tokens-per-request recalibration now has a transaction-scoped job that
+  refines the global factor from calibration observations, recomputes only
+  self-derived capacities, and is fired by its own scheduler cron under the
+  daily run lock.
+- Quota manager now assembles research, calibrated and live quota axes into
+  request-equivalent daily binding capacity, converts live quota token totals
+  and usage, and keeps effective remaining in the same normalized unit.
+- Quota research now captures request and token axes from deterministic summaries,
+  preserves both axes on active rules, routes sub-day request rates out as
+  reactive gates, and applies the same routing to Instructor inspector claims.
+- Quota unit normalization now has explicit OpenSpec deltas for quota-manager
+  and telemetry-sync, binds conversion/config/token telemetry scenarios to
+  executable tests, captures OmniRoute analytics token counts without fabricating
+  missing values, and records future active-slice coverage in
+  `tests/spec_coverage_pending.txt` plus `openspec/TODO.md`.
 - Active implementation slices are archived: production pipeline composition,
   metadata persistence, apply-precondition derivation, and scheduler service
   entrypoint.
@@ -73,6 +91,32 @@
 - Runtime documentation checks now allow only the explicitly named active-slice
   scenario pending list, and require those remaining slices to be visible in
   `openspec/TODO.md`.
+- Hermes inventory now reads profile main model slots and raw auxiliary blocks
+  from each profile's `config.yaml`, ignoring stale list-summary model values;
+  Code Simplifier added an anchor on that source-of-truth boundary.
+- Apply now rebalances only live `fmo-` combos from the OmniRoute combo set,
+  skips absent desired combos as `unmanaged_combo`, and removes the unwired
+  unknown-role immediate inventory trigger.
+- Hermes inventory now emits non-auto profile and gateway auxiliary model slots
+  as `auxiliary` consumers, and shared-combo demand sums those slot consumers.
+- Quality gates now persist upper bounds, derive seed-anchored bands from live
+  combo seeds, widen bands to forecast demand, and order combo members weakest
+  eligible first.
+- Profile normalization now rewrites raw or missing Hermes model slots to live
+  `fmo-` combos by canonical model, falls back to the default profile combo,
+  supports dry-run reporting, backs up configs before atomic writes, and is
+  exposed through `normalize-profiles`; focused review fixed nested gateway
+  auxiliary slot writes before commit.
+- Quota research now runs only on reachable free-model changes, skips unchanged
+  free-registry snapshots without `/v1/search`, uses OmniRoute `quotaTotal` as
+  a limit hint during triggered full recalc, and deactivates lost-free models so
+  rebalance drops them while provider-model rows remain additive. Focused review
+  added the probe/quota safety stages to rebalance tests before apply.
+- New confirmed-free provider models are now additively registered in OmniRoute
+  through `POST /api/provider-models` only when their provider has an existing
+  connection and no endpoint already exists; paid, unreachable, and already-known
+  models are skipped, and an integration test covers registered models flowing
+  through scan, matching, quota, probe, scoring, and combo rebalance.
 - Multi-combo apply now persists each successful `applied` snapshot before
   moving to the next combo, restores the failed combo plus all earlier applied
   combos on later smoke failure, cleans rolled-back applied snapshots, and
@@ -109,4 +153,26 @@
   dispatches to that stage, quota-pool membership and independence status are
   persisted, rate-limit failures stay conservative, and allocation uses
   account quota pools instead of double-counting same-pool accounts.
-- Remaining deferred repo-level work: none discovered in this batch.
+- Recorded slink fixtures now cover live OmniRoute combo rows and Hermes empty
+  live state; formerly stub-heavy registration, composition, and role-lifecycle
+  tests now replay recorded OmniRoute/Hermes bodies as their base inputs, with
+  only scenario-specific overlays kept local to the test. Code Simplifier review
+  cleaned the prompt assertion formatting before commit.
+- Remaining deferred repo-level work: OmniRoute API bridge still returns 404 for
+  `/api/combos*` on `127.0.0.1:20129`; tracked in `openspec/TODO.md`.
+- No-auth quota calibration now resolves `opencode -> opencode-zen` as shared
+  quota/model capacity, keeps alias misses and unknown no-auth providers
+  inactive, and promotes only complete operator-observed OmniRoute token usage
+  evidence.
+- Hermes inventory trigger coverage now binds daily full inventory, explicit
+  manual full inventory, and the unknown-role no-inventory/no-combo guard to
+  executable scheduler tests; the matching pending allowlist entries are removed.
+- Executable-spec pending coverage is empty again after binding the no-auth
+  quota calibration scenarios.
+- Fingerprint-backed provider connections now expand into deterministic
+  per-fingerprint account scopes, persist stable account refs, parent metadata
+  and `account-fingerprint` pool membership, fan scanner endpoints out to those
+  virtual accounts, and remove the matching `account-discovery::*` pending
+  coverage entries. Targeted tests cover fixture-backed pool multiplication,
+  duplicate dedupe, missing-fingerprint shared fallback, scanner fanout,
+  persistence, allocation, and the spec coverage gate.

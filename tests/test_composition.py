@@ -1,5 +1,6 @@
 import argparse
-from datetime import datetime, timezone
+from copy import deepcopy
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -31,7 +32,8 @@ from fmo.pipeline import CANONICAL_STAGE_NAMES, PipelineRunner
 from fmo.quota_research import QuotaClaimResponse
 from fmo.registry import FreeRegistry, FreeRegistrySyncOutcome
 from fmo.smart_review import ComboReviewResponse
-from tests._stage_effects import assert_success_has_declared_effect, effectful_success
+from _fixtures import fixture_body, load_hermes_fixture
+from _stage_effects import assert_success_has_declared_effect, effectful_success
 
 
 OPENAI_CHAT_COMPLETION_BODY = {
@@ -95,13 +97,14 @@ def empty_adapters_with_stage_effects():
 
 
 def hermes_inventory_fixture():
+    cron = load_hermes_fixture("cron_jobs.json")["jobs"][0]
     return Inventory(
         consumers=[
             Consumer(
-                role_id="routing_fast",
+                role_id=str(cron["model"]),
                 consumer_type="cron_job",
-                consumer="daily-routing",
-                cadence="0 4 * * *",
+                consumer=str(cron["id"]),
+                cadence=str(cron["schedule"]["expr"]),
                 calls_per_run=12,
             )
         ]
@@ -136,10 +139,55 @@ class PipelineOpsClient(QuotaSearchClient):
         self.rollback_fails = rollback_fails
         self.get_calls = []
         self.combos = {"fmo-routing_fast": ["old-endpoint"]}
+        self.deleted_paths = []
+        self.providers_body = deepcopy(fixture_body("omniroute_api_providers"))
+        self.rate_limits_body = deepcopy(fixture_body("omniroute_api_rate_limits"))
+        self.analytics_body = deepcopy(fixture_body("omniroute_api_usage_analytics"))
+        self.quota_body = deepcopy(fixture_body("omniroute_api_usage_quota"))
+        self.providers_body.setdefault("connections", []).append(
+            {
+                "id": "conn-provider-a",
+                "provider": "provider-a",
+                "enabled": True,
+                "isActive": True,
+                "upstream_account_id": "acct-provider-a",
+                "status": "confirmed",
+                "quota": 100,
+            }
+        )
+        self.rate_limits_body.setdefault("connections", []).append(
+            {
+                "connectionId": "conn-provider-a",
+                "provider": "provider-a",
+                "enabled": True,
+                "active": True,
+                "remaining": 100,
+            }
+        )
+        self.analytics_body.setdefault("byProvider", []).append(
+            {"provider": "provider-a", "requests": 10, "successRatePct": 90, "avgLatencyMs": 120}
+        )
+        self.analytics_body.setdefault("byModel", []).append(
+            {
+                "provider": "provider-a",
+                "model": "free-chat",
+                "requests": 5,
+                "successRatePct": 100,
+                "avgLatencyMs": 80,
+            }
+        )
+        self.quota_body.setdefault("providers", []).append(
+            {
+                "provider": "provider-a",
+                "connectionId": "conn-provider-a",
+                "quotaTotal": 200_000,
+                "quotaUsed": 80_000,
+                "quotaWindow": "day",
+                "resetAt": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
+            }
+        )
 
-    def post(self, path, payload, headers=None, idempotency_key=None):
-        if path == "/v1/search":
-            return super().post(path, payload)
+    def put(self, path, payload, headers=None, idempotency_key=None):
         if path.startswith("/api/combos/"):
             combo_id = path.rsplit("/", 1)[-1]
             if self.rollback_fails and payload.get("models") == ["old-endpoint"]:
@@ -147,6 +195,13 @@ class PipelineOpsClient(QuotaSearchClient):
             self.calls.append((path, payload, headers, idempotency_key))
             self.combos[combo_id] = list(payload["models"])
             return {"ok": True}
+        raise AssertionError(f"unexpected PUT {path}")
+
+    def post(self, path, payload, headers=None, idempotency_key=None):
+        if path == "/v1/search":
+            return super().post(path, payload)
+        if path.startswith("/api/combos/"):
+            raise AssertionError("combo updates must use PUT")
         if path == "/v1/chat/completions":
             self.calls.append((path, payload, headers, idempotency_key))
             if self.smoke_status >= 400:
@@ -157,58 +212,22 @@ class PipelineOpsClient(QuotaSearchClient):
         self.calls.append((path, payload, headers, idempotency_key))
         return {"status_code": self.probe_status, "content": "ok" if self.probe_status == 200 else ""}
 
+    def delete(self, path):
+        self.deleted_paths.append(path)
+        raise AssertionError(f"unexpected DELETE {path}")
+
     def get(self, path):
         self.get_calls.append(path)
         if path == "/api/providers":
-            return {
-                "connections": [
-                    {
-                        "id": "conn-provider-a",
-                        "provider": "provider-a",
-                        "enabled": True,
-                        "upstream_account_id": "acct-provider-a",
-                        "status": "confirmed",
-                        "quota": 100,
-                    }
-                ]
-            }
+            return self.providers_body
         if path == "/api/rate-limits":
-            return {
-                "connections": [
-                    {
-                        "connectionId": "conn-provider-a",
-                        "provider": "provider-a",
-                        "enabled": True,
-                        "remaining": 100,
-                    }
-                ]
-            }
+            return self.rate_limits_body
         if path == "/api/usage/analytics":
-            return {
-                "byProvider": [{"provider": "provider-a", "requests": 10, "successRatePct": 90, "avgLatencyMs": 120}],
-                "byModel": [
-                    {
-                        "provider": "provider-a",
-                        "model": "free-chat",
-                        "requests": 5,
-                        "successRatePct": 100,
-                        "avgLatencyMs": 80,
-                    }
-                ],
-            }
+            return self.analytics_body
         if path == "/api/usage/quota":
-            return {
-                "meta": {"generatedAt": datetime.now(timezone.utc).isoformat()},
-                "providers": [
-                    {
-                        "provider": "provider-a",
-                        "connectionId": "conn-provider-a",
-                        "quotaTotal": 100,
-                        "quotaUsed": 40,
-                        "resetAt": "2026-06-21T00:00:00+00:00",
-                    }
-                ],
-            }
+            body = deepcopy(self.quota_body)
+            body.setdefault("meta", {})["generatedAt"] = datetime.now(timezone.utc).isoformat()
+            return body
         if path == "/api/combos":
             return {"combos": [{"id": combo_id, "models": models} for combo_id, models in self.combos.items()]}
         raise AssertionError(f"unexpected GET {path}")
@@ -226,13 +245,16 @@ class MultiComboOpsClient(PipelineOpsClient):
         }
         self.applied_record_seen_before_second_mutation = False
 
-    def post(self, path, payload, headers=None, idempotency_key=None):
+    def put(self, path, payload, headers=None, idempotency_key=None):
         if path.startswith("/api/combos/"):
             combo_id = path.rsplit("/", 1)[-1]
             if combo_id == "fmo-b" and payload.get("models") != self._before_models(combo_id):
                 self.applied_record_seen_before_second_mutation = self._applied_record_exists("fmo-a")
             if combo_id in self.restore_fail_for and payload.get("models") == self._before_models(combo_id):
                 raise RuntimeError("restore failed")
+        return super().put(path, payload, headers, idempotency_key)
+
+    def post(self, path, payload, headers=None, idempotency_key=None):
         if path == "/v1/chat/completions":
             combo_id = payload["model"]
             self.calls.append((path, payload, headers, idempotency_key))
@@ -360,18 +382,18 @@ class FakeInstructorClient:
         self.chat = type("Chat", (), {"completions": FakeInstructorCompletions()})()
 
 
-def seed_endpoint(repository, *, model_id="free-chat"):
+def seed_endpoint(repository, *, model_id="free-chat", provider_id="provider-a", connection_id="conn-provider-a"):
     with repository.database.transaction() as transaction:
         provider = repository.providers.upsert(
             transaction,
             omniroute_instance_id="local",
-            omniroute_provider_id="provider-a",
+            omniroute_provider_id=provider_id,
             provider_type="api",
         )
         account = repository.provider_accounts.upsert(
             transaction,
             provider_id=provider["id"],
-            omniroute_connection_id="conn-provider-a",
+            omniroute_connection_id=connection_id,
         )
         endpoint = repository.provider_endpoints.upsert(
             transaction,
@@ -382,6 +404,61 @@ def seed_endpoint(repository, *, model_id="free-chat"):
             metadata_hash=f"{model_id}:hash",
         )
     return endpoint
+
+
+def seed_free_registry_snapshot(repository, *, models, created_at):
+    payload = {
+        "free_models": {
+            "models": [
+                {"provider": provider, "modelId": model_id, "freeType": "free"}
+                for provider, model_id in models
+            ]
+        },
+        "rankings": {"providers": []},
+    }
+    with repository.database.transaction() as transaction:
+        transaction.execute(
+            """
+            INSERT INTO free_provider_registry_snapshots (
+              free_models_hash, rankings_hashes, raw_json, created_at
+            )
+            VALUES (
+              %(hash)s, '{}'::jsonb, %(payload)s, %(created_at)s
+            )
+            """,
+            {
+                "hash": f"{created_at.isoformat()}:{models}",
+                "payload": Jsonb(payload),
+                "created_at": created_at,
+            },
+        )
+        for provider, model_id in models:
+            transaction.execute(
+                """
+                INSERT INTO free_model_definitions (
+                  provider_id, provider_model_id, free_type, omniroute_pool_key,
+                  source_snapshot_id, status, last_seen_at
+                )
+                SELECT %(provider)s, %(model_id)s, 'free', %(pool_key)s,
+                       id, 'active', %(created_at)s
+                FROM free_provider_registry_snapshots
+                WHERE free_models_hash = %(hash)s
+                ON CONFLICT (provider_id, provider_model_id)
+                DO UPDATE SET
+                  free_type = EXCLUDED.free_type,
+                  omniroute_pool_key = EXCLUDED.omniroute_pool_key,
+                  source_snapshot_id = EXCLUDED.source_snapshot_id,
+                  status = EXCLUDED.status,
+                  last_seen_at = EXCLUDED.last_seen_at
+                """,
+                {
+                    "provider": provider,
+                    "model_id": model_id,
+                    "pool_key": f"{provider}:{model_id}",
+                    "hash": f"{created_at.isoformat()}:{models}",
+                    "created_at": created_at,
+                },
+            )
 
 
 def run_composed_stage(repository, stage_name, *, client=None):
@@ -415,6 +492,21 @@ def run_runtime_command(repository, client, command, **args):
     }
     values.update(args)
     return runtime.run_command(command, argparse.Namespace(**values))
+
+
+def run_rebalance_stages(repository, client):
+    stage_names = [
+        "quota-research",
+        "access-classification",
+        "probing",
+        "telemetry-sync",
+        "quota-sync",
+        "role-scoring",
+        "allocation",
+        "diff",
+        "apply",
+    ]
+    return [run_composed_stage(repository, stage_name, client=client) for stage_name in stage_names]
 
 
 def _command_for_stage(stage_name):
@@ -471,19 +563,21 @@ def seed_confirmed_llm_candidate(
     coding_index=None,
     agentic_index=None,
     aa_index_version="4.1",
+    provider_id="provider-a",
+    connection_id="pool-a",
 ):
     with repository.database.transaction() as transaction:
         canonical = repository.canonical_models.upsert(transaction, canonical_slug=model_id)
         provider = repository.providers.upsert(
             transaction,
             omniroute_instance_id="local",
-            omniroute_provider_id="provider-a",
+            omniroute_provider_id=provider_id,
             provider_type="api",
         )
         account = repository.provider_accounts.upsert(
             transaction,
             provider_id=provider["id"],
-            omniroute_connection_id="pool-a",
+            omniroute_connection_id=connection_id,
         )
         endpoint = repository.provider_endpoints.upsert(
             transaction,
@@ -710,6 +804,162 @@ def test_quota_research_missing_external_payload_fails_closed(postgres_url):
     assert result.stage_results[0]["reason"] == "missing_amount"
 
 
+@pytest.mark.spec("quota-research::No new free model skips quota research")
+@pytest.mark.spec("pipeline-orchestration::No new free model leaves quota research skipped")
+def test_quota_research_skips_when_free_registry_snapshot_is_unchanged(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    seed_endpoint(repository)
+    run_composed_stage(repository, "model-matching")
+    now = datetime.now(timezone.utc)
+    seed_free_registry_snapshot(repository, models=[("provider-a", "free-chat")], created_at=now - timedelta(days=1))
+    seed_free_registry_snapshot(repository, models=[("provider-a", "free-chat")], created_at=now)
+    client = PipelineOpsClient()
+
+    result = run_composed_stage(repository, "quota-research", client=client)
+
+    assert result.exit_code == 0
+    assert result.stage_results[0]["details"]["effect"] == "idempotent_no_change"
+    assert result.stage_results[0]["details"]["reason"] == "no_free_model_change"
+    assert not [call for call in client.calls if call[0] == "/v1/search"]
+
+
+@pytest.mark.spec("quota-research::Recalc re-searches all on new free model")
+@pytest.mark.spec("pipeline-orchestration::Quota research is triggered by new free models")
+def test_new_reachable_free_model_triggers_full_recalc_and_uses_quota_total_hint(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    seed_endpoint(repository, model_id="free-chat")
+    seed_endpoint(repository, model_id="new-free")
+    run_composed_stage(repository, "model-matching")
+    now = datetime.now(timezone.utc)
+    seed_free_registry_snapshot(repository, models=[("provider-a", "free-chat")], created_at=now - timedelta(days=1))
+    seed_free_registry_snapshot(
+        repository,
+        models=[("provider-a", "free-chat"), ("provider-a", "new-free")],
+        created_at=now,
+    )
+    client = PipelineOpsClient()
+    llm_runtime = RecordingLlmRuntime(quota_amount=50.0)
+    dependencies = StageDependencies(repository=repository, omniroute_client=client, llm_runtime=llm_runtime)
+
+    result = run_composed_stage_with_dependencies(repository, "quota-research", dependencies)
+
+    with repository.database.transaction() as transaction:
+        rule_rows = transaction.execute("SELECT limits FROM quota_rules ORDER BY model_pattern").fetchall()
+    assert result.exit_code == 0
+    assert [call[0] for call in client.calls if call[0] == "/v1/search"] == ["/v1/search", "/v1/search"]
+    assert [row["limits"]["requests"] for row in rule_rows] == [50.0, 50.0]
+
+
+@pytest.mark.spec("quota-research::New model outside our connections does not trigger")
+def test_new_free_model_outside_our_connections_does_not_trigger_recalc(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    seed_endpoint(repository)
+    run_composed_stage(repository, "model-matching")
+    now = datetime.now(timezone.utc)
+    seed_free_registry_snapshot(repository, models=[("provider-a", "free-chat")], created_at=now - timedelta(days=1))
+    seed_free_registry_snapshot(
+        repository,
+        models=[("provider-a", "free-chat"), ("provider-b", "outside-free")],
+        created_at=now,
+    )
+    client = PipelineOpsClient()
+
+    result = run_composed_stage(repository, "quota-research", client=client)
+
+    assert result.exit_code == 0
+    assert result.stage_results[0]["details"]["effect"] == "idempotent_no_change"
+    assert not [call for call in client.calls if call[0] == "/v1/search"]
+
+
+@pytest.mark.spec("quota-research::Changed free status triggers recalc")
+def test_changed_free_status_triggers_recalc_and_deactivates_lost_free_rule(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    seed_endpoint(repository, model_id="lost-free")
+    run_composed_stage(repository, "model-matching")
+    now = datetime.now(timezone.utc)
+    seed_free_registry_snapshot(repository, models=[("provider-a", "lost-free")], created_at=now - timedelta(days=1))
+    seed_free_registry_snapshot(repository, models=[], created_at=now)
+    client = PipelineOpsClient()
+
+    result = run_composed_stage(repository, "quota-research", client=client)
+
+    with repository.database.transaction() as transaction:
+        rule = transaction.execute("SELECT status FROM quota_rules WHERE model_pattern = 'lost-free'").fetchone()
+        endpoint = transaction.execute("SELECT access_status FROM provider_endpoints WHERE provider_model_id = 'lost-free'").fetchone()
+        definition = transaction.execute("SELECT status FROM free_model_definitions WHERE provider_model_id = 'lost-free'").fetchone()
+    assert result.exit_code == 0
+    assert [call[0] for call in client.calls if call[0] == "/v1/search"] == ["/v1/search"]
+    assert rule["status"] == "inactive"
+    assert endpoint["access_status"] == "rejected"
+    assert definition["status"] == "inactive"
+
+
+@pytest.mark.spec("pipeline-orchestration::Lost-free-status model is dropped on rebalance")
+def test_lost_free_model_is_removed_from_existing_combo_on_rebalance(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    lost = seed_confirmed_llm_candidate(repository, model_id="lost-free", intelligence_index=70)
+    kept = seed_confirmed_llm_candidate(repository, model_id="still-free", intelligence_index=75)
+    with repository.database.transaction() as transaction:
+        repository.roles.upsert(
+            transaction,
+            role_id="routing_fast",
+            requirements={"capabilities": []},
+            expected_load={"requests": 1},
+            criticality=1,
+        )
+    now = datetime.now(timezone.utc)
+    seed_free_registry_snapshot(
+        repository,
+        models=[("provider-a", "lost-free"), ("provider-a", "still-free")],
+        created_at=now - timedelta(days=1),
+    )
+    seed_free_registry_snapshot(repository, models=[("provider-a", "still-free")], created_at=now)
+    client = PipelineOpsClient()
+    client.combos = {"fmo-routing_fast": [str(lost["id"]), str(kept["id"])]}
+
+    results = run_rebalance_stages(repository, client)
+
+    assert [result.exit_code for result in results] == [0] * 9
+    assert client.combos["fmo-routing_fast"] == [str(kept["id"])]
+    assert not client.deleted_paths
+
+
+@pytest.mark.spec("pipeline-orchestration::Quota research is triggered by new free models")
+def test_gained_free_model_is_added_to_existing_combo_on_rebalance(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    old = seed_confirmed_llm_candidate(repository, model_id="old-free", intelligence_index=70)
+    new = seed_confirmed_llm_candidate(repository, model_id="new-free", intelligence_index=70)
+    with repository.database.transaction() as transaction:
+        repository.roles.upsert(
+            transaction,
+            role_id="routing_fast",
+            requirements={"capabilities": []},
+            expected_load={"requests": 1},
+            criticality=1,
+        )
+    now = datetime.now(timezone.utc)
+    seed_free_registry_snapshot(repository, models=[("provider-a", "old-free")], created_at=now - timedelta(days=1))
+    seed_free_registry_snapshot(
+        repository,
+        models=[("provider-a", "old-free"), ("provider-a", "new-free")],
+        created_at=now,
+    )
+    client = PipelineOpsClient()
+    client.combos = {"fmo-routing_fast": [str(old["id"])]}
+
+    results = run_rebalance_stages(repository, client)
+
+    assert [result.exit_code for result in results] == [0] * 9
+    assert set(client.combos["fmo-routing_fast"]) == {str(old["id"]), str(new["id"])}
+    assert not client.deleted_paths
+
+
 @pytest.mark.spec("pipeline-orchestration::Full run calls production adapters")
 def test_full_pipeline_runs_through_apply_and_audit(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
@@ -782,7 +1032,9 @@ def test_account_discovery_stage_persists_quota_pools_and_membership(postgres_ur
             """
         ).fetchall()
         member_count = transaction.execute("SELECT count(*) AS total FROM quota_pool_members").fetchone()["total"]
-        snapshot = transaction.execute("SELECT snapshot_json FROM account_discovery_snapshots").fetchone()
+        snapshot = transaction.execute(
+            "SELECT independent_quota_pool_count, snapshot_json FROM account_discovery_snapshots"
+        ).fetchone()
     assert result.exit_code == 0
     assert result.stage_results[0]["details"]["effect"] == "repository_write"
     assert client.get_calls[:2] == ["/api/providers", "/api/rate-limits"]
@@ -791,6 +1043,132 @@ def test_account_discovery_stage_persists_quota_pools_and_membership(postgres_ur
     assert len({row["quota_pool_id"] for row in account_rows}) == 1
     assert member_count == 2
     assert snapshot["snapshot_json"]["rate_limits_available"] is True
+
+
+@pytest.mark.spec("account-discovery::Fingerprints create independent pools")
+def test_account_discovery_stage_persists_fingerprint_scopes_and_membership(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    client = AccountDiscoveryOpsClient(
+        connections=[
+            {
+                "id": "conn-fp",
+                "provider": "provider-a",
+                "enabled": True,
+                "providerSpecificData": {"fingerprints": ["fp-a", "fp-b", "fp-c"]},
+                "quota": 10,
+            }
+        ]
+    )
+
+    result = run_composed_stage(repository, "account-discovery", client=client)
+
+    with repository.database.transaction() as transaction:
+        rows = transaction.execute(
+            """
+            SELECT pa.omniroute_connection_id, pa.external_account_ref,
+                   pa.metadata, pa.quota_independence_status, qp.name AS pool_name,
+                   qpm.membership_reason
+            FROM provider_accounts pa
+            JOIN quota_pools qp ON qp.id = pa.quota_pool_id
+            JOIN quota_pool_members qpm ON qpm.provider_account_id = pa.id
+            ORDER BY pa.omniroute_connection_id
+            """
+        ).fetchall()
+        snapshot = transaction.execute(
+            "SELECT independent_quota_pool_count FROM account_discovery_snapshots"
+        ).fetchone()
+    assert result.exit_code == 0
+    assert len(rows) == 3
+    assert {row["pool_name"] for row in rows} == {
+        "provider-a:fingerprint:fp-a:requests",
+        "provider-a:fingerprint:fp-b:requests",
+        "provider-a:fingerprint:fp-c:requests",
+    }
+    assert {row["external_account_ref"] for row in rows} == {
+        "provider-a:fingerprint:fp-a",
+        "provider-a:fingerprint:fp-b",
+        "provider-a:fingerprint:fp-c",
+    }
+    assert all(row["quota_independence_status"] == "confirmed" for row in rows)
+    assert all(row["membership_reason"] == "account-fingerprint" for row in rows)
+    assert {row["metadata"]["parent_connection_id"] for row in rows} == {"conn-fp"}
+    assert snapshot["independent_quota_pool_count"] == 3
+
+
+@pytest.mark.spec("account-discovery::Fingerprint pools feed allocation independently")
+def test_fingerprint_pool_endpoints_feed_allocation_independently(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    endpoints = [
+        seed_confirmed_llm_candidate(
+            repository,
+            model_id=f"fingerprint-model-{index}",
+            intelligence_index=90 - index,
+            remaining=5,
+            connection_id=f"conn-fp#fingerprint:fp-{index}",
+        )
+        for index in range(3)
+    ]
+    with repository.database.transaction() as transaction:
+        for index, endpoint in enumerate(endpoints):
+            row = transaction.execute(
+                "SELECT provider_account_id FROM provider_endpoints WHERE id = %(endpoint_id)s",
+                {"endpoint_id": endpoint["id"]},
+            ).fetchone()
+            pool_id = transaction.execute(
+                """
+                INSERT INTO quota_pools (name, provider_group, reset_policy)
+                VALUES (%(name)s, 'provider-a', '{}'::jsonb)
+                RETURNING id
+                """,
+                {"name": f"provider-a:fingerprint:fp-{index}"},
+            ).fetchone()["id"]
+            transaction.execute(
+                """
+                UPDATE provider_accounts
+                SET quota_pool_id = %(pool_id)s,
+                    quota_independence_status = 'confirmed'
+                WHERE id = %(account_id)s
+                """,
+                {"pool_id": pool_id, "account_id": row["provider_account_id"]},
+            )
+        repository.roles.upsert(
+            transaction,
+            role_id="fingerprint_capacity",
+            requirements={"capabilities": []},
+            expected_load={"requests": 3},
+            criticality=1,
+        )
+    run_composed_stage(repository, "role-scoring")
+    run_composed_stage(repository, "demand-forecast")
+
+    result = run_composed_stage(repository, "allocation")
+
+    with repository.database.transaction() as transaction:
+        plan = transaction.execute(
+            "SELECT status, targets, constraint_report FROM allocation_plans WHERE role_id = 'fingerprint_capacity'"
+        ).fetchone()
+        target_pools = transaction.execute(
+            """
+            SELECT qp.name
+            FROM provider_endpoints pe
+            JOIN provider_accounts pa ON pa.id = pe.provider_account_id
+            JOIN quota_pools qp ON qp.id = pa.quota_pool_id
+            WHERE pe.id = ANY(%(endpoint_ids)s::uuid[])
+            ORDER BY qp.name
+            """,
+            {"endpoint_ids": [target["endpoint_id"] for target in plan["targets"]]},
+        ).fetchall()
+    assert result.exit_code == 0
+    assert plan["status"] == "planned"
+    assert len(plan["targets"]) >= 2
+    assert len({row["name"] for row in target_pools}) == len(plan["targets"])
+    assert {row["name"] for row in target_pools} <= {
+        "provider-a:fingerprint:fp-0",
+        "provider-a:fingerprint:fp-1",
+        "provider-a:fingerprint:fp-2",
+    }
 
 
 @pytest.mark.spec("pipeline-orchestration::Unavailable rate-limit data stays conservative")
@@ -1021,11 +1399,11 @@ def test_hermes_inventory_stage_uses_selected_adapter_and_persists_prompt_only_f
     assert result.stage_results[0]["details"]["effect"] == "repository_write"
     assert role["expected_load"]["requests"] == 25
     assert role["role_lifecycle_status"] == "bootstrap_pending"
-    assert consumer["consumer_key"] == "daily-routing"
+    assert consumer["consumer_key"] == "a1b2c3d4e5f6"
     assert float(consumer["calls_per_run"]) == 12.0
     assert inventory_run["source_mode"] == "command"
     assert inventory_run["status"] == "completed"
-    assert inventory_run["roles_found"] == 1
+    assert inventory_run["roles_found"] == 2
     assert inventory_run["routines_found"] == 1
     assert llm_runtime.calls == [
         {
@@ -1035,7 +1413,7 @@ def test_hermes_inventory_stage_uses_selected_adapter_and_persists_prompt_only_f
                     "Hermes inventory forecast request\n"
                     "Changes:\n"
                     "Consumers:\n"
-                    "routing_fast cron_job daily-routing 0 4 * * * 12"
+                    "coding-combo cron_job a1b2c3d4e5f6 0 2 * * * 12"
                 )
             },
             "response_model": "InspectorForecastResponse",
@@ -1262,6 +1640,102 @@ def test_role_scoring_stage_rejects_endpoint_below_quality_gate(postgres_url):
     assert score["rejection_reasons"] == ["quality_gate:below_gate"]
 
 
+@pytest.mark.spec("quality-gate::Endpoint above the band is excluded")
+def test_role_scoring_stage_rejects_endpoint_above_quality_band(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    seed_confirmed_llm_candidate(repository, model_id="too-smart", intelligence_index=75)
+    with repository.database.transaction() as transaction:
+        repository.roles.upsert(
+            transaction,
+            role_id="banded_role",
+            requirements={"capabilities": []},
+            expected_load={"requests": 1},
+            criticality=1,
+            minimum_quality_metric="intelligence_index",
+            minimum_quality_value=40,
+            maximum_quality_metric="intelligence_index",
+            maximum_quality_value=60,
+            quality_gate_index_version="4.1",
+        )
+
+    run_composed_stage(repository, "role-scoring")
+
+    with repository.database.transaction() as transaction:
+        score = transaction.execute("SELECT eligibility, rejection_reasons FROM role_scores").fetchone()
+    assert score["eligibility"] is False
+    assert score["rejection_reasons"] == ["quality_gate:above_band"]
+
+
+@pytest.mark.spec("quality-gate::Band bounds are set once from the seed anchor")
+def test_role_scoring_stage_sets_quality_band_from_single_seed_and_keeps_existing_band(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    seed = seed_confirmed_llm_candidate(repository, model_id="seed-mid", intelligence_index=60)
+    other = seed_confirmed_llm_candidate(repository, model_id="other-high", intelligence_index=80)
+    with repository.database.transaction() as transaction:
+        repository.roles.upsert(transaction, role_id="routing_fast", requirements={"capabilities": []}, expected_load={"requests": 1}, criticality=1)
+    client = PipelineOpsClient()
+    client.combos["fmo-routing_fast"] = [str(seed["id"])]
+
+    run_composed_stage(repository, "role-scoring", client=client)
+    client.combos["fmo-routing_fast"] = [str(seed["id"]), str(other["id"])]
+    with repository.database.transaction() as transaction:
+        transaction.execute("UPDATE roles SET minimum_quality_value = 55, maximum_quality_value = 65 WHERE id = 'routing_fast'")
+    run_composed_stage(repository, "role-scoring", client=client)
+
+    with repository.database.transaction() as transaction:
+        role = transaction.execute("SELECT minimum_quality_value, maximum_quality_value FROM roles WHERE id = 'routing_fast'").fetchone()
+    assert float(role["minimum_quality_value"]) == 55
+    assert float(role["maximum_quality_value"]) == 65
+
+
+@pytest.mark.spec("quality-gate::Re-seeding re-anchors the band")
+def test_role_scoring_stage_reanchors_when_combo_is_stripped_to_single_member(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    first = seed_confirmed_llm_candidate(repository, model_id="seed-low", intelligence_index=50)
+    second = seed_confirmed_llm_candidate(repository, model_id="seed-high", intelligence_index=75)
+    with repository.database.transaction() as transaction:
+        repository.roles.upsert(transaction, role_id="routing_fast", requirements={"capabilities": []}, expected_load={"requests": 1}, criticality=1)
+    client = PipelineOpsClient()
+    client.combos["fmo-routing_fast"] = [str(first["id"])]
+    run_composed_stage(repository, "role-scoring", client=client)
+    client.combos["fmo-routing_fast"] = [str(second["id"])]
+    run_composed_stage(repository, "role-scoring", client=client)
+
+    with repository.database.transaction() as transaction:
+        role = transaction.execute("SELECT minimum_quality_value, maximum_quality_value FROM roles WHERE id = 'routing_fast'").fetchone()
+    assert float(role["minimum_quality_value"]) <= 75 <= float(role["maximum_quality_value"])
+    assert float(role["minimum_quality_value"]) > 50
+
+
+@pytest.mark.spec("quality-gate::Paid seed anchors but is not a member")
+def test_paid_seed_sets_anchor_but_is_excluded_from_allocated_members(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    paid_seed = seed_confirmed_llm_candidate(repository, model_id="paid-seed", intelligence_index=70)
+    free_member = seed_confirmed_llm_candidate(repository, model_id="free-member", intelligence_index=68)
+    with repository.database.transaction() as transaction:
+        transaction.execute("UPDATE provider_endpoints SET access_status = 'paid' WHERE id = %(id)s", {"id": paid_seed["id"]})
+        transaction.execute("DELETE FROM endpoint_access_states WHERE endpoint_id = %(id)s", {"id": paid_seed["id"]})
+        repository.roles.upsert(transaction, role_id="routing_fast", requirements={"capabilities": []}, expected_load={"requests": 1}, criticality=1)
+    client = PipelineOpsClient()
+    client.combos["fmo-routing_fast"] = [str(paid_seed["id"])]
+
+    run_composed_stage(repository, "role-scoring", client=client)
+    run_composed_stage(repository, "demand-forecast", client=client)
+    run_composed_stage(repository, "allocation", client=client)
+
+    with repository.database.transaction() as transaction:
+        role = transaction.execute("SELECT minimum_quality_value, maximum_quality_value FROM roles WHERE id = 'routing_fast'").fetchone()
+        plan = transaction.execute("SELECT targets FROM allocation_plans WHERE role_id = 'routing_fast' ORDER BY created_at DESC LIMIT 1").fetchone()
+    target_ids = [target["endpoint_id"] for target in plan["targets"]]
+    assert float(role["minimum_quality_value"]) <= 70 <= float(role["maximum_quality_value"])
+    assert str(paid_seed["id"]) not in target_ids
+    assert str(free_member["id"]) in target_ids
+
+
 @pytest.mark.spec("quality-gate::Missing gate metric")
 def test_role_scoring_stage_rejects_unverifiable_quality_unless_role_allows(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
@@ -1482,6 +1956,10 @@ def test_smoke_combo_maps_non_2xx_response_to_failure():
 @pytest.mark.spec("combo-applier::Production apply smoke-tests applied combos")
 @pytest.mark.spec("combo-applier::Fabricated smoke signal rejected")
 @pytest.mark.spec("combo-applier::Smoke pass derived from OpenAI-compatible body")
+@pytest.mark.spec("combo-applier::Apply reads combos through management API bridge")
+@pytest.mark.spec("combo-applier::Apply writes existing combos through management API bridge")
+@pytest.mark.spec("combo-applier::Public combo projection is never used for management apply")
+@pytest.mark.spec("omniroute-client::Bridge denies combo test helper")
 def test_apply_stage_mutates_fmo_combo_and_reports_real_smoke_signal(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     repository = Repository(Database(postgres_url))
@@ -1497,8 +1975,10 @@ def test_apply_stage_mutates_fmo_combo_and_reports_real_smoke_signal(postgres_ur
     assert result.exit_code == 0
     assert result.stage_results[0]["details"]["combo_test_called"] is True
     assert _cli_result(result).combo_test_called is True
+    assert "/api/combos" in client.get_calls
     assert any(call[0] == "/v1/chat/completions" for call in client.calls)
     assert not any(call[0] == "/api/combos/test" for call in client.calls)
+    assert not any(call[0] == "/v1/combos" for call in client.calls)
     assert next(call for call in client.calls if call[0].startswith("/api/combos/"))[3]
     assert client.combos["fmo-routing_fast"] != ["old-endpoint"]
 
@@ -1659,6 +2139,47 @@ def test_apply_stage_blocks_when_live_combo_diverged_from_diff_before(postgres_u
     assert result.exit_code == 5
     assert client.combos["fmo-routing_fast"] == ["manual-live"]
     assert not any(call[0].startswith("/api/combos/") for call in client.calls)
+    assert client.deleted_paths == []
+
+
+@pytest.mark.spec("combo-applier::Non-existent combo is not created")
+@pytest.mark.spec("combo-applier::Combos are never deleted")
+def test_apply_stage_skips_absent_combo_without_create_or_delete(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    seed_apply_ready_diff(repository, role_id="missing", combo_id="fmo-missing", before=[], after_model_id="free-missing")
+    client = PipelineOpsClient()
+
+    result = run_composed_stage(repository, "apply", client=client)
+
+    assert result.exit_code == 0
+    assert "fmo-missing" not in client.combos
+    assert not any(call[0] == "/api/combos/fmo-missing" for call in client.calls)
+    assert client.deleted_paths == []
+    assert result.stage_results[0]["details"]["unmanaged_combos"] == ["fmo-missing"]
+    assert result.stage_results[0]["details"]["effect"] == "idempotent_no_change"
+
+
+@pytest.mark.spec("combo-applier::Absent combo is skipped without failing the run")
+@pytest.mark.spec("combo-applier::Combos are never deleted")
+@pytest.mark.spec("combo-applier::Production apply smoke-tests applied combos")
+def test_apply_stage_skips_absent_combo_and_rebalances_present_combo(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    present_endpoint = seed_apply_ready_diff(repository, role_id="routing_fast", combo_id="fmo-routing_fast", before=["old-endpoint"], after_model_id="free-present")
+    seed_apply_ready_diff(repository, role_id="missing", combo_id="fmo-missing", before=[], after_model_id="free-missing")
+    client = PipelineOpsClient()
+
+    result = run_composed_stage(repository, "apply", client=client)
+
+    assert result.exit_code == 0
+    assert client.combos["fmo-routing_fast"] == [present_endpoint]
+    assert "fmo-missing" not in client.combos
+    assert any(call[0] == "/api/combos/fmo-routing_fast" for call in client.calls)
+    assert not any(call[0] == "/api/combos/fmo-missing" for call in client.calls)
+    assert any(call[0] == "/v1/chat/completions" and call[1]["model"] == "fmo-routing_fast" for call in client.calls)
+    assert client.deleted_paths == []
+    assert result.stage_results[0]["details"]["unmanaged_combos"] == ["fmo-missing"]
 
 
 @pytest.mark.spec("combo-applier::Later combo failure rolls back earlier applied combos")
@@ -2082,7 +2603,8 @@ def test_composed_scheduler_run_once_starts_full_pipeline_at_cron(postgres_url):
         adapters=empty_adapters_with_stage_effects(),
     )
 
-    cli_result = runtime.run_scheduler_once("2026-06-19T04:00:00Z")
+    cron_now = datetime.now(timezone.utc).replace(hour=4, minute=0, second=0, microsecond=0)
+    cli_result = runtime.run_scheduler_once(cron_now.isoformat())
 
     repository = Repository(Database(postgres_url))
     with repository.database.transaction() as transaction:

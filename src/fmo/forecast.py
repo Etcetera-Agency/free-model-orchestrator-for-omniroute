@@ -14,6 +14,13 @@ class ColdStartDemand:
     source: str
 
 
+@dataclass(frozen=True)
+class QualityBand:
+    minimum: float
+    maximum: float
+    degraded: bool
+
+
 def aggregate_demand(agent_runs: dict[str, float], bindings: list[tuple[str, str, float]], dependencies: list[tuple[str, str, float]]) -> dict[str, float]:
     _reject_cycles(dependencies)
     demand: dict[str, float] = {}
@@ -46,6 +53,41 @@ def cold_start_demand(*, schedule: float | None, bootstrap: float | None, role_m
     if bootstrap is not None:
         return ColdStartDemand(bootstrap, "bootstrap")
     return ColdStartDemand(max(role_minimum, global_minimum), "role_minimum")
+
+
+def quality_band_for_demand(
+    *,
+    anchor: float,
+    candidates: list[dict],
+    protected_requests: float,
+    adequacy_floor: float,
+) -> QualityBand:
+    confirmed = [
+        candidate
+        for candidate in candidates
+        if candidate.get("confirmed_free") and float(candidate.get("quality", 0)) >= adequacy_floor
+    ]
+    qualities = sorted({anchor, *(float(candidate["quality"]) for candidate in confirmed)})
+    best_minimum = anchor
+    best_maximum = anchor
+    for minimum in (quality for quality in qualities if quality <= anchor and quality >= adequacy_floor):
+        for maximum in (quality for quality in qualities if quality >= anchor):
+            capacity = sum(
+                float(candidate.get("capacity", 0))
+                for candidate in confirmed
+                if minimum <= float(candidate["quality"]) <= maximum
+            )
+            if capacity >= protected_requests:
+                if (anchor - minimum) + (maximum - anchor) < (anchor - best_minimum) + (best_maximum - anchor) or best_minimum == best_maximum == anchor:
+                    best_minimum = minimum
+                    best_maximum = maximum
+                break
+    capacity = sum(
+        float(candidate.get("capacity", 0))
+        for candidate in confirmed
+        if best_minimum <= float(candidate["quality"]) <= best_maximum
+    )
+    return QualityBand(minimum=best_minimum, maximum=best_maximum, degraded=capacity < protected_requests)
 
 
 def _reject_cycles(edges: list[tuple[str, str, float]]) -> None:

@@ -1,0 +1,6 @@
+model:
+  provider: omniroute
+  default: chat-combo
+  base_url: ""
+  api_mode: chat_completions
+provider: omniroute

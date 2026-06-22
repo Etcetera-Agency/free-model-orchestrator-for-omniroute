@@ -6,7 +6,6 @@ from fmo.omniroute import OmniRouteClient
 from fmo.telemetry import sync_live_telemetry
 
 from _fixtures import fixture_body
-import pytest
 
 
 class _FixtureResponse:
@@ -51,6 +50,40 @@ def test_live_telemetry_fetches_usage_analytics_and_normalizes_real_shapes():
     assert longcat.p95_ms is None
     assert longcat.failure_count == 6
     assert snapshot.model_metrics[("longcat", "longcat-2.0-preview")].requests == 2
+
+
+@pytest.mark.spec("telemetry-sync::Analytics token counts captured")
+def test_live_telemetry_captures_provider_and_model_tokens():
+    transport = _TelemetryTransport()
+    client = OmniRouteClient(base_url="https://omniroute.test", api_key="manage-key", transport=transport)
+
+    snapshot = sync_live_telemetry(client)
+
+    assert snapshot.provider_metrics["publicai"].tokens == 332
+    assert snapshot.model_metrics[("publicai", "qwen-sea-lion-v4-32b-it")].tokens == 163
+
+
+@pytest.mark.spec("telemetry-sync::Missing analytics token counts stay unknown")
+def test_live_telemetry_leaves_missing_tokens_unknown():
+    transport = _TelemetryTransport(
+        analytics_body={
+            "byProvider": [{"provider": "unknown-token-provider", "requests": 3, "successRatePct": 100}],
+            "byModel": [
+                {
+                    "provider": "unknown-token-provider",
+                    "model": "model-a",
+                    "requests": 3,
+                    "successRatePct": 100,
+                }
+            ],
+        }
+    )
+    client = OmniRouteClient(base_url="https://omniroute.test", api_key="manage-key", transport=transport)
+
+    snapshot = sync_live_telemetry(client)
+
+    assert snapshot.provider_metrics["unknown-token-provider"].tokens is None
+    assert snapshot.model_metrics[("unknown-token-provider", "model-a")].tokens is None
 
 
 @pytest.mark.spec("telemetry-sync::Telemetry source unavailable")
