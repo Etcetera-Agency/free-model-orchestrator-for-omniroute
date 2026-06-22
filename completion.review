@@ -200,3 +200,6 @@
   `502/503/504/429` responses with bounded injectable backoff, honors bounded
   `Retry-After`, preserves first-response failures for non-transient status and
   invalid JSON, and removes the retry scenarios from spec coverage pending.
+- Final full-suite audit fixed quota-research all-failed status mapping and
+  tightened rebalance fixtures so apply safety sees live quota evidence on the
+  exact provider account selected by catalog scan.

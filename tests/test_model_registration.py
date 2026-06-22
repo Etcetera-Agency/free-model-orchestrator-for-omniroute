@@ -1,5 +1,6 @@
-from pathlib import Path
 from copy import deepcopy
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -20,6 +21,7 @@ from _fixtures import fixture_body
 
 
 FIXTURE_PROVIDER = fixture_body("omniroute_api_rate_limits")["connections"][0]["provider"]
+FIXTURE_CONNECTION_ID = fixture_body("omniroute_api_rate_limits")["connections"][0]["connectionId"]
 
 
 class RegistrationClient:
@@ -57,10 +59,39 @@ class RegistrationFlowClient(PipelineOpsClient):
         self.provider_models = {"old-free"}
         self.registered_payloads = []
         self.combos = {}
-        self.rate_limits_body = deepcopy(fixture_body("omniroute_api_rate_limits"))
-        for connection in self.rate_limits_body["connections"]:
-            connection["enabled"] = connection["provider"] == FIXTURE_PROVIDER
-            connection["active"] = connection["provider"] == FIXTURE_PROVIDER
+        self.providers_body = {
+            "connections": [
+                {
+                    "id": FIXTURE_CONNECTION_ID,
+                    "provider": FIXTURE_PROVIDER,
+                    "enabled": True,
+                    "isActive": True,
+                    "upstream_account_id": FIXTURE_CONNECTION_ID,
+                    "status": "confirmed",
+                }
+            ]
+        }
+        self.rate_limits_body = {
+            "connections": [
+                {
+                    "connectionId": FIXTURE_CONNECTION_ID,
+                    "provider": FIXTURE_PROVIDER,
+                    "enabled": True,
+                    "active": True,
+                    "remaining": 100,
+                }
+            ]
+        }
+        self.quota_body.setdefault("providers", []).append(
+            {
+                "provider": FIXTURE_PROVIDER,
+                "connectionId": FIXTURE_CONNECTION_ID,
+                "quotaTotal": 200_000,
+                "quotaUsed": 80_000,
+                "quotaWindow": "day",
+                "resetAt": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
+            }
+        )
 
     def get(self, path):
         if path == "/v1/models":
@@ -224,7 +255,8 @@ def test_registered_model_flows_to_existing_combo_rebalance(postgres_url):
         model_id="old-free",
         intelligence_index=70,
         provider_id=FIXTURE_PROVIDER,
-        connection_id=f"conn-{FIXTURE_PROVIDER}",
+        connection_id=FIXTURE_CONNECTION_ID,
+        omniroute_instance_id="default",
     )
     with repository.database.transaction() as transaction:
         repository.roles.upsert(
@@ -241,6 +273,7 @@ def test_registered_model_flows_to_existing_combo_rebalance(postgres_url):
     discovery = _run_free_candidate_full(repository, client, registry_payload)
     matching = run_composed_stage(repository, "model-matching", client=client)
     _record_aa_metric(repository, model_id="new-free", intelligence_index=70)
+    _add_live_quota_rows_for_provider(repository, client, provider_id=FIXTURE_PROVIDER)
     rebalance_results = run_rebalance_stages(repository, client)
 
     with repository.database.transaction() as transaction:
@@ -260,7 +293,31 @@ def test_registered_model_flows_to_existing_combo_rebalance(postgres_url):
     assert matching.exit_code == 0
     assert "new-free" in {payload["modelId"] for payload, _key in client.registered_payloads}
     assert new_endpoint_ids
-    assert [result.exit_code for result in rebalance_results] == [0] * 9
+    assert [result.exit_code for result in rebalance_results] == [0] * 9, rebalance_results[-1].stage_results[0]["reason"]
     combo_members = set(client.combos["fmo-routing_fast"])
     assert combo_members & old_endpoint_ids
     assert not client.deleted_paths
+
+
+def _add_live_quota_rows_for_provider(repository, client, *, provider_id):
+    with repository.database.transaction() as transaction:
+        rows = transaction.execute(
+            """
+            SELECT DISTINCT pa.omniroute_connection_id
+            FROM provider_accounts pa
+            JOIN providers p ON p.id = pa.provider_id
+            WHERE p.omniroute_provider_id = %(provider_id)s
+            """,
+            {"provider_id": provider_id},
+        ).fetchall()
+    for row in rows:
+        client.quota_body.setdefault("providers", []).append(
+            {
+                "provider": provider_id,
+                "connectionId": row["omniroute_connection_id"],
+                "quotaTotal": 200_000,
+                "quotaUsed": 80_000,
+                "quotaWindow": "day",
+                "resetAt": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
+            }
+        )

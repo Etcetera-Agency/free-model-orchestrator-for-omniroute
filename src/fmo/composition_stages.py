@@ -402,6 +402,7 @@ def _quota_research_stage(dependencies: StageDependencies, context: PipelineCont
     quota_limit_hints = _quota_limit_hints(dependencies.omniroute_client)
     written = 0
     failed = 0
+    first_failure_reason = "quota_rule_missing"
     today = datetime.now(timezone.utc)
     for endpoint in endpoints:
         result = research_quota_rule(
@@ -420,9 +421,11 @@ def _quota_research_stage(dependencies: StageDependencies, context: PipelineCont
         )
         if result.error is not None:
             failed += 1
+            first_failure_reason = result.error.reason
             continue
         if result.snapshot is None or result.rule is None:
             failed += 1
+            first_failure_reason = "quota_rule_missing"
             continue
         rule = result.rule
         claim = rule.claim
@@ -456,6 +459,8 @@ def _quota_research_stage(dependencies: StageDependencies, context: PipelineCont
         with context.repository.database.transaction() as transaction:
             _deactivate_lost_free_models(transaction, changes.lost)
     if failed:
+        if written == 0:
+            return StageResult(status="external_dependency_failed", reason=first_failure_reason)
         return StageResult(
             status="partial_stale",
             changed=written > 0,

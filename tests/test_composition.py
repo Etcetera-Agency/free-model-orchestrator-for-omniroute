@@ -583,12 +583,13 @@ def seed_confirmed_llm_candidate(
     aa_index_version="4.1",
     provider_id="provider-a",
     connection_id="pool-a",
+    omniroute_instance_id="local",
 ):
     with repository.database.transaction() as transaction:
         canonical = repository.canonical_models.upsert(transaction, canonical_slug=model_id)
         provider = repository.providers.upsert(
             transaction,
-            omniroute_instance_id="local",
+            omniroute_instance_id=omniroute_instance_id,
             omniroute_provider_id=provider_id,
             provider_type="api",
         )
@@ -621,11 +622,11 @@ def seed_confirmed_llm_candidate(
         transaction.execute(
             """
             INSERT INTO free_model_definitions (provider_id, provider_model_id, free_type, omniroute_pool_key, status)
-            VALUES ('provider-a', %(model_id)s, 'free', 'pool-a', 'active')
+            VALUES (%(provider_id)s, %(model_id)s, 'free', %(pool_key)s, 'active')
             ON CONFLICT (provider_id, provider_model_id)
             DO UPDATE SET status = EXCLUDED.status
             """,
-            {"model_id": model_id},
+            {"provider_id": provider_id, "model_id": model_id, "pool_key": connection_id},
         )
         transaction.execute(
             """
@@ -952,8 +953,18 @@ def test_changed_free_status_triggers_recalc_and_deactivates_lost_free_rule(post
 def test_lost_free_model_is_removed_from_existing_combo_on_rebalance(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     repository = Repository(Database(postgres_url))
-    lost = seed_confirmed_llm_candidate(repository, model_id="lost-free", intelligence_index=70)
-    kept = seed_confirmed_llm_candidate(repository, model_id="still-free", intelligence_index=75)
+    lost = seed_confirmed_llm_candidate(
+        repository,
+        model_id="lost-free",
+        intelligence_index=70,
+        connection_id="conn-provider-a",
+    )
+    kept = seed_confirmed_llm_candidate(
+        repository,
+        model_id="still-free",
+        intelligence_index=75,
+        connection_id="conn-provider-a",
+    )
     with repository.database.transaction() as transaction:
         repository.roles.upsert(
             transaction,
@@ -983,8 +994,18 @@ def test_lost_free_model_is_removed_from_existing_combo_on_rebalance(postgres_ur
 def test_gained_free_model_is_added_to_existing_combo_on_rebalance(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     repository = Repository(Database(postgres_url))
-    old = seed_confirmed_llm_candidate(repository, model_id="old-free", intelligence_index=70)
-    new = seed_confirmed_llm_candidate(repository, model_id="new-free", intelligence_index=70)
+    old = seed_confirmed_llm_candidate(
+        repository,
+        model_id="old-free",
+        intelligence_index=70,
+        connection_id="conn-provider-a",
+    )
+    new = seed_confirmed_llm_candidate(
+        repository,
+        model_id="new-free",
+        intelligence_index=70,
+        connection_id="conn-provider-a",
+    )
     with repository.database.transaction() as transaction:
         repository.roles.upsert(
             transaction,
