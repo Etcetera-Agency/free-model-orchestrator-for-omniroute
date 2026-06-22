@@ -66,6 +66,74 @@ def test_priority_combo_no_weights_oversubscription_and_degraded_modes():
     assert degraded.role_status == "unavailable"
 
 
+def _router_endpoint(endpoint_id: str, **overrides):
+    endpoint = {
+        "id": endpoint_id,
+        "is_router": True,
+        "access": "free_quota_available",
+        "basic_probe": True,
+        "quota": 100,
+        "breaker": "closed",
+        "input": ("text",),
+        "effective_context_window": 128_000,
+    }
+    endpoint.update(overrides)
+    return endpoint
+
+
+@pytest.mark.spec("allocator::Router never outranks a scored endpoint")
+@pytest.mark.spec("allocator::Configured routers pinned to the tail in config order")
+def test_priority_combo_appends_configured_router_tail_after_scored_head():
+    combo = build_priority_combo(
+        "routing_fast",
+        [
+            {"id": "scored-a", "score": 2},
+            {"id": "scored-b", "score": 1},
+            _router_endpoint("openrouter/free", input=("text", "image")),
+            _router_endpoint("mimocode/mimo-auto"),
+        ],
+        per_pool_cap=2,
+        auto_router_tail=("mimocode/mimo-auto", "openrouter/free"),
+        required_capabilities={"text"},
+    )
+
+    assert combo.endpoints == ["scored-b", "scored-a", "mimocode/mimo-auto", "openrouter/free"]
+
+
+@pytest.mark.spec("allocator::Router skipped when its declared modalities miss a role capability")
+@pytest.mark.spec("allocator::Router skipped when its effective context is below the role minimum")
+@pytest.mark.spec("role-scorer::Router still honors non-quality filters")
+def test_priority_combo_filters_router_tail_by_role_and_access_constraints():
+    combo = build_priority_combo(
+        "vision_role",
+        [
+            _router_endpoint("text-only", input=("text",)),
+            _router_endpoint("short-context", input=("text", "image"), effective_context_window=8_000),
+            _router_endpoint("paid-router", input=("text", "image"), access="paid_only_excluded"),
+            _router_endpoint("openrouter/free", input=("text", "image"), effective_context_window=128_000),
+        ],
+        per_pool_cap=2,
+        auto_router_tail=("text-only", "short-context", "paid-router", "openrouter/free"),
+        required_capabilities={"image"},
+        minimum_context=64_000,
+    )
+
+    assert combo.endpoints == ["openrouter/free"]
+
+
+@pytest.mark.spec("allocator::Router-only combo is allowed")
+def test_priority_combo_allows_router_only_combo_when_no_scored_endpoint_eligible():
+    combo = build_priority_combo(
+        "routing_fast",
+        [_router_endpoint("mimocode/mimo-auto"), _router_endpoint("openrouter/free", input=("text", "image"))],
+        per_pool_cap=2,
+        auto_router_tail=("mimocode/mimo-auto", "openrouter/free"),
+        required_capabilities={"text"},
+    )
+
+    assert combo.endpoints == ["mimocode/mimo-auto", "openrouter/free"]
+
+
 @pytest.mark.spec("allocator::Zero capacity pool")
 def test_validate_plan_zero_capacity_pool_is_oversubscribed():
     blocked = validate_plan({"pool-a": {"usage": 1, "capacity": 0}})

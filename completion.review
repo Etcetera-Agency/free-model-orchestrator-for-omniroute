@@ -1,5 +1,8 @@
 # Completion Review
 
+- Auto-router fallback tail now has a structured ordered config, exact
+  membership matching, AA/quality-gate exemptions, and allocation appends
+  eligible routers after scored endpoints without consuming scored slots.
 - Weekly tokens-per-request recalibration now has a transaction-scoped job that
   refines the global factor from calibration observations, recomputes only
   self-derived capacities, and is fired by its own scheduler cron under the

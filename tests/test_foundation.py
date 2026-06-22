@@ -5,7 +5,13 @@ import httpx
 import pytest
 
 from fmo.apply_guard import ApplyPreconditions, check_apply_preconditions
-from fmo.config import StartupConfig, validate_startup, validate_static_config
+from fmo.config import (
+    DEFAULT_AUTO_ROUTER_TAIL,
+    StartupConfig,
+    is_configured_router,
+    validate_startup,
+    validate_static_config,
+)
 from fmo.db import MigrationRunner
 from fmo.idempotency import stable_hash
 from fmo.llm_runtime import LlmSiteConfig, assemble_prompt, redact_secrets
@@ -306,6 +312,23 @@ def test_static_config_rejects_missing_database_url():
 def test_static_config_rejects_non_positive_tokens_per_request():
     with pytest.raises(ValueError, match="TOKENS_PER_REQUEST"):
         validate_static_config(valid_startup_config(tokens_per_request=0))
+
+
+@pytest.mark.spec("role-scorer::Configured router is recognized")
+@pytest.mark.spec("role-scorer::Unlisted model is not a router")
+@pytest.mark.spec("role-scorer::Child router is independent of its parent")
+def test_auto_router_tail_defaults_and_membership_matching():
+    assert [entry.id for entry in DEFAULT_AUTO_ROUTER_TAIL] == [
+        "mimocode/mimo-auto",
+        "kilo-auto/free",
+        "openrouter/free",
+    ]
+    assert DEFAULT_AUTO_ROUTER_TAIL[0].input == ("text",)
+    assert DEFAULT_AUTO_ROUTER_TAIL[2].input == ("text", "image")
+    assert is_configured_router("OPENROUTER/FREE") is True
+    assert is_configured_router("provider:openrouter/free") is True
+    assert is_configured_router("openrouter/auto") is False
+    assert is_configured_router("mcode/mimo-auto") is False
 
 
 @pytest.mark.spec("environment-and-connections::Invalid inventory mode")

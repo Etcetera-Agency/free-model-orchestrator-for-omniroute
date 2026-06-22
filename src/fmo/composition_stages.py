@@ -17,7 +17,7 @@ from fmo.allocation import allocate_globally, build_priority_combo, validate_pla
 from fmo.applier import ComboApplier
 from fmo.apply_guard import ApplyPreconditions, check_apply_preconditions
 from fmo.aa_migration import run_migration_agent
-from fmo.config import StartupConfig
+from fmo.config import DEFAULT_AUTO_ROUTER_TAIL, StartupConfig, configured_router_entry, is_configured_router
 from fmo.context import context_eligible, effective_context_window
 from fmo.external_metadata import ExternalMetadataError
 from fmo.forecast import apply_historical_reserve, cold_start_demand, protected_demand, quality_band_for_demand
@@ -1335,13 +1335,14 @@ def _demand_forecast_stage(_dependencies: StageDependencies, context: PipelineCo
 
 def _allocation_stage(_dependencies: StageDependencies, context: PipelineContext) -> StageResult:
     with context.repository.database.transaction() as transaction:
-        roles = transaction.execute("SELECT id FROM roles ORDER BY id").fetchall()
+        roles = transaction.execute("SELECT id, requirements FROM roles ORDER BY id").fetchall()
         score_rows = transaction.execute(
             """
             SELECT DISTINCT ON (rs.role_id, rs.endpoint_id)
                    rs.role_id, rs.endpoint_id, rs.total_score,
                    COALESCE(pa.quota_pool_id, pe.provider_account_id) AS quota_pool_id,
-                   eas.effective_remaining
+                   eas.effective_remaining, pe.provider_model_id, pe.capabilities,
+                   pe.effective_context_window, pe.access_status, pe.probe_status
             FROM role_scores rs
             JOIN provider_endpoints pe ON pe.id = rs.endpoint_id
             JOIN provider_accounts pa ON pa.id = pe.provider_account_id
@@ -1371,6 +1372,13 @@ def _allocation_stage(_dependencies: StageDependencies, context: PipelineContext
                 "pool": str(row["quota_pool_id"]),
                 "score": float(row["total_score"]),
                 "capacity": _remaining_requests(row["effective_remaining"]),
+                "is_router": is_configured_router(str(row["provider_model_id"])),
+                "input": _configured_router_input(str(row["provider_model_id"])),
+                "effective_context_window": int(row["effective_context_window"] or 0),
+                "access": "free_quota_available" if row["access_status"] == "confirmed" else "unknown_excluded",
+                "basic_probe": row["probe_status"] == "passed",
+                "quota": _remaining_requests(row["effective_remaining"]),
+                "breaker": "closed",
             }
             for row in score_rows
         ]
@@ -1391,7 +1399,15 @@ def _allocation_stage(_dependencies: StageDependencies, context: PipelineContext
             validation = validate_plan(pool_reports or {"empty": {"usage": 0, "capacity": 0}}, role_has_primary=allocation is not None)
             targets = []
             if allocation is not None:
-                combo = build_priority_combo(role["id"], role_scores, per_pool_cap=2)
+                requirements = role["requirements"] or {}
+                combo = build_priority_combo(
+                    role["id"],
+                    role_scores,
+                    per_pool_cap=2,
+                    auto_router_tail=tuple(entry.id for entry in DEFAULT_AUTO_ROUTER_TAIL),
+                    required_capabilities=set(requirements.get("capabilities", [])),
+                    minimum_context=int(requirements.get("minimum_context_window") or 0),
+                )
                 targets = [
                     {"endpoint_id": endpoint_id, "priority": index + 1}
                     for index, endpoint_id in enumerate(combo.endpoints)
@@ -1423,6 +1439,11 @@ def _roles_needing_quality_recalibration(transaction: Any) -> set[str]:
         """
     ).fetchall()
     return {row["role_id"] for row in rows}
+
+
+def _configured_router_input(model_id: str) -> tuple[str, ...]:
+    entry = configured_router_entry(model_id)
+    return entry.input if entry is not None else ()
 
 
 def _diff_stage(dependencies: StageDependencies, context: PipelineContext) -> StageResult:

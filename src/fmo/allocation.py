@@ -51,10 +51,22 @@ def allocate_globally(roles: list[str], endpoints: list[dict], demand: dict[str,
     return AllocationPlan(allocations=allocations, pool_usage=pool_usage)
 
 
-def build_priority_combo(role_id: str, endpoints: list[dict], *, per_pool_cap: int) -> Combo:
+FREE_ROUTER_ACCESS = {"free_unlimited", "free_quota_available", "free_promotional_available"}
+
+
+def build_priority_combo(
+    role_id: str,
+    endpoints: list[dict],
+    *,
+    per_pool_cap: int,
+    auto_router_tail: list[str] | tuple[str, ...] = (),
+    required_capabilities: set[str] | None = None,
+    minimum_context: int = 0,
+) -> Combo:
     ordered = []
     used_pools = set()
-    for endpoint in sorted(endpoints, key=lambda item: item["score"]):
+    scored_endpoints = [endpoint for endpoint in endpoints if not endpoint.get("is_router")]
+    for endpoint in sorted(scored_endpoints, key=lambda item: item["score"]):
         pool = endpoint.get("pool")
         if role_id in HEAVY_ROLES and pool is not None and pool in used_pools:
             continue
@@ -63,7 +75,28 @@ def build_priority_combo(role_id: str, endpoints: list[dict], *, per_pool_cap: i
             used_pools.add(pool)
         if len(ordered) == per_pool_cap:
             break
+    router_order = {model_id.lower(): index for index, model_id in enumerate(auto_router_tail)}
+    routers = [endpoint for endpoint in endpoints if endpoint.get("is_router")]
+    routers = sorted(routers, key=lambda item: router_order.get(str(item["id"]).lower(), len(router_order)))
+    required = required_capabilities or set()
+    for endpoint in routers:
+        if _router_tail_eligible(endpoint, required_capabilities=required, minimum_context=minimum_context):
+            ordered.append(endpoint["id"])
     return Combo(role_id=role_id, endpoints=ordered, strategy="priority")
+
+
+def _router_tail_eligible(endpoint: dict, *, required_capabilities: set[str], minimum_context: int) -> bool:
+    if endpoint.get("access") not in FREE_ROUTER_ACCESS:
+        return False
+    if endpoint.get("basic_probe") is not True:
+        return False
+    if endpoint.get("quota", 0) <= 0:
+        return False
+    if endpoint.get("breaker") != "closed":
+        return False
+    if not required_capabilities.issubset(set(endpoint.get("input", ()))):
+        return False
+    return endpoint.get("effective_context_window", 0) >= minimum_context
 
 
 def validate_plan(pool_reports: dict[str, dict], *, role_has_primary: bool = True) -> PlanValidation:

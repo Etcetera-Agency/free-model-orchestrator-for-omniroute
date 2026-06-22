@@ -39,7 +39,15 @@ def eligible_for_scoring(endpoint: dict, *, required_capabilities: set[str]) -> 
     return EligibilityDecision(True)
 
 
-def aa_subscore(metrics: dict[str, float], *, weights: dict[str, float], percentiles: dict[str, tuple[float, float]]) -> AASubscore:
+def aa_subscore(
+    metrics: dict[str, float],
+    *,
+    weights: dict[str, float],
+    percentiles: dict[str, tuple[float, float]],
+    is_router: bool = False,
+) -> AASubscore:
+    if is_router:
+        return AASubscore(value=None, uncertainty_penalty=0, unknown=True)
     quality_keys = {"intelligence_index", "coding_index", "agentic_index"}
     present = [key for key in weights if key in metrics and key in percentiles]
     if not quality_keys.intersection(present):
@@ -60,7 +68,9 @@ def latency_score_source(*, endpoint_p95: int | None, provider_p95: int | None, 
     return ("unknown", None)
 
 
-def score_endpoint(components: dict[str, float]) -> ScoreResult:
+def score_endpoint(components: dict[str, float], *, is_router: bool = False) -> ScoreResult:
+    if is_router:
+        return ScoreResult(total=0, components={})
     used = {
         key: components.get(key, 0)
         for key in ("benchmark_fit", "capability_fit", "health", "latency", "quota_headroom", "stability")

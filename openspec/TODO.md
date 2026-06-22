@@ -1,12 +1,10 @@
 # OpenSpec TODO
 
-## Active implementation queue
-
-- add-auto-router-fallback-tail: bind and implement configured router tail scenarios.
-
 ## Deferred follow-up
 
-None.
+- OmniRoute API bridge still returns 404 for `/api/combos*` on
+  `127.0.0.1:20129`; keep tracked until the live bridge exposes combo
+  management routes.
 
 ## Dropped (not needed for project essence)
 

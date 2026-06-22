@@ -5,14 +5,3 @@
 #
 # Active proposal slices awaiting TDD implementation (see openspec/TODO.md and
 # openspec/changes/<id>/). Each line is dropped when its test lands.
-role-scorer::Configured router is recognized
-role-scorer::Unlisted model is not a router
-role-scorer::Child router is independent of its parent
-role-scorer::Router skips AA quality scoring
-role-scorer::Router still honors non-quality filters
-quality-gate::Router is exempt from the band
-allocator::Router never outranks a scored endpoint
-allocator::Configured routers pinned to the tail in config order
-allocator::Router skipped when its declared modalities miss a role capability
-allocator::Router skipped when its effective context is below the role minimum
-allocator::Router-only combo is allowed

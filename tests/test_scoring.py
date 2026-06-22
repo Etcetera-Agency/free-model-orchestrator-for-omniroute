@@ -137,6 +137,22 @@ def test_aa_subscore_missing_metric_redistributes_and_all_missing_unknown():
     assert unknown.unknown is True
 
 
+@pytest.mark.spec("role-scorer::Router skips AA quality scoring")
+def test_router_skips_aa_quality_scoring_and_uncertainty_penalty():
+    score = aa_subscore(
+        {},
+        weights={"intelligence_index": 1},
+        percentiles={"intelligence_index": (0, 100)},
+        is_router=True,
+    )
+    result = score_endpoint({"benchmark_fit": 1, "uncertainty": 1}, is_router=True)
+
+    assert score.value is None
+    assert score.uncertainty_penalty == 0
+    assert result.total == 0
+    assert result.components == {}
+
+
 @pytest.mark.spec("role-scorer::Missing metric remains missing")
 def test_normalize_degenerate_percentiles_is_zero():
     assert _normalize(50, 100, 100) == 0.0
@@ -199,3 +215,19 @@ def test_quality_gate_hard_prefilter_unverifiable_and_index_change():
     assert missing.eligible is False
     assert changed.status == "needs_recalibration"
     assert changed.apply_new_plan is False
+
+
+@pytest.mark.spec("quality-gate::Router is exempt from the band")
+def test_router_missing_quality_metric_is_exempt_from_quality_gate():
+    decision = evaluate_quality_gate(
+        {},
+        metric="coding_index",
+        value=10,
+        index_version="v1",
+        current_version="v1",
+        allow_unverified=False,
+        is_router=True,
+    )
+
+    assert decision.eligible is True
+    assert decision.status == "router_tail"

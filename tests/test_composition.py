@@ -180,8 +180,9 @@ class PipelineOpsClient(QuotaSearchClient):
             {
                 "provider": "provider-a",
                 "connectionId": "conn-provider-a",
-                "quotaTotal": 100,
-                "quotaUsed": 40,
+                "quotaTotal": 200_000,
+                "quotaUsed": 80_000,
+                "quotaWindow": "day",
                 "resetAt": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
             }
         )
@@ -1032,7 +1033,7 @@ def test_account_discovery_stage_persists_quota_pools_and_membership(postgres_ur
         ).fetchall()
         member_count = transaction.execute("SELECT count(*) AS total FROM quota_pool_members").fetchone()["total"]
         snapshot = transaction.execute(
-            "SELECT independent_quota_pool_count FROM account_discovery_snapshots"
+            "SELECT independent_quota_pool_count, snapshot_json FROM account_discovery_snapshots"
         ).fetchone()
     assert result.exit_code == 0
     assert result.stage_results[0]["details"]["effect"] == "repository_write"

@@ -3,6 +3,19 @@ from urllib.parse import urlparse
 
 
 @dataclass(frozen=True)
+class AutoRouterEntry:
+    id: str
+    input: tuple[str, ...]
+
+
+DEFAULT_AUTO_ROUTER_TAIL = (
+    AutoRouterEntry("mimocode/mimo-auto", ("text",)),
+    AutoRouterEntry("kilo-auto/free", ("text",)),
+    AutoRouterEntry("openrouter/free", ("text", "image")),
+)
+
+
+@dataclass(frozen=True)
 class StartupConfig:
     omniroute_url: str
     database_url: str | None
@@ -14,6 +27,7 @@ class StartupConfig:
     llm_smart_review_call_limit: int = 1
     tokens_per_request: int = 2000
     tokens_per_request_recalibration_cron: str = "0 5 * * 0"
+    auto_router_tail: tuple[AutoRouterEntry, ...] = DEFAULT_AUTO_ROUTER_TAIL
     hermes_home: str | None = None
     hermes_agents_path: str | None = None
     hermes_routines_path: str | None = None
@@ -46,6 +60,11 @@ def validate_static_config(config: StartupConfig) -> None:
         raise ValueError("TOKENS_PER_REQUEST must be positive")
     if not _valid_cron(config.tokens_per_request_recalibration_cron):
         raise ValueError("TOKENS_PER_REQUEST_RECALIBRATION_CRON is invalid")
+    if not config.auto_router_tail:
+        raise ValueError("AUTO_ROUTER_TAIL must not be empty")
+    for entry in config.auto_router_tail:
+        if not entry.id or not entry.input:
+            raise ValueError("AUTO_ROUTER_TAIL entries require id and input")
     if not config.database_url:
         raise ValueError("DATABASE_URL is required")
     if config.hermes_inventory_mode not in {"filesystem", "command", "http"}:
@@ -77,3 +96,24 @@ def _valid_cron(value: str) -> bool:
     if len(parts) != 5:
         return False
     return all(part for part in parts)
+
+
+def is_configured_router(model_id: str, *, entries: tuple[AutoRouterEntry, ...] = DEFAULT_AUTO_ROUTER_TAIL) -> bool:
+    candidate = _router_match_id(model_id)
+    return any(candidate == _router_match_id(entry.id) for entry in entries)
+
+
+def configured_router_entry(
+    model_id: str,
+    *,
+    entries: tuple[AutoRouterEntry, ...] = DEFAULT_AUTO_ROUTER_TAIL,
+) -> AutoRouterEntry | None:
+    candidate = _router_match_id(model_id)
+    for entry in entries:
+        if candidate == _router_match_id(entry.id):
+            return entry
+    return None
+
+
+def _router_match_id(model_id: str) -> str:
+    return model_id.split(":", 1)[-1].lower()

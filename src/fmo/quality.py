@@ -17,9 +17,12 @@ def evaluate_quality_gate(
     index_version: str,
     current_version: str,
     allow_unverified: bool = False,
+    is_router: bool = False,
 ) -> QualityGateDecision:
     if index_version != current_version:
         return QualityGateDecision(eligible=False, status="needs_recalibration", apply_new_plan=False)
+    if is_router and metric not in metrics:
+        return QualityGateDecision(eligible=True, status="router_tail")
     if metric not in metrics:
         return QualityGateDecision(eligible=allow_unverified, status="unverifiable")
     if metrics[metric] < value:
