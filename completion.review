@@ -142,3 +142,12 @@
   cleaned the prompt assertion formatting before commit.
 - Remaining deferred repo-level work: OmniRoute API bridge still returns 404 for
   `/api/combos*` on `127.0.0.1:20129`; tracked in `openspec/TODO.md`.
+- No-auth quota calibration now resolves `opencode -> opencode-zen` as shared
+  quota/model capacity, keeps alias misses and unknown no-auth providers
+  inactive, and promotes only complete operator-observed OmniRoute token usage
+  evidence.
+- Hermes inventory trigger coverage now binds daily full inventory, explicit
+  manual full inventory, and the unknown-role no-inventory/no-combo guard to
+  executable scheduler tests; the matching pending allowlist entries are removed.
+- Executable-spec pending coverage is empty again after binding the no-auth
+  quota calibration scenarios.

@@ -12,6 +12,10 @@ from fmo.omniroute import OmniRouteRequestError
 
 VALID_METRICS = {"requests", "tokens"}
 VALID_WINDOWS = {"minute", "hour", "day", "month"}
+# AICODE-NOTE: no-auth aliases are shared quota/model pools, not independent
+# capacity; missing sibling evidence must stay inactive.
+NOAUTH_QUOTA_ALIASES = {"opencode": "opencode-zen"}
+NOAUTH_CALIBRATION_ACTION = "place_first_in_combo_and_observe_omniroute_token_usage"
 
 
 @dataclass(frozen=True)
@@ -38,6 +42,31 @@ class ActiveQuotaRule:
     activated_by: str
     capacity_class: str
     safe_mode: bool
+
+
+@dataclass(frozen=True)
+class NoAuthQuotaResolution:
+    provider: str
+    model_id: str
+    status: str
+    usable: bool
+    rule: ActiveQuotaRule | None = None
+    quota_source_provider: str | None = None
+    model_source_provider: str | None = None
+    shared_with: str | None = None
+    model_ids: tuple[str, ...] = ()
+    independence_status: str = "unknown"
+    counted_as_independent: bool = False
+    action: str | None = None
+
+
+@dataclass(frozen=True)
+class NoAuthCalibrationEvidence:
+    observed_tokens: float | None = None
+    inferred_limit: float | None = None
+    reset_window: str | None = None
+    hard_stop: bool | None = None
+    evidence: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -105,6 +134,116 @@ def research_quota_rule(
         error = QuotaResearchError("quota_research", "extraction_error")
         return QuotaResearchResult(snapshot=None, rule=None, error=error)
     return QuotaResearchResult(snapshot=snapshot, rule=rule)
+
+
+def resolve_noauth_quota(
+    *,
+    provider: str,
+    model_id: str,
+    quota_rules: dict[tuple[str, str], ActiveQuotaRule],
+    provider_models: dict[str, tuple[str, ...]],
+    aliases: dict[str, str] | None = None,
+) -> NoAuthQuotaResolution:
+    aliases = NOAUTH_QUOTA_ALIASES if aliases is None else aliases
+    alias_provider = aliases.get(provider)
+    if alias_provider:
+        rule = quota_rules.get((alias_provider, model_id))
+        if rule is None:
+            return _calibration_required(provider=provider, model_id=model_id, status="alias_quota_missing")
+        return NoAuthQuotaResolution(
+            provider=provider,
+            model_id=model_id,
+            status="shared_capacity",
+            usable=True,
+            rule=rule,
+            quota_source_provider=alias_provider,
+            model_source_provider=alias_provider,
+            shared_with=alias_provider,
+            model_ids=provider_models.get(alias_provider, ()),
+            independence_status="assumed_shared",
+            counted_as_independent=False,
+        )
+
+    rule = quota_rules.get((provider, model_id))
+    if rule is not None:
+        return NoAuthQuotaResolution(
+            provider=provider,
+            model_id=model_id,
+            status="active",
+            usable=True,
+            rule=rule,
+            quota_source_provider=provider,
+            model_source_provider=provider,
+            model_ids=provider_models.get(provider, ()),
+            independence_status="confirmed",
+            counted_as_independent=True,
+        )
+
+    return _calibration_required(provider=provider, model_id=model_id)
+
+
+def promote_noauth_calibration(
+    *,
+    provider: str,
+    model_id: str,
+    evidence: NoAuthCalibrationEvidence,
+) -> NoAuthQuotaResolution:
+    if not _complete_calibration(evidence):
+        return _calibration_required(provider=provider, model_id=model_id)
+    claim = validate_claim(
+        QuotaClaim(
+            metric="tokens",
+            amount=float(evidence.inferred_limit),
+            window=str(evidence.reset_window),
+            evidence=list(evidence.evidence),
+            hard_stop=bool(evidence.hard_stop),
+        )
+    )
+    return NoAuthQuotaResolution(
+        provider=provider,
+        model_id=model_id,
+        status="active",
+        usable=True,
+        rule=ActiveQuotaRule(
+            claim=claim,
+            confidence=1.0,
+            activated_by="operator_observed_omniroute_usage",
+            capacity_class="calibrated",
+            safe_mode=False,
+        ),
+        quota_source_provider=provider,
+        model_source_provider=provider,
+        model_ids=(model_id,),
+        independence_status="confirmed",
+        counted_as_independent=True,
+    )
+
+
+def _calibration_required(
+    *,
+    provider: str,
+    model_id: str,
+    status: str = "calibration_required",
+) -> NoAuthQuotaResolution:
+    return NoAuthQuotaResolution(
+        provider=provider,
+        model_id=model_id,
+        status=status,
+        usable=False,
+        action=NOAUTH_CALIBRATION_ACTION,
+    )
+
+
+def _complete_calibration(evidence: NoAuthCalibrationEvidence) -> bool:
+    return (
+        evidence.observed_tokens is not None
+        and evidence.observed_tokens > 0
+        and evidence.inferred_limit is not None
+        and evidence.inferred_limit > 0
+        and evidence.reset_window in VALID_WINDOWS
+        and evidence.hard_stop is True
+        and bool(evidence.evidence)
+    )
 
 
 def _extract_claim(snapshot: SearchSnapshot, *, instructor_call) -> QuotaClaim:
