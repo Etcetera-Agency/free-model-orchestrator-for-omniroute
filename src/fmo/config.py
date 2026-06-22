@@ -12,6 +12,8 @@ class StartupConfig:
     llm_bootstrap_confirmed_free: bool = False
     llm_quota_research_call_limit: int = 1
     llm_smart_review_call_limit: int = 1
+    tokens_per_request: int = 2000
+    tokens_per_request_recalibration_cron: str = "0 5 * * 0"
     hermes_home: str | None = None
     hermes_agents_path: str | None = None
     hermes_routines_path: str | None = None
@@ -40,6 +42,10 @@ def validate_static_config(config: StartupConfig) -> None:
         raise ValueError("LLM_QUOTA_RESEARCH_CALL_LIMIT must be non-negative")
     if config.llm_smart_review_call_limit < 0:
         raise ValueError("LLM_SMART_REVIEW_CALL_LIMIT must be non-negative")
+    if config.tokens_per_request <= 0:
+        raise ValueError("TOKENS_PER_REQUEST must be positive")
+    if not _valid_cron(config.tokens_per_request_recalibration_cron):
+        raise ValueError("TOKENS_PER_REQUEST_RECALIBRATION_CRON is invalid")
     if not config.database_url:
         raise ValueError("DATABASE_URL is required")
     if config.hermes_inventory_mode not in {"filesystem", "command", "http"}:

@@ -302,6 +302,12 @@ def test_static_config_rejects_missing_database_url():
         validate_static_config(valid_startup_config(database_url=None))
 
 
+@pytest.mark.spec("quota-manager::Tokens-per-request config validated")
+def test_static_config_rejects_non_positive_tokens_per_request():
+    with pytest.raises(ValueError, match="TOKENS_PER_REQUEST"):
+        validate_static_config(valid_startup_config(tokens_per_request=0))
+
+
 @pytest.mark.spec("environment-and-connections::Invalid inventory mode")
 def test_static_config_rejects_invalid_inventory_mode():
     with pytest.raises(ValueError, match="HERMES_INVENTORY_MODE"):

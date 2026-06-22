@@ -1,5 +1,10 @@
 # Completion Review
 
+- Quota unit normalization now has explicit OpenSpec deltas for quota-manager
+  and telemetry-sync, binds conversion/config/token telemetry scenarios to
+  executable tests, captures OmniRoute analytics token counts without fabricating
+  missing values, and records future active-slice coverage in
+  `tests/spec_coverage_pending.txt` plus `openspec/TODO.md`.
 - Active implementation slices are archived: production pipeline composition,
   metadata persistence, apply-precondition derivation, and scheduler service
   entrypoint.

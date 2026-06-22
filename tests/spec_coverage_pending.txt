@@ -5,3 +5,33 @@
 #
 # Active proposal slices awaiting TDD implementation (see openspec/TODO.md and
 # openspec/changes/<id>/). Each line is dropped when its test lands.
+quota-research::Token budget summary
+quota-research::Request limit summary unchanged
+quota-research::Both axes present
+quota-research::Requests-per-minute only does not activate
+quota-research::Inspector token claim carried through
+quota-research::Inspector sub-day request claim routed out
+quota-manager::Tightest axis binds the capacity
+quota-manager::Live token budget converted
+quota-manager::Calibrated endpoint contributes its axis
+quota-manager::Remaining expressed in request-equivalents per day
+quota-manager::Sub-day request axis excluded
+quota-manager::Factor refined from observations
+quota-manager::Too little signal keeps the current factor
+quota-manager::A noisy week is clamped
+quota-manager::Derived endpoints recomputed, live untouched
+quota-manager::Factor and capacities persisted consistently
+scheduler::Non-matching tick is a no-op
+scheduler::Weekly recalibration fires
+scheduler::Recalibration does not overlap a running job
+role-scorer::Configured router is recognized
+role-scorer::Unlisted model is not a router
+role-scorer::Child router is independent of its parent
+role-scorer::Router skips AA quality scoring
+role-scorer::Router still honors non-quality filters
+quality-gate::Router is exempt from the band
+allocator::Router never outranks a scored endpoint
+allocator::Configured routers pinned to the tail in config order
+allocator::Router skipped when its declared modalities miss a role capability
+allocator::Router skipped when its effective context is below the role minimum
+allocator::Router-only combo is allowed
