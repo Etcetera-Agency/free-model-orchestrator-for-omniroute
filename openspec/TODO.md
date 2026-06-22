@@ -9,9 +9,7 @@
 These were opened from the 2026-06-23 implementation review. Each carries
 uncovered scenarios in `tests/spec_coverage_pending.txt` until its tests land.
 
-- `add-rollback-idempotency` — revert/restore combo writes carry an
-  `Idempotency-Key` derived from the restored state, matching forward applies.
-  Spec: `combo-applier`.
+- (none open)
 
 ## Resolved
 
@@ -23,6 +21,9 @@ uncovered scenarios in `tests/spec_coverage_pending.txt` until its tests land.
   aborts later stages, quota research skips failed endpoints while persisting the
   rest, and apply requires fresh live-observed quota evidence above the
   configured positive safety-buffer floor.
+- `add-rollback-idempotency` — archived 2026-06-22. Smoke-failure reverts and
+  top-level rollback restores now send an `Idempotency-Key` derived from the
+  restored combo model list.
 - OmniRoute API bridge combo routes — DONE and deployed (2026-06-22). The fork
   exposes `GET /api/combos` and `GET|PUT /api/combos/fmo-*` on the bridge
   (OmniRoute commit `886ceb750`); `POST /api/combos/test` stays bridge `404` by

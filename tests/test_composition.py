@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from psycopg.types.json import Jsonb
 
+from fmo.applier import ComboApplier
 from fmo.accounts import AccountDiscoveryOutcome
 from fmo.artificial_analysis import AAModelMetrics, AASnapshot
 from fmo.bootstrap import build_startup_config
@@ -2368,6 +2369,7 @@ def test_apply_stage_blocks_mutation_without_current_probe_success(postgres_url)
 @pytest.mark.spec("combo-applier::Confirmed safety allows the apply stage")
 @pytest.mark.spec("pipeline-orchestration::Smoke failure rolls back")
 @pytest.mark.spec("combo-applier::Non-2xx smoke response is a smoke failure")
+@pytest.mark.spec("combo-applier::Revert write carries an idempotency key")
 def test_apply_stage_smoke_failure_rolls_back_and_maps_failures(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     repository = Repository(Database(postgres_url))
@@ -2382,6 +2384,14 @@ def test_apply_stage_smoke_failure_rolls_back_and_maps_failures(postgres_url):
 
     assert result.exit_code == 6
     assert client.combos["fmo-routing_fast"] == ["old-endpoint"]
+    rollback_put = next(
+        call
+        for call in client.calls
+        if call[0] == "/api/combos/fmo-routing_fast" and call[1]["models"] == ["old-endpoint"]
+    )
+    assert rollback_put[3] == ComboApplier({"fmo-routing_fast": ["old-endpoint"]}).state_hash(
+        "fmo-routing_fast"
+    )
 
     rollback_client = PipelineOpsClient(smoke_status=500, rollback_fails=True)
     rollback_repository = Repository(Database(postgres_url))
@@ -2500,6 +2510,7 @@ def test_multi_combo_apply_reports_rollback_failed_when_earlier_restore_fails(po
 
 
 @pytest.mark.spec("audit-rollback::rollback command reverts combos, not AA-index")
+@pytest.mark.spec("combo-applier::Revert write carries an idempotency key")
 @pytest.mark.spec("audit-rollback::Roll back a run")
 def test_rollback_command_reverts_run_combos_and_records_audit_without_touching_aa_index(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
@@ -2528,6 +2539,16 @@ def test_rollback_command_reverts_run_combos_and_records_audit_without_touching_
     assert result.exit_code == 0
     assert client.combos["fmo-a"] == ["old-a"]
     assert client.combos["fmo-b"] == ["old-b"]
+    revert_keys = {
+        call[0].rsplit("/", 1)[-1]: call[3]
+        for call in client.calls
+        if call[0] in {"/api/combos/fmo-a", "/api/combos/fmo-b"}
+        and call[1]["models"] in (["old-a"], ["old-b"])
+    }
+    assert revert_keys == {
+        "fmo-a": ComboApplier({"fmo-a": ["old-a"]}).state_hash("fmo-a"),
+        "fmo-b": ComboApplier({"fmo-b": ["old-b"]}).state_hash("fmo-b"),
+    }
     assert audit_count == 2
     assert migration["status"] == "rolled_out"
 

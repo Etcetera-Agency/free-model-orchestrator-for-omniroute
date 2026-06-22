@@ -1757,10 +1757,18 @@ def _rollback_apply_mutations(
     rollback_failed = False
     for combo_id, before in rollback_targets:
         try:
-            client.put(f"/api/combos/{combo_id}", {"models": before})
+            client.put(
+                f"/api/combos/{combo_id}",
+                {"models": before},
+                idempotency_key=_combo_models_idempotency_key(combo_id, before),
+            )
         except Exception:
             rollback_failed = True
     return not rollback_failed
+
+
+def _combo_models_idempotency_key(combo_id: str, models: Sequence[str]) -> str:
+    return ComboApplier(current={combo_id: list(models)}).state_hash(combo_id)
 
 
 def _delete_applied_snapshots_for_run(
@@ -1889,7 +1897,11 @@ def _rollback_stage(dependencies: StageDependencies, context: PipelineContext) -
         combo_id = snapshot["omniroute_combo_id"]
         before = list(snapshot["state_json"].get("before", []))
         try:
-            dependencies.omniroute_client.put(f"/api/combos/{combo_id}", {"models": before})
+            dependencies.omniroute_client.put(
+                f"/api/combos/{combo_id}",
+                {"models": before},
+                idempotency_key=_combo_models_idempotency_key(combo_id, before),
+            )
         except Exception:
             rollback_failed = True
             continue

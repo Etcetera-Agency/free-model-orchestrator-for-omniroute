@@ -7,10 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 # Active proposal slices awaiting TDD implementation. Each entry is dropped from
 # tests/spec_coverage_pending.txt (and here) when its test lands. Slices are
 # listed in openspec/TODO.md and openspec/changes/<id>/.
-EXPECTED_ACTIVE_PENDING = {
-    # add-rollback-idempotency
-    "combo-applier::Revert write carries an idempotency key",
-}
+EXPECTED_ACTIVE_PENDING = set()
 
 
 @pytest.mark.spec("runtime-documentation::Active docs state")

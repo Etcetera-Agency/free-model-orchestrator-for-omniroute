@@ -6,5 +6,3 @@
 # Active proposal slices awaiting TDD implementation (see openspec/TODO.md and
 # openspec/changes/<id>/). Each line is dropped when its test lands.
 #
-# add-rollback-idempotency
-combo-applier::Revert write carries an idempotency key

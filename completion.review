@@ -1,5 +1,8 @@
 # Completion Review
 
+- `add-rollback-idempotency` is archived: in-apply smoke-failure reverts and
+  top-level rollback restores now pass an idempotency key derived from the
+  restored combo state; the executable pending coverage allowlist is empty.
 - `harden-pipeline-resilience` is archived: pipeline partial/stale results now
   continue through later stages while preserving exit 2, quota research degrades
   per endpoint, and apply rejects stale, assumed, or zero-buffer quota evidence.
