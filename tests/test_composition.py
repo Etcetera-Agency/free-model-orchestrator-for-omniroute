@@ -1031,7 +1031,9 @@ def test_account_discovery_stage_persists_quota_pools_and_membership(postgres_ur
             """
         ).fetchall()
         member_count = transaction.execute("SELECT count(*) AS total FROM quota_pool_members").fetchone()["total"]
-        snapshot = transaction.execute("SELECT snapshot_json FROM account_discovery_snapshots").fetchone()
+        snapshot = transaction.execute(
+            "SELECT independent_quota_pool_count FROM account_discovery_snapshots"
+        ).fetchone()
     assert result.exit_code == 0
     assert result.stage_results[0]["details"]["effect"] == "repository_write"
     assert client.get_calls[:2] == ["/api/providers", "/api/rate-limits"]
@@ -1040,6 +1042,132 @@ def test_account_discovery_stage_persists_quota_pools_and_membership(postgres_ur
     assert len({row["quota_pool_id"] for row in account_rows}) == 1
     assert member_count == 2
     assert snapshot["snapshot_json"]["rate_limits_available"] is True
+
+
+@pytest.mark.spec("account-discovery::Fingerprints create independent pools")
+def test_account_discovery_stage_persists_fingerprint_scopes_and_membership(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    client = AccountDiscoveryOpsClient(
+        connections=[
+            {
+                "id": "conn-fp",
+                "provider": "provider-a",
+                "enabled": True,
+                "providerSpecificData": {"fingerprints": ["fp-a", "fp-b", "fp-c"]},
+                "quota": 10,
+            }
+        ]
+    )
+
+    result = run_composed_stage(repository, "account-discovery", client=client)
+
+    with repository.database.transaction() as transaction:
+        rows = transaction.execute(
+            """
+            SELECT pa.omniroute_connection_id, pa.external_account_ref,
+                   pa.metadata, pa.quota_independence_status, qp.name AS pool_name,
+                   qpm.membership_reason
+            FROM provider_accounts pa
+            JOIN quota_pools qp ON qp.id = pa.quota_pool_id
+            JOIN quota_pool_members qpm ON qpm.provider_account_id = pa.id
+            ORDER BY pa.omniroute_connection_id
+            """
+        ).fetchall()
+        snapshot = transaction.execute(
+            "SELECT independent_quota_pool_count FROM account_discovery_snapshots"
+        ).fetchone()
+    assert result.exit_code == 0
+    assert len(rows) == 3
+    assert {row["pool_name"] for row in rows} == {
+        "provider-a:fingerprint:fp-a:requests",
+        "provider-a:fingerprint:fp-b:requests",
+        "provider-a:fingerprint:fp-c:requests",
+    }
+    assert {row["external_account_ref"] for row in rows} == {
+        "provider-a:fingerprint:fp-a",
+        "provider-a:fingerprint:fp-b",
+        "provider-a:fingerprint:fp-c",
+    }
+    assert all(row["quota_independence_status"] == "confirmed" for row in rows)
+    assert all(row["membership_reason"] == "account-fingerprint" for row in rows)
+    assert {row["metadata"]["parent_connection_id"] for row in rows} == {"conn-fp"}
+    assert snapshot["independent_quota_pool_count"] == 3
+
+
+@pytest.mark.spec("account-discovery::Fingerprint pools feed allocation independently")
+def test_fingerprint_pool_endpoints_feed_allocation_independently(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    endpoints = [
+        seed_confirmed_llm_candidate(
+            repository,
+            model_id=f"fingerprint-model-{index}",
+            intelligence_index=90 - index,
+            remaining=5,
+            connection_id=f"conn-fp#fingerprint:fp-{index}",
+        )
+        for index in range(3)
+    ]
+    with repository.database.transaction() as transaction:
+        for index, endpoint in enumerate(endpoints):
+            row = transaction.execute(
+                "SELECT provider_account_id FROM provider_endpoints WHERE id = %(endpoint_id)s",
+                {"endpoint_id": endpoint["id"]},
+            ).fetchone()
+            pool_id = transaction.execute(
+                """
+                INSERT INTO quota_pools (name, provider_group, reset_policy)
+                VALUES (%(name)s, 'provider-a', '{}'::jsonb)
+                RETURNING id
+                """,
+                {"name": f"provider-a:fingerprint:fp-{index}"},
+            ).fetchone()["id"]
+            transaction.execute(
+                """
+                UPDATE provider_accounts
+                SET quota_pool_id = %(pool_id)s,
+                    quota_independence_status = 'confirmed'
+                WHERE id = %(account_id)s
+                """,
+                {"pool_id": pool_id, "account_id": row["provider_account_id"]},
+            )
+        repository.roles.upsert(
+            transaction,
+            role_id="fingerprint_capacity",
+            requirements={"capabilities": []},
+            expected_load={"requests": 3},
+            criticality=1,
+        )
+    run_composed_stage(repository, "role-scoring")
+    run_composed_stage(repository, "demand-forecast")
+
+    result = run_composed_stage(repository, "allocation")
+
+    with repository.database.transaction() as transaction:
+        plan = transaction.execute(
+            "SELECT status, targets, constraint_report FROM allocation_plans WHERE role_id = 'fingerprint_capacity'"
+        ).fetchone()
+        target_pools = transaction.execute(
+            """
+            SELECT qp.name
+            FROM provider_endpoints pe
+            JOIN provider_accounts pa ON pa.id = pe.provider_account_id
+            JOIN quota_pools qp ON qp.id = pa.quota_pool_id
+            WHERE pe.id = ANY(%(endpoint_ids)s::uuid[])
+            ORDER BY qp.name
+            """,
+            {"endpoint_ids": [target["endpoint_id"] for target in plan["targets"]]},
+        ).fetchall()
+    assert result.exit_code == 0
+    assert plan["status"] == "planned"
+    assert len(plan["targets"]) >= 2
+    assert len({row["name"] for row in target_pools}) == len(plan["targets"])
+    assert {row["name"] for row in target_pools} <= {
+        "provider-a:fingerprint:fp-0",
+        "provider-a:fingerprint:fp-1",
+        "provider-a:fingerprint:fp-2",
+    }
 
 
 @pytest.mark.spec("pipeline-orchestration::Unavailable rate-limit data stays conservative")

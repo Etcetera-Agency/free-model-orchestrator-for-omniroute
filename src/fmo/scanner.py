@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from fmo.accounts import expand_account_scopes
 from fmo.omniroute import OmniRouteRequestError
 from fmo.persistence import Repository
 
@@ -86,6 +87,7 @@ class CatalogScanner:
             for account_payload in provider_accounts:
                 provider_slug = str(account_payload["provider"])
                 account_ref = str(account_payload.get("id") or account_payload.get("name") or provider_slug)
+                external_ref = str(account_payload.get("external_account_ref") or account_ref)
                 provider = self.repository.providers.upsert(
                     transaction,
                     omniroute_instance_id=omniroute_instance_id,
@@ -96,7 +98,7 @@ class CatalogScanner:
                     transaction,
                     provider_id=provider["id"],
                     omniroute_connection_id=account_ref,
-                    external_account_ref=account_ref,
+                    external_account_ref=external_ref,
                     metadata=account_payload,
                 )
                 accounts = self.repository.provider_accounts.list_for_provider(
@@ -197,7 +199,8 @@ def _fetch_provider_accounts(client: Any) -> list[dict[str, Any]]:
     connections = payload.get("connections") if isinstance(payload, dict) else None
     if not isinstance(connections, list):
         raise CatalogFetchError("omniroute_catalog", "invalid_payload")
-    return [connection for connection in connections if isinstance(connection, dict) and connection.get("provider")]
+    provider_accounts = [connection for connection in connections if isinstance(connection, dict) and connection.get("provider")]
+    return expand_account_scopes(provider_accounts)
 
 
 def _fetch_models_catalogs(client: Any) -> dict[str, list[dict[str, Any]]]:

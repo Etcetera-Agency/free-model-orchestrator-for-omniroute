@@ -34,7 +34,7 @@ def group_quota_pools(
 ) -> dict[str, QuotaPool]:
     previous_pools = previous_pools or {}
     pools: dict[str, QuotaPool] = {}
-    for connection in connections:
+    for connection in expand_account_scopes(connections, rate_limits_available=rate_limits_available):
         connection_id = str(connection["id"])
         pool_key = _pool_key(connection, previous_pools, rate_limits_available)
         status = connection.get("status", "assumed_shared")
@@ -50,6 +50,17 @@ def group_quota_pools(
             pools[pool_key] = QuotaPool(pool_key=pool_key, independence_status=status, capacity=capacity)
         pools[connection_id] = QuotaPool(pool_key=pool_key, independence_status=status, capacity=0.0)
     return pools
+
+
+def expand_account_scopes(
+    connections: list[dict[str, Any]],
+    *,
+    rate_limits_available: bool = True,
+) -> list[dict[str, Any]]:
+    expanded: list[dict[str, Any]] = []
+    for connection in connections:
+        expanded.extend(_expand_connection_scopes(connection, rate_limits_available=rate_limits_available))
+    return expanded
 
 
 def usable_capacity(pools: dict[str, QuotaPool]) -> float:
@@ -73,6 +84,43 @@ def _merge_status(left: str, right: str) -> str:
     return "unknown"
 
 
+def _expand_connection_scopes(connection: dict[str, Any], *, rate_limits_available: bool) -> list[dict[str, Any]]:
+    if connection.get("quota_scope_type") == "account_fingerprint":
+        return [connection]
+    fingerprints = _account_fingerprints(connection)
+    if not fingerprints or not rate_limits_available:
+        return [connection]
+
+    # AICODE-NOTE: OmniRoute nested fingerprints are treated as account quota
+    # identities; do not multiply provider/model rows without this evidence.
+    parent_connection_id = str(connection["id"])
+    provider = str(connection.get("provider") or "unknown")
+    accounts = []
+    for fingerprint in fingerprints:
+        account = dict(connection)
+        account["id"] = f"{parent_connection_id}#fingerprint:{fingerprint}"
+        account["parent_connection_id"] = parent_connection_id
+        account["credential_fingerprint"] = fingerprint
+        account["external_account_ref"] = f"{provider}:fingerprint:{fingerprint}"
+        account["manual_pool_key"] = f"{provider}:fingerprint:{fingerprint}"
+        account["quota_scope_type"] = "account_fingerprint"
+        account["quota_scope_key"] = fingerprint
+        account["status"] = "confirmed"
+        account["membership_reason"] = "account-fingerprint"
+        accounts.append(account)
+    return accounts
+
+
+def _account_fingerprints(connection: dict[str, Any]) -> list[str]:
+    provider_data = connection.get("providerSpecificData")
+    if not isinstance(provider_data, dict):
+        return []
+    fingerprints = provider_data.get("fingerprints")
+    if not isinstance(fingerprints, list):
+        return []
+    return sorted({str(fingerprint) for fingerprint in fingerprints if fingerprint})
+
+
 def discover_live_accounts(
     client: Any,
     *,
@@ -93,13 +141,14 @@ def discover_live_accounts(
         rate_limits,
         rate_limits_available=rate_limits_available,
     )
+    account_scopes = expand_account_scopes(normalized, rate_limits_available=rate_limits_available)
     pools = group_quota_pools(
-        normalized,
+        account_scopes,
         previous_pools=previous_pools,
         rate_limits_available=rate_limits_available,
     )
     return AccountDiscoveryOutcome(
-        connections=normalized,
+        connections=account_scopes,
         pools=pools,
         rate_limits_available=rate_limits_available,
         errors=errors,

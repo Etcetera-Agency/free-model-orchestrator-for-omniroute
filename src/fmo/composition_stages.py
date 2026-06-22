@@ -210,7 +210,12 @@ def _persist_account_discovery(context: PipelineContext, transaction: Any, outco
             transaction,
             provider_id=provider["id"],
             omniroute_connection_id=connection_id,
-            external_account_ref=str(connection.get("upstream_account_id") or connection_id),
+            external_account_ref=str(
+                connection.get("external_account_ref")
+                or connection.get("upstream_account_id")
+                or connection.get("credential_fingerprint")
+                or connection_id
+            ),
             metadata=connection,
             enabled=bool(connection.get("enabled", True)),
         )
@@ -235,7 +240,7 @@ def _persist_account_discovery(context: PipelineContext, transaction: Any, outco
             {
                 "quota_pool_id": quota_pool_id,
                 "account_id": account["id"],
-                "reason": "account-discovery",
+                "reason": str(connection.get("membership_reason") or "account-discovery"),
                 "confidence": 1.0 if pool.independence_status == "confirmed" else 0.0,
             },
         )
@@ -1886,7 +1891,12 @@ def _ensure_quota_pool(transaction: Any, provider_id: str, connection_id: str, a
 
 
 def _ensure_named_quota_pool(transaction: Any, provider_id: str, pool_key: str) -> Any:
-    name = pool_key if pool_key.endswith(":requests") else f"{provider_id}:{pool_key}:requests"
+    if pool_key.endswith(":requests"):
+        name = pool_key
+    elif pool_key.startswith(f"{provider_id}:"):
+        name = f"{pool_key}:requests"
+    else:
+        name = f"{provider_id}:{pool_key}:requests"
     pool = transaction.execute(
         """
         INSERT INTO quota_pools (name, provider_group, reset_policy)

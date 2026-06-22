@@ -2,13 +2,7 @@
 
 ## Deferred follow-up
 
-- Fingerprint-backed account quota pools: implement
-  `update-fingerprint-account-quota-pools` so any provider connection with
-  `providerSpecificData.fingerprints` expands into independent
-  provider-account quota pools without hard-coding provider names,
-  allocation/combos can use the multiplied per-account capacity, and the
-  matching `account-discovery::*` entries are removed from
-  `tests/spec_coverage_pending.txt`.
+None.
 
 ## Dropped (not needed for project essence)
 

@@ -151,3 +151,10 @@
   executable scheduler tests; the matching pending allowlist entries are removed.
 - Executable-spec pending coverage is empty again after binding the no-auth
   quota calibration scenarios.
+- Fingerprint-backed provider connections now expand into deterministic
+  per-fingerprint account scopes, persist stable account refs, parent metadata
+  and `account-fingerprint` pool membership, fan scanner endpoints out to those
+  virtual accounts, and remove the matching `account-discovery::*` pending
+  coverage entries. Targeted tests cover fixture-backed pool multiplication,
+  duplicate dedupe, missing-fingerprint shared fallback, scanner fanout,
+  persistence, allocation, and the spec coverage gate.
