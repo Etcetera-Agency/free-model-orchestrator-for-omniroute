@@ -1,5 +1,12 @@
 # Completion Review
 
+- Deploy fix: shared OmniRoute client `post`/`put` now preserve call-site
+  headers while still adding management auth, `Idempotency-Key`, and
+  `X-Request-Id`. Live probing needed this for `X-OmniRoute-No-Cache`; before
+  the fix `probe-models` crashed with an unexpected `headers` keyword before any
+  provider probe could run. Code Simplifier review kept the change at the client
+  boundary. Focused verification: foundation/probe/e2e tests, ruff on touched
+  files, and OpenSpec strict validation.
 - Deploy fix: access classification now treats missing quota research as
   endpoint-local fail-closed state (`unknown` / `quota_rule_missing`) instead of
   aborting the whole batch. This lets live endpoints with active quota rules

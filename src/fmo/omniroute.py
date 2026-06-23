@@ -57,11 +57,25 @@ class OmniRouteClient:
     def get(self, path: str) -> dict:
         return self._request("GET", path)
 
-    def post(self, path: str, payload: dict, *, idempotency_key: str | None = None) -> dict:
-        return self._request("POST", path, payload, idempotency_key=idempotency_key)
+    def post(
+        self,
+        path: str,
+        payload: dict,
+        *,
+        headers: dict[str, str] | None = None,
+        idempotency_key: str | None = None,
+    ) -> dict:
+        return self._request("POST", path, payload, headers=headers, idempotency_key=idempotency_key)
 
-    def put(self, path: str, payload: dict, *, idempotency_key: str | None = None) -> dict:
-        return self._request("PUT", path, payload, idempotency_key=idempotency_key)
+    def put(
+        self,
+        path: str,
+        payload: dict,
+        *,
+        headers: dict[str, str] | None = None,
+        idempotency_key: str | None = None,
+    ) -> dict:
+        return self._request("PUT", path, payload, headers=headers, idempotency_key=idempotency_key)
 
     def _request(
         self,
@@ -69,6 +83,7 @@ class OmniRouteClient:
         path: str,
         payload: dict | None = None,
         *,
+        headers: dict[str, str] | None = None,
         idempotency_key: str | None = None,
     ) -> dict:
         attempts = self.max_get_retries + 1 if method == "GET" else 1
@@ -78,7 +93,7 @@ class OmniRouteClient:
                 response = self.transport.request(
                     method,
                     urljoin(self.base_url, path.lstrip("/")),
-                    headers=self._headers(idempotency_key=idempotency_key),
+                    headers=self._headers(headers=headers, idempotency_key=idempotency_key),
                     json=payload,
                     timeout=self.timeout,
                 )
@@ -99,8 +114,16 @@ class OmniRouteClient:
             break
         raise OmniRouteRequestError(method, path, last_response.status_code if last_response is not None else 0)
 
-    def _headers(self, *, idempotency_key: str | None = None) -> dict[str, str]:
-        headers = {"X-Request-Id": str(uuid.uuid4())}
+    def _headers(
+        self,
+        *,
+        headers: dict[str, str] | None = None,
+        idempotency_key: str | None = None,
+    ) -> dict[str, str]:
+        # AICODE-NOTE: Call-site headers supplement management auth/request IDs;
+        # probe no-cache and apply idempotency must survive the same request.
+        headers = dict(headers or {})
+        headers["X-Request-Id"] = str(uuid.uuid4())
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
         if idempotency_key:

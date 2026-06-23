@@ -197,6 +197,25 @@ def test_omniroute_client_post_carries_idempotency_key_and_is_not_retried():
     assert headers["X-Request-Id"]
 
 
+@pytest.mark.spec("omniroute-client::POST preserves call-site headers")
+def test_omniroute_client_post_preserves_call_site_headers_with_management_headers():
+    transport = FakeTransport([FakeResponse(200, {"ok": True})])
+    client = OmniRouteClient(base_url="https://omniroute.test/api", api_key="manage-key", transport=transport)
+
+    client.post(
+        "/v1/providers/provider-a/chat/completions",
+        {"model": "model-a"},
+        headers={"X-OmniRoute-No-Cache": "true"},
+        idempotency_key="probe:model-a",
+    )
+
+    headers = transport.requests[0]["headers"]
+    assert headers["X-OmniRoute-No-Cache"] == "true"
+    assert headers["Authorization"] == "Bearer manage-key"
+    assert headers["Idempotency-Key"] == "probe:model-a"
+    assert headers["X-Request-Id"]
+
+
 @pytest.mark.spec("combo-applier::Apply writes existing combos through management API bridge")
 def test_omniroute_client_put_carries_idempotency_key_and_is_not_retried():
     transport = FakeTransport([FakeResponse(503, {"error": "busy"})])

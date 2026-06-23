@@ -39,7 +39,9 @@ exhaustion, non-429/non-transient `4xx`, and non-transient `5xx` responses SHALL
 fail with `RuntimeError`. A `401/403` SHALL fail the run with no apply. When the
 caller supplies an idempotency key the client SHALL send it as an
 `Idempotency-Key` header on the POST while keeping a per-attempt `X-Request-Id`;
-POST SHALL remain non-retriable.
+POST SHALL remain non-retriable. POST/PUT callers MAY supply extra request
+headers; the client SHALL preserve those headers while still adding management
+auth, idempotency, and request-id headers.
 
 #### Scenario: 429 with Retry-After
 - GIVEN a GET returns `429` with a valid positive `Retry-After` header
@@ -77,6 +79,14 @@ POST SHALL remain non-retriable.
 - WHEN the request is sent
 - THEN it carries an `Idempotency-Key` header and a per-attempt `X-Request-Id`
 - AND the POST is not retried
+
+#### Scenario: POST preserves call-site headers
+- GIVEN a POST is issued with a call-site header such as probe no-cache
+- AND management auth and an idempotency key are configured
+- WHEN the request is sent
+- THEN the call-site header is sent
+- AND the management auth, `Idempotency-Key`, and `X-Request-Id` headers are
+  still sent
 
 ### Requirement: Safe URL construction
 
@@ -126,4 +136,3 @@ model path, not OmniRoute's management combo-test helper.
 - WHEN FMO attempts to call `/api/combos/test`
 - THEN the request is rejected by FMO or bridge policy
 - AND it is not used as the apply smoke-test path
-
