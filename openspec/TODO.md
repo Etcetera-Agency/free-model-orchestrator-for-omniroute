@@ -13,9 +13,6 @@
   stage bodies). The drain mirrors the original split sequence and tightens the
   spec from "a module exists" to "the module defines the stage"; behavior-preserving
   (pytest as oracle), public re-export surface stays identical.
-  - `refactor-drain-stages-runtime` — drains the middle-of-pipeline bodies
-    (probing/telemetry/inventory/roles + role-scoring helper cluster). Independent
-    of the discovery drain; either order.
   - `refactor-drain-stages-apply` — terminal: drains the back-of-pipeline bodies
     (allocation/apply/rollback/audit), relocates the shared spine (`Stage*`
     dataclasses + base `_production_stage_adapters`) into `_base.py`, and **deletes
@@ -29,6 +26,10 @@
 
 ## Resolved
 
+- `refactor-drain-stages-runtime` — archived 2026-06-23. Middle-of-pipeline
+  stage bodies and role-scoring helpers now live in `probing.py`, `telemetry.py`,
+  `inventory.py`, and `roles.py`. Focused runtime/spec docs checks,
+  `make check`, and OpenSpec validation are green.
 - `refactor-drain-stages-discovery` — archived 2026-06-23. Front-of-pipeline
   stage bodies now live in `discovery.py`, `quota.py`, and `access.py`; adapter
   re-exports remain stable. Focused discovery/quota/access/spec docs checks,
