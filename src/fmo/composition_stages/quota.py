@@ -38,26 +38,26 @@ def _quota_research_stage(dependencies: StageDependencies, context: PipelineCont
               JOIN providers p ON p.id = pa.provider_id
               WHERE pe.canonical_model_id IS NOT NULL
                 AND (
-                  %(endpoint_filter)s IS NULL
+                  %(endpoint_filter)s::text IS NULL
                   OR pe.id::text = %(endpoint_filter)s
                   OR pe.provider_model_id = %(endpoint_filter)s
                 )
                 AND (
-                  %(provider_filter)s IS NULL
+                  %(provider_filter)s::text IS NULL
                   OR p.id::text = %(provider_filter)s
                   OR p.omniroute_provider_id = %(provider_filter)s
                 )
                 AND (
-                  %(account_filter)s IS NULL
+                  %(account_filter)s::text IS NULL
                   OR pa.id::text = %(account_filter)s
                   OR pa.omniroute_connection_id = %(account_filter)s
                 )
             ),
             scoped AS (
               SELECT *,
-                     CASE WHEN %(endpoint_filter)s IS NULL THEN provider_id ELSE id END AS provider_group,
-                     CASE WHEN %(endpoint_filter)s IS NULL THEN account_id ELSE id END AS account_group,
-                     CASE WHEN %(endpoint_filter)s IS NULL THEN '*' ELSE provider_model_id END AS rule_model_pattern
+                     CASE WHEN %(endpoint_filter)s::text IS NULL THEN provider_id ELSE id END AS provider_group,
+                     CASE WHEN %(endpoint_filter)s::text IS NULL THEN account_id ELSE id END AS account_group,
+                     CASE WHEN %(endpoint_filter)s::text IS NULL THEN '*' ELSE provider_model_id END AS rule_model_pattern
               FROM candidates
             ),
             ranked AS (

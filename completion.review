@@ -1,5 +1,11 @@
 # Completion Review
 
+- Deploy fix: provider/account quota research filters now cast optional CLI
+  filters to text before `IS NULL` checks, matching live Postgres parameter
+  typing. Live `research-quotas --provider antigravity` previously failed before
+  running search with `could not determine data type of parameter`. Code
+  Simplifier review kept the fix to SQL typing only. Verification: ruff on the
+  quota stage, `git diff --check`, and OpenSpec strict validation.
 - Deploy fix: quota research now defaults to provider/account pool scope instead
   of per-model scanning. A triggered recalc searches each provider/account once,
   persists wildcard rules with `model_pattern='*'`, and access classification
