@@ -36,8 +36,18 @@ capability is claimed and quota reserve allows.
 The system SHALL map probe failures deterministically: `402` means paid charge
 risk, `429` means quota exhausted, `401/403` means auth/access failure, `5xx`
 means provider failure, and any other status means generic probe failure.
+HTTP errors raised by the shared OmniRoute client SHALL be persisted as failed
+probe results for that endpoint and SHALL NOT crash the whole probing stage.
 
 #### Scenario: Probe error table
 - GIVEN probe responses with status `402`, `429`, `401`, `403`, `500`, and another code
 - WHEN probe error handling runs
 - THEN each response maps to the expected failure reason
+
+#### Scenario: Probe HTTP errors are persisted fail-closed
+- GIVEN a confirmed endpoint has reserved capacity
+- AND the probe request raises an OmniRoute HTTP error
+- WHEN the probing stage runs
+- THEN a failed probe row is stored with the HTTP status and mapped reason
+- AND the endpoint probe status becomes `failed`
+- AND the probing stage completes without crashing

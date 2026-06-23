@@ -13,7 +13,7 @@ def should_probe(access_status: str, *, reserved_capacity: bool) -> bool:
     return access_status in PROBE_ALLOWED_ACCESS and reserved_capacity
 
 
-def probe_endpoint(client, *, provider: str, model: str, capabilities: dict[str, bool]) -> ProbeResult:
+def probe_suites(capabilities: dict[str, bool]) -> tuple[str, ...]:
     suites = ["basic_text"]
     for capability, suite in (
         ("structured_output", "structured_output"),
@@ -22,12 +22,17 @@ def probe_endpoint(client, *, provider: str, model: str, capabilities: dict[str,
     ):
         if capabilities.get(capability):
             suites.append(suite)
+    return tuple(suites)
+
+
+def probe_endpoint(client, *, provider: str, model: str, capabilities: dict[str, bool]) -> ProbeResult:
+    suites = probe_suites(capabilities)
     response = client.post(
         f"/v1/providers/{provider}/chat/completions",
         {"model": model, "messages": [{"role": "user", "content": "Return ok"}]},
         headers={"X-OmniRoute-No-Cache": "true"},
     )
-    return ProbeResult(passed=response["status_code"] == 200 and bool(response.get("content")), suites=tuple(suites))
+    return ProbeResult(passed=response["status_code"] == 200 and bool(response.get("content")), suites=suites)
 
 
 def handle_probe_error(status_code: int) -> tuple[str, str]:

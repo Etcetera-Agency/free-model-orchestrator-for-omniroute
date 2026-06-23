@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from fmo.omniroute import OmniRouteRequestError
 from tests._composition_support import (
     CANONICAL_STAGE_NAMES,
     UTC,
@@ -44,6 +45,13 @@ from tests._composition_support import (
 )
 
 
+class FailingProbeClient(PipelineOpsClient):
+    def post(self, path, payload, headers=None, idempotency_key=None):
+        if path.endswith("/chat/completions"):
+            raise OmniRouteRequestError("POST", path, 400)
+        return super().post(path, payload, headers=headers, idempotency_key=idempotency_key)
+
+
 @pytest.mark.spec("pipeline-orchestration::Probe respects confirmed free capacity")
 @pytest.mark.spec("pipeline-orchestration::Probe persists results and excludes failures")
 def test_probe_stage_gates_on_confirmed_capacity_and_persists_results(postgres_url):
@@ -64,6 +72,25 @@ def test_probe_stage_gates_on_confirmed_capacity_and_persists_results(postgres_u
     assert probe["passed"] is True
     assert probe["details"]["reserved_capacity"] is True
     assert endpoint["probe_status"] == "passed"
+
+
+@pytest.mark.spec("probe-runner::Probe HTTP errors are persisted fail-closed")
+def test_probe_stage_records_http_error_without_crashing(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    client = FailingProbeClient()
+    prepare_confirmed_endpoint(repository, client=client)
+
+    result = run_composed_stage(repository, "probing", client=client)
+
+    with repository.database.transaction() as transaction:
+        probe = transaction.execute("SELECT passed, http_status, details FROM endpoint_probes").fetchone()
+        endpoint = transaction.execute("SELECT probe_status FROM provider_endpoints").fetchone()
+    assert result.exit_code == 0
+    assert probe["passed"] is False
+    assert probe["http_status"] == 400
+    assert probe["details"]["error_reason"] == "unknown"
+    assert endpoint["probe_status"] == "failed"
 
 
 @pytest.mark.spec("pipeline-orchestration::Telemetry sync writes normalized rows")

@@ -1,5 +1,13 @@
 # Completion Review
 
+- Deploy fix: probing now persists shared-client HTTP errors as failed endpoint
+  probes instead of crashing the stage. Live `probe-models` hit HTTP 400 from a
+  provider completion route; the stage now records status/reason details, marks
+  that endpoint `probe_status=failed`, and keeps the batch moving. Code
+  Simplifier review extracted suite selection once for normal/error paths.
+  Focused verification: probe/scoring tests on Python 3.12 venv (DB-backed
+  probe-stage tests skipped locally due PostgreSQL `/dev/shm` exhaustion), ruff
+  on touched files, and OpenSpec strict validation.
 - Deploy fix: shared OmniRoute client `post`/`put` now preserve call-site
   headers while still adding management auth, `Idempotency-Key`, and
   `X-Request-Id`. Live probing needed this for `X-OmniRoute-No-Cache`; before
