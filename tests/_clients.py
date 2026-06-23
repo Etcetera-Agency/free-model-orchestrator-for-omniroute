@@ -4,7 +4,7 @@ from copy import deepcopy
 from datetime import UTC, datetime
 
 from fmo.aa_migration import MigrationProposalResponse
-from fmo.hermes_inventory import InspectorForecastResponse
+from fmo.hermes_inventory import InspectorForecastResponse, IntelligenceForecastResponse
 from fmo.omniroute import OmniRouteRequestError
 from fmo.quota_research import QuotaClaimResponse
 from fmo.smart_review import ComboReviewResponse
@@ -271,6 +271,8 @@ class RecordingLlmRuntime:
                 average_output_tokens=50,
                 confidence="medium",
             )
+        if response_model is IntelligenceForecastResponse:
+            return response_model(capability_axis="intelligence_index", tier="medium", confidence="medium")
         if response_model is MigrationProposalResponse:
             return response_model(
                 index_version="4.2",

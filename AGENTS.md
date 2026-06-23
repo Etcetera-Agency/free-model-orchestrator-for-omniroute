@@ -13,6 +13,8 @@ Use `@/openspec/AGENTS.md` for:
 - Spec format/conventions
 - Project structure/guidelines
 
+Run OpenSpec CLI as `npx --yes @fission-ai/openspec@latest ...`.
+
 Keep managed block so `openspec update` can refresh it.
 
 <!-- OPENSPEC:END -->

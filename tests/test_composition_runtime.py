@@ -818,10 +818,22 @@ def test_production_llm_runtime_uses_instructor_from_openai_and_bootstrap_model(
     config = build_startup_config(
         valid_env(
             DATABASE_URL=postgres_url,
-            LLM_BOOTSTRAP_MODEL_ID="free-bootstrap",
+            LLM_BOOTSTRAP_MODEL_ID="provider-bootstrap:conn-bootstrap",
             LLM_BOOTSTRAP_MODEL_CONFIRMED_FREE="true",
         )
     )
+    client = PipelineOpsClient()
+    client.quota_body["providers"] = [
+        {
+            "provider": "provider-bootstrap",
+            "connectionId": "conn-bootstrap",
+            "quotaTotal": 100,
+            "quotaUsed": 20,
+            "quotaWindow": "day",
+            "percentRemaining": 80,
+            "resetAt": None,
+        }
+    ]
     openai_clients = []
     instructor_clients = []
     fake_instructor_client = FakeInstructorClient()
@@ -838,6 +850,7 @@ def test_production_llm_runtime_uses_instructor_from_openai_and_bootstrap_model(
     runtime = build_production_llm_runtime(
         config,
         repository,
+        live_quota_client=client,
         adapters=StageAdapters(
             instructor_from_openai=instructor_from_openai,
             openai_client_factory=openai_client_factory,
@@ -863,7 +876,7 @@ def test_production_llm_runtime_uses_instructor_from_openai_and_bootstrap_model(
     assert response.amount == 1
     assert openai_clients[0].kwargs == {"base_url": "https://omniroute.test/v1", "api_key": "test-key"}
     assert instructor_clients == openai_clients
-    assert fake_instructor_client.chat.completions.calls[0]["model"] == "free-bootstrap"
+    assert fake_instructor_client.chat.completions.calls[0]["model"] == "provider-bootstrap:conn-bootstrap"
 
 
 @pytest.mark.spec("llm-runtime::Highest-index confirmed-free model selected")
@@ -872,19 +885,110 @@ def test_llm_model_selection_uses_confirmed_free_index_order_and_no_llm_fallback
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     repository = Repository(Database(postgres_url))
     config = build_startup_config(valid_env(DATABASE_URL=postgres_url))
-    seed_confirmed_llm_candidate(repository, model_id="free-low", intelligence_index=40)
-    seed_confirmed_llm_candidate(repository, model_id="free-high", intelligence_index=90, remaining=0)
-    seed_confirmed_llm_candidate(repository, model_id="free-unhealthy", intelligence_index=95, health_status="degraded")
+    seed_confirmed_llm_candidate(
+        repository,
+        model_id="free-low",
+        intelligence_index=40,
+        connection_id="conn-provider-a",
+    )
+    seed_confirmed_llm_candidate(
+        repository, model_id="free-high", intelligence_index=90, remaining=0, connection_id="conn-provider-a"
+    )
+    seed_confirmed_llm_candidate(
+        repository,
+        model_id="free-unhealthy",
+        intelligence_index=95,
+        health_status="degraded",
+        connection_id="conn-provider-a",
+    )
 
-    selected = select_llm_model(repository, config)
+    client = PipelineOpsClient()
+    selected = select_llm_model(repository, config, client)
 
     with repository.database.transaction() as transaction:
         combo_count = transaction.execute("SELECT count(*) AS total FROM combo_snapshots").fetchone()["total"]
     assert selected == "free-low"
     assert combo_count == 0
 
-    empty_repository = Repository(Database(postgres_url))
-    assert select_llm_model(empty_repository, config) == "free-low"
+    assert select_llm_model(repository, config) is None
+
+
+@pytest.mark.spec("llm-runtime::Falls to next model by index on unavailability")
+@pytest.mark.spec("llm-runtime::Just-consumed quota is not selected")
+def test_llm_model_selection_requires_fresh_live_quota_before_returning_candidate(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    config = build_startup_config(valid_env(DATABASE_URL=postgres_url))
+    seed_confirmed_llm_candidate(
+        repository,
+        model_id="free-low-percent",
+        intelligence_index=100,
+        provider_id="provider-low-percent",
+        connection_id="conn-low-percent",
+    )
+    seed_confirmed_llm_candidate(
+        repository,
+        model_id="free-locked",
+        intelligence_index=90,
+        provider_id="provider-locked",
+        connection_id="conn-locked",
+    )
+    seed_confirmed_llm_candidate(
+        repository,
+        model_id="free-exhausted",
+        intelligence_index=80,
+        provider_id="provider-exhausted",
+        connection_id="conn-exhausted",
+    )
+    seed_confirmed_llm_candidate(
+        repository,
+        model_id="free-usable",
+        intelligence_index=70,
+        provider_id="provider-usable",
+        connection_id="conn-usable",
+    )
+    client = PipelineOpsClient()
+    client.quota_body["providers"] = [
+        {
+            "provider": "provider-low-percent",
+            "connectionId": "conn-low-percent",
+            "quotaTotal": 100,
+            "quotaUsed": 89,
+            "quotaWindow": "day",
+            "percentRemaining": 10,
+            "resetAt": None,
+        },
+        {
+            "provider": "provider-locked",
+            "connectionId": "conn-locked",
+            "quotaTotal": 100,
+            "quotaUsed": 20,
+            "quotaWindow": "day",
+            "percentRemaining": 80,
+            "resetAt": (datetime.now(UTC) + timedelta(hours=1)).isoformat(),
+        },
+        {
+            "provider": "provider-exhausted",
+            "connectionId": "conn-exhausted",
+            "quotaTotal": 100,
+            "quotaUsed": 100,
+            "quotaWindow": "day",
+            "percentRemaining": 50,
+            "resetAt": None,
+        },
+        {
+            "provider": "provider-usable",
+            "connectionId": "conn-usable",
+            "quotaTotal": 100,
+            "quotaUsed": 20,
+            "quotaWindow": "day",
+            "percentRemaining": 80,
+            "resetAt": None,
+        },
+    ]
+
+    assert select_llm_model(repository, config, client) == "free-usable"
+    assert client.get_calls[-1] == "/api/usage/quota"
 
 
 @pytest.mark.spec("llm-runtime::No confirmed-free model degrades to no-LLM")

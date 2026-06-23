@@ -81,14 +81,22 @@ def test_inspector_prompt_and_scope_no_secret_or_file_reads():
     prompt = assemble_inspector_prompt(
         inventory, changes=["cadence changed"], secrets={"HERMES_INVENTORY_TOKEN": "secret"}
     )
+
+    class Inspector:
+        def complete(self, *, site, context, response_model):
+            assert site.model is None
+            assert site.prompt_path.name == "hermes-inspector.md"
+            assert "secret" not in context["prompt"]
+            return response_model(
+                role="r",
+                expected_calls=9,
+                average_input_tokens=100,
+                average_output_tokens=20,
+                confidence="low",
+            )
+
     forecast = run_inspector(
-        lambda prompt: {
-            "role": "r",
-            "expected_calls": 9,
-            "average_input_tokens": 100,
-            "average_output_tokens": 20,
-            "confidence": "low",
-        },
+        Inspector(),
         prompt,
     )
     assert "secret" not in prompt

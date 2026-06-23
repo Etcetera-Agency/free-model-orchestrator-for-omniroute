@@ -2,18 +2,43 @@
 
 ## Deferred follow-up
 
-- (none open)
-
-## Active proposal slices (awaiting TDD implementation)
-
-- `add-intelligence-inspector` — proposed 2026-06-23. Adds a second prompt-only
-  Hermes Inspector that assesses per-unit role intelligence needs, caches
-  content-hash verdicts, maps tier/axis to role quality anchors, and snaps roles
-  to reusable default combo grid cells. Its scenarios are temporarily listed in
-  `tests/spec_coverage_pending.txt` until the slice lands next.
+- Server-side default combo grid bootstrap — separate deploy task. Regenerate
+  seed models with the live FMO matcher, back up `GET /api/combos`, then create
+  the default one-seed combos from `docs/combo-grid-bootstrap.md` on OmniRoute.
+- `update-smart-combo-review-context` — active proposal has uncovered
+  executable scenarios for reviewer prompt context, safety facts, external
+  prompt file loading, prompt bounds, and secret redaction. Added those scenario
+  ids to `tests/spec_coverage_pending.txt`; remove them as tests land.
+- `update-combo-member-identity` — implement before
+  `update-smart-combo-review-context`. The reviewer needs structured
+  provider/model/account, quota-pool, and canonical-model identities before its
+  patches can be validated and rendered safely. Added its allocator/combo-applier
+  scenario ids to `tests/spec_coverage_pending.txt`; remove them as tests land.
+- `update-aa-index-migration-inspector` — active proposal captures the AA
+  migration inspector hardening slice: real prompt-file loading, deterministic
+  migration context, shared resolver model selection, typed machine-used
+  proposal fields, operational validation/repair, rollout revalidation, and
+  audit snapshot persistence. Bind new scenarios to tests during implementation
+  and remove any pending coverage entries as tests land.
 
 ## Resolved
 
+- `update-quota-research-range-resolution` — archived 2026-06-23. Quota
+  research now threads `previous_limit` into the
+  Instructor inspector prompt, documents deterministic range clamping in the
+  prompt template, asks search for cumulative request/token budgets across
+  official and community sources, and keeps worsened-quota safe mode under the
+  deterministic activation gate. Shared Inspector model resolution is finished:
+  every Inspector leaves `LlmSiteConfig.model` unset, uses configured prompt
+  files, requires resolver-selected concrete provider models, fails closed as
+  `llm_model_unavailable` without one, skips stale/exhausted/locked live quota,
+  and no repo text retains fabricated Inspector route ids.
+- `add-intelligence-inspector` — archived 2026-06-23. Hermes now runs a second
+  advisory intelligence Inspector per describing unit, caches verdicts by content
+  hash, maps axis/tier to quality anchors, fills forecast model-choice metadata,
+  persists role quality anchors, and resolves reusable/default combo grid cells
+  deterministically. The concrete live server combo bootstrap remains a deferred
+  deploy task above.
 - `refactor-collapse-stage-helper-aliases` — archived 2026-06-23. Removed the
   slug/hash/quota-math re-export aliases from `composition_stages/_helpers.py`,
   repointed drained stage modules to canonical `idempotency`/`quota_normalize`

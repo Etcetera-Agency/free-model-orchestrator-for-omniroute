@@ -2,8 +2,14 @@ import pytest
 
 from _fixtures import fixture_body
 from fmo.aa_migration import run_migration_agent
-from fmo.hermes_inventory import run_inspector
-from fmo.llm_runtime import LlmRuntimeError, LlmSiteConfig, complete_with_adapter
+from fmo.hermes_inventory import run_inspector, run_intelligence_inspector
+from fmo.llm_runtime import (
+    LlmProviderConfig,
+    LlmRuntimeError,
+    LlmSiteConfig,
+    SharedInstructorRuntime,
+    complete_with_adapter,
+)
 from fmo.quota_research import QuotaClaimResponse, run_quota_inspector
 from fmo.smart_review import run_combo_review
 
@@ -22,13 +28,22 @@ def _transport():
     return RecordingCompletionTransport(fixture_body("omniroute_structured_llm_completions"))
 
 
+def _runtime(transport):
+    return SharedInstructorRuntime(
+        provider=LlmProviderConfig(base_url="https://omniroute.test/v1", api_key="test-key"),
+        transport=transport,
+        model_resolver=lambda: "provider/model-a",
+    )
+
+
 @pytest.mark.spec("llm-runtime::All sites use the adapter")
 @pytest.mark.spec("llm-runtime::Add or change runtime defaults")
 def test_all_structured_llm_sites_use_shared_adapter_and_validate_pydantic_outputs():
     transport = _transport()
+    runtime = _runtime(transport)
 
-    quota_claim = run_quota_inspector(transport, "quota prompt")
-    forecast = run_inspector(transport, "forecast prompt")
+    quota_claim = run_quota_inspector(runtime, "quota prompt")
+    forecast = run_inspector(runtime, "forecast prompt")
     review = run_combo_review(transport, deterministic_combo={"research_scout": ["free:model-b"]}, trigger=True)
     migration = run_migration_agent(transport, {"endpoint": "free:model-a", "available": True})
 
@@ -45,6 +60,49 @@ def test_all_structured_llm_sites_use_shared_adapter_and_validate_pydantic_outpu
     ]
     assert all(call["mode"] == "json_schema" for call in transport.calls)
     assert all(call["response_model"] for call in transport.calls)
+
+
+@pytest.mark.spec("llm-runtime::Inspector sites use one resolver approach")
+@pytest.mark.spec("quota-research::Inspector uses resolver-selected provider model")
+@pytest.mark.spec("hermes-inventory::Inspector uses resolver-selected provider model")
+def test_inspector_sites_leave_model_unset_and_use_resolver_model():
+    transport = _transport()
+    transport.completions["hermes_intelligence_inspector"] = {
+        "capability_axis": "intelligence_index",
+        "tier": "medium",
+        "confidence": "medium",
+    }
+    runtime = _runtime(transport)
+
+    run_quota_inspector(runtime, "quota prompt")
+    run_inspector(runtime, "forecast prompt")
+    run_intelligence_inspector(runtime, "intelligence prompt")
+
+    assert [call["model"] for call in transport.calls] == ["provider/model-a"] * 3
+    assert all("omniroute/" not in call["model"] for call in transport.calls)
+    assert "Prompt: quota-research inspector" in transport.calls[0]["prompt"]
+    assert "Prompt: Hermes role Inspector forecast" in transport.calls[1]["prompt"]
+    assert "Prompt: Hermes intelligence Inspector" in transport.calls[2]["prompt"]
+
+
+@pytest.mark.spec("llm-runtime::Inspector sites fail closed without a resolver model")
+@pytest.mark.spec("quota-research::Resolver-less inspector fails closed")
+@pytest.mark.spec("hermes-inventory::Resolver-less inspector fails closed")
+def test_resolverless_inspector_calls_fail_closed_without_omniroute_combo():
+    calls = []
+
+    def transport(payload):
+        calls.append(payload)
+        return {"metric": "requests", "amount": 1, "window": "day", "evidence": ["fixture"], "hard_stop": False}
+
+    with pytest.raises(LlmRuntimeError, match="llm_model_unavailable"):
+        run_quota_inspector(transport, "quota prompt")
+    with pytest.raises(LlmRuntimeError, match="llm_model_unavailable"):
+        run_inspector(transport, "forecast prompt")
+    with pytest.raises(LlmRuntimeError, match="llm_model_unavailable"):
+        run_intelligence_inspector(transport, "intelligence prompt")
+
+    assert calls == []
 
 
 @pytest.mark.spec("llm-runtime::All sites use the adapter")

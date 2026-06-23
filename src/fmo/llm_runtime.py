@@ -18,7 +18,7 @@ SECRET_PATTERNS = (
 @dataclass(frozen=True)
 class LlmSiteConfig:
     name: str
-    model: str
+    model: str | None = None
     prompt_path: Path | None = None
     max_prompt_chars: int = 8000
     retries: int = 1

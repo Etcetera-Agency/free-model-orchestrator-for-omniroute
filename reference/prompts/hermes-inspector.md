@@ -23,6 +23,8 @@ deterministic code and handed to you in this prompt.
 - `{{expected_frequency}}` (for event/manual consumers: observed or configured rate)
 - `{{known_token_estimates}}`
 - `{{shared_role_dependencies}}`
+- `{{prompt}}` — deterministic fallback bundle when per-field variables are not
+  split by the caller
 
 ## Task
 
@@ -35,3 +37,7 @@ Return: `expected_runs_per_window`, `expected_calls_per_window`,
 - Prefer explicit schedules over guesses; mark `confidence: low` when guessing.
 - Never return zero demand for an enabled role.
 - List every assumption you made in `assumptions`.
+
+## Supplied deterministic context
+
+{{prompt}}

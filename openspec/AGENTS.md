@@ -10,7 +10,7 @@ Spec-driven dev rules for AI coding agents.
 - Files: `proposal.md`, `tasks.md`, optional `design.md`, delta specs per affected capability.
 - Deltas: `## ADDED|MODIFIED|REMOVED|RENAMED Requirements`.
 - Every requirement needs `#### Scenario:`.
-- Validate: `openspec validate <change-id> --strict`; fix before sharing.
+- Validate: `npx --yes @fission-ai/openspec@latest validate <change-id> --strict`; fix before sharing.
 - Gate: no impl before proposal approval.
 
 ## Workflow
@@ -67,28 +67,29 @@ Before specs: check existing capability, prefer modifying over duplicate, use `o
 ## Search / CLI
 
 ```bash
-# Search
-openspec spec list --long              # specs, or --json
-openspec list                          # active changes
-openspec change list --json            # deprecated but available
-openspec show <spec-id> --type spec    # or --json
-openspec show <change-id> --json --deltas-only
+npx --yes @fission-ai/openspec@latest spec list --long
+npx --yes @fission-ai/openspec@latest list
+npx --yes @fission-ai/openspec@latest change list --json
+npx --yes @fission-ai/openspec@latest show <spec-id> --type spec
+npx --yes @fission-ai/openspec@latest show <change-id> --json --deltas-only
 rg -n "Requirement:|Scenario:" openspec/specs
 
 # Essential
-openspec list
-openspec list --specs
-openspec show [item]
-openspec validate [item]
-openspec archive <change-id> [--yes|-y]
+npx --yes @fission-ai/openspec@latest list
+npx --yes @fission-ai/openspec@latest list --specs
+npx --yes @fission-ai/openspec@latest show [item]
+npx --yes @fission-ai/openspec@latest validate [item]
+npx --yes @fission-ai/openspec@latest archive <change-id> [--yes|-y]
+npx --yes @fission-ai/openspec@latest validate <change-id> --strict
+npx --yes @fission-ai/openspec@latest archive <change-id> --yes
 
 # Project / interactive / debug
-openspec init [path]
-openspec update [path]
-openspec show
-openspec validate
-openspec show [change] --json --deltas-only
-openspec validate [change] --strict
+npx --yes @fission-ai/openspec@latest init [path]
+npx --yes @fission-ai/openspec@latest update [path]
+npx --yes @fission-ai/openspec@latest show
+npx --yes @fission-ai/openspec@latest validate
+npx --yes @fission-ai/openspec@latest show [change] --json --deltas-only
+npx --yes @fission-ai/openspec@latest validate [change] --strict
 ```
 
 Flags: `--json` machine output; `--type change|spec` disambiguate; `--strict` full validation; `--no-interactive` no prompts; `--skip-specs` archive without spec updates; `--yes`/`-y` no archive confirm.

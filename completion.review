@@ -1,5 +1,30 @@
 # Completion Review
 
+- `update-quota-research-range-resolution` is ready to archive: quota research
+  now renders the quota inspector prompt from `reference/prompts/quota-research.md`,
+  threads `previous_limit` into that prompt, exposes deterministic range-clamp
+  policy tests, and expands the search query to ask for cumulative request/token
+  budget axes plus hard-stop evidence from official and community sources.
+  Shared Inspector resolution is complete: quota, Hermes forecast, and Hermes
+  intelligence Inspectors leave `LlmSiteConfig.model` unset, render configured
+  prompt files, require a resolver-selected concrete provider model, and fail
+  closed as `llm_model_unavailable` without one. Code Simplifier review kept the
+  deterministic fallback and safe-mode activation unchanged while removing the
+  fabricated Inspector combo fallback from code and specs.
+- `update-quota-research-range-resolution` archived on 2026-06-23 via
+  `npx --yes @fission-ai/openspec@latest archive ... --skip-specs --yes` after
+  manually confirming/merging living spec deltas. Post-archive checks passed:
+  full pytest, OpenSpec `--all --strict`, spec coverage/doc gates, and
+  `git diff --check`. The OpenSpec CLI invocation is now documented as the
+  always-used npx form.
+- `add-intelligence-inspector` is ready to archive: Hermes inventory now carries
+  profile/cron/auxiliary describing text, runs the advisory intelligence
+  Inspector per describing unit, caches verdicts by content hash, maps tier/axis
+  to role quality anchors, persists anchor metadata for role scoring, and exposes
+  deterministic grid profile/snap/bootstrap helpers. Code Simplifier review
+  tightened the cache-hit test setup and added an anchor on the content-hash
+  refresh boundary. Static gates also surfaced a stale quota-summary
+  `previous_limit` signature; the minimal fix restored safe-mode derivation.
 - `refactor-unify-shared-helpers` is archived: row helpers remain single-home in
   `persistence/_base.py`, timestamp/slug/hash/idempotency-key helpers now live
   in `idempotency.py`, quota payload math lives in `quota_normalize.py`, and the

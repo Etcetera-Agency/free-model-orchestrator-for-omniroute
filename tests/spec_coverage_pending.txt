@@ -5,15 +5,22 @@
 #
 # Active proposal slices awaiting TDD implementation (see openspec/TODO.md and
 # openspec/changes/<id>/). Each line is dropped when its test lands.
-#
-hermes-inventory::Each describing unit is assessed individually
-hermes-inventory::Axis and anchor set the band centre, not its edges
-hermes-inventory::Shared combo takes the most demanding unit
-hermes-inventory::Bare webhook role floors without an LLM call
-hermes-inventory::Unchanged unit reuses its cached verdict
-hermes-inventory::Cadence change does not re-run the intelligence Inspector
-hermes-inventory::Changed persona re-assesses only its unit
-hermes-inventory::Main role snaps to a reusable grid combo
-hermes-inventory::Auxiliary combo snaps to the cheap cell without assessment
-hermes-inventory::Special role mints a unique combo
-hermes-inventory::Inspector failure falls back to seed anchor
+smart-combo-reviewer::Reviewer receives deterministic combo context
+smart-combo-reviewer::Reviewer receives planning and safety facts
+smart-combo-reviewer::Reviewer uses external prompt file
+smart-combo-reviewer::Reviewer prompt remains bounded and complete
+smart-combo-reviewer::Reviewer prompt redacts secrets
+combo-applier::Structured combo steps applied
+combo-applier::Endpoint ids retained for audit
+combo-applier::Drift guard uses structured baseline
+allocator::Allocation target carries structured member identity
+allocator::Duplicate canonical model avoided when alternative exists
+allocator::Family concentration reported
+allocator::Quota pool remains hard gate
+aa-index-migration::Prompt is not selected-model JSON
+aa-index-migration::Invalid proposal enters repair loop
+aa-index-migration::Unrepaired proposal fails closed
+aa-index-migration::Rollout revalidates proposal
+aa-index-migration::Rollout drift blocks mutation
+aa-index-migration::Shared resolver handles migration model selection
+llm-runtime::AA migration prompt is loaded from file
