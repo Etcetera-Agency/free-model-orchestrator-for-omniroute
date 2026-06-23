@@ -1,5 +1,6 @@
 import pytest
 
+from fmo.aa_index_runtime import _valid_migration_proposal
 from fmo.aa_migration import (
     detect_index_change,
     run_migration_agent,
@@ -219,8 +220,14 @@ def test_migration_agent_selects_highest_intelligence_and_validates_approval():
         ]
     )
     proposal = run_migration_agent(
-        lambda model: {"index_version": "v2", "roles": {"r": {"metric": "intelligence_index", "threshold": 50}}},
-        selected,
+        lambda model: {"index_version": "v2", "roles": {"r": {"metric": "intelligence_index", "threshold_value": 50}}},
+        {
+            "old_index_version": "v1",
+            "new_index_version": "v2",
+            "roles": [{"role_id": "r"}],
+            "capacity_summary": {},
+            "percentile_mapping": {},
+        },
     )
     validation = validate_migration_proposal(
         proposal,
@@ -244,7 +251,7 @@ def test_migration_agent_selects_highest_intelligence_and_validates_approval():
 @pytest.mark.spec("aa-index-migration::Smoke test fails after rollout")
 def test_no_model_and_smoke_failure_keep_or_rollback_production():
     assert select_migration_model([]) is None
-    proposal = {"index_version": "v2", "roles": {"r": {"metric": "coding_index", "threshold": 999}}}
+    proposal = {"index_version": "v2", "roles": {"r": {"metric": "coding_index", "threshold_value": 999}}}
     with pytest.raises(ValueError):
         validate_migration_proposal(
             proposal,
@@ -252,3 +259,52 @@ def test_no_model_and_smoke_failure_keep_or_rollback_production():
             role_capacity={"r": {"eligible": 0, "minimum": 2, "quota_ok": False, "quality_ok": False}},
             approved=True,
         )
+
+
+@pytest.mark.spec("aa-index-migration::Invalid proposal enters repair loop")
+def test_migration_repair_loop_passes_validation_errors_and_persists_repaired_proposal():
+    class Runtime:
+        def __init__(self):
+            self.calls = []
+
+        def complete(self, *, site, context, response_model):
+            self.calls.append({"site": site.name, "context": context})
+            if len(self.calls) == 1:
+                return response_model(
+                    index_version="wrong", roles={"r": {"metric": "intelligence_index", "threshold_value": 50}}
+                )
+            return response_model(
+                index_version="v2", roles={"r": {"metric": "intelligence_index", "threshold_value": 50}}
+            )
+
+    context = {
+        "new_index_version": "v2",
+        "role_capacity": {"r": {"eligible": 2, "minimum": 1, "quota_ok": True, "quality_ok": True}},
+    }
+
+    runtime = Runtime()
+    proposal, report = _valid_migration_proposal(runtime, context)
+
+    assert proposal["index_version"] == "v2"
+    assert report["attempts"][0]["validation_errors"] == ["wrong_index_version"]
+    assert report["attempts"][1]["repair_errors"] == ["wrong_index_version"]
+
+
+@pytest.mark.spec("aa-index-migration::Unrepaired proposal fails closed")
+def test_migration_repair_loop_fails_closed_after_three_invalid_attempts():
+    class Runtime:
+        def complete(self, *, site, context, response_model):
+            return response_model(
+                index_version="wrong", roles={"r": {"metric": "intelligence_index", "threshold_value": 50}}
+            )
+
+    context = {
+        "new_index_version": "v2",
+        "role_capacity": {"r": {"eligible": 2, "minimum": 1, "quota_ok": True, "quality_ok": True}},
+    }
+
+    proposal, report = _valid_migration_proposal(Runtime(), context)
+
+    assert proposal is None
+    assert report["status"] == "migration_needs_manual_review"
+    assert len(report["attempts"]) == 3

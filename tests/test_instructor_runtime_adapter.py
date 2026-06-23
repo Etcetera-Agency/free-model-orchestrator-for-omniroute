@@ -48,6 +48,8 @@ def _review_context():
 
 @pytest.mark.spec("llm-runtime::All sites use the adapter")
 @pytest.mark.spec("llm-runtime::Add or change runtime defaults")
+@pytest.mark.spec("llm-runtime::AA migration prompt is loaded from file")
+@pytest.mark.spec("aa-index-migration::Prompt is not selected-model JSON")
 def test_all_structured_llm_sites_use_shared_adapter_and_validate_pydantic_outputs():
     transport = _transport()
     runtime = _runtime(transport)
@@ -55,7 +57,18 @@ def test_all_structured_llm_sites_use_shared_adapter_and_validate_pydantic_outpu
     quota_claim = run_quota_inspector(runtime, "quota prompt")
     forecast = run_inspector(runtime, "forecast prompt")
     review = run_combo_review(transport, review_context=_review_context(), trigger=True)
-    migration = run_migration_agent(transport, {"endpoint": "free:model-a", "available": True})
+    migration = run_migration_agent(
+        transport,
+        {
+            "old_index_version": "2026-06-17-aa-free",
+            "new_index_version": "2026-06-18-aa-free",
+            "old_distribution": {"intelligence_index": {"max": 70}},
+            "new_distribution": {"intelligence_index": {"max": 90}},
+            "roles": [{"role_id": "research_scout"}],
+            "capacity_summary": {"research_scout": {"eligible": 3}},
+            "percentile_mapping": {"research_scout": {"new_same_percentile_threshold": 52}},
+        },
+    )
 
     assert quota_claim.amount == 60
     assert forecast.role == "research_scout"
@@ -70,6 +83,11 @@ def test_all_structured_llm_sites_use_shared_adapter_and_validate_pydantic_outpu
     ]
     assert all(call["mode"] == "json_schema" for call in transport.calls)
     assert all(call["response_model"] for call in transport.calls)
+    migration_prompt = transport.calls[-1]["prompt"]
+    assert "Prompt: aa-index migration agent" in migration_prompt
+    assert "2026-06-17-aa-free" in migration_prompt
+    assert "2026-06-18-aa-free" in migration_prompt
+    assert '"endpoint"' not in migration_prompt
 
 
 @pytest.mark.spec("llm-runtime::Inspector sites use one resolver approach")

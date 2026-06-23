@@ -11,15 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 # Active proposal slices awaiting TDD implementation. Each entry is dropped from
 # tests/spec_coverage_pending.txt (and here) when its test lands. Slices are
 # listed in openspec/TODO.md and openspec/changes/<id>/.
-EXPECTED_ACTIVE_PENDING = {
-    "aa-index-migration::Prompt is not selected-model JSON",
-    "aa-index-migration::Invalid proposal enters repair loop",
-    "aa-index-migration::Unrepaired proposal fails closed",
-    "aa-index-migration::Rollout revalidates proposal",
-    "aa-index-migration::Rollout drift blocks mutation",
-    "aa-index-migration::Shared resolver handles migration model selection",
-    "llm-runtime::AA migration prompt is loaded from file",
-}
+EXPECTED_ACTIVE_PENDING = set()
 
 
 @pytest.mark.spec("runtime-documentation::Active docs state")

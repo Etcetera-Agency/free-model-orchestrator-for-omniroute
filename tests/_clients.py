@@ -276,7 +276,7 @@ class RecordingLlmRuntime:
         if response_model is MigrationProposalResponse:
             return response_model(
                 index_version="4.2",
-                roles={"routing_fast": {"metric": "intelligence_index", "threshold": 60}},
+                roles={"routing_fast": {"metric": "intelligence_index", "threshold_value": 60}},
             )
         raise AssertionError(f"unexpected response model {response_model}")
 
@@ -296,7 +296,7 @@ class FakeInstructorCompletions:
         if response_model is MigrationProposalResponse:
             return response_model(
                 index_version="4.2",
-                roles={"routing_fast": {"metric": "intelligence_index", "threshold": 60}},
+                roles={"routing_fast": {"metric": "intelligence_index", "threshold_value": 60}},
             )
         return response_model(metric="requests", amount=1, window="day", evidence=["fixture"], hard_stop=True)
 

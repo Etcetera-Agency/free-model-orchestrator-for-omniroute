@@ -1003,6 +1003,7 @@ def test_llm_model_selection_returns_none_without_catalog_or_bootstrap(postgres_
 
 @pytest.mark.spec("aa-index-migration::Advisory proposal generated")
 @pytest.mark.spec("aa-index-migration::Deterministic approval and rollout")
+@pytest.mark.spec("aa-index-migration::Shared resolver handles migration model selection")
 def test_aa_index_runtime_generates_approves_rolls_out_and_rolls_back(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     repository = Repository(Database(postgres_url))
@@ -1045,11 +1046,56 @@ def test_aa_index_runtime_generates_approves_rolls_out_and_rolls_back(postgres_u
     assert rolled_back.exit_code == 0
     assert fake_instructor_client.chat.completions.calls[0]["model"] == "free-migration"
     assert migration["status"] == "rolled_back"
-    assert migration["threshold_proposal_json"]["roles"]["routing_fast"]["threshold"] == 60
+    assert migration["threshold_proposal_json"]["roles"]["routing_fast"]["threshold_value"] == 60
     assert threshold["role_id"] == "routing_fast"
     assert threshold["metric"] == "intelligence_index"
     assert float(threshold["threshold_value"]) == 60.0
     assert threshold["is_active"] is False
+
+
+@pytest.mark.spec("aa-index-migration::Rollout revalidates proposal")
+@pytest.mark.spec("aa-index-migration::Rollout drift blocks mutation")
+def test_aa_index_rollout_revalidates_and_blocks_drift(postgres_url):
+    from fmo.aa_index_runtime import _rollout_latest_aa_migration
+
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    seed_confirmed_llm_candidate(repository, model_id="free-migration", intelligence_index=88, aa_index_version="4.2")
+    with repository.database.transaction() as transaction:
+        repository.roles.upsert(
+            transaction,
+            role_id="routing_fast",
+            requirements={"capabilities": []},
+            expected_load={"requests": 1},
+            criticality=1,
+        )
+        transaction.execute(
+            """
+            INSERT INTO artificial_analysis_index_migrations (
+              new_index_version, change_type, status, baseline_snapshot_json, threshold_proposal_json
+            )
+            VALUES (
+              '4.2', 'major', 'approved', '{}'::jsonb,
+              '{"index_version":"4.2","roles":{"routing_fast":{"metric":"intelligence_index","threshold_value":60}}}'::jsonb
+            )
+            """
+        )
+        transaction.execute("UPDATE endpoint_access_states SET effective_remaining = '{\"requests\": 0}'::jsonb")
+
+    result = _rollout_latest_aa_migration(repository)
+
+    with repository.database.transaction() as transaction:
+        migration = transaction.execute(
+            "SELECT status, validation_report_json FROM artificial_analysis_index_migrations"
+        ).fetchone()
+        threshold_count = transaction.execute(
+            "SELECT count(*) AS total FROM artificial_analysis_threshold_versions"
+        ).fetchone()["total"]
+    assert result.exit_code == 4
+    assert result.error_reason == "migration_validation_failed"
+    assert migration["status"] == "approved"
+    assert migration["validation_report_json"]["status"] == "blocked"
+    assert threshold_count == 0
 
 
 @pytest.mark.spec("aa-index-migration::AA unavailable freezes thresholds")

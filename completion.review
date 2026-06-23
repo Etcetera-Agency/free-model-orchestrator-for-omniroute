@@ -1,5 +1,18 @@
 # Completion Review
 
+- `update-aa-index-migration-inspector` is archived: the migration agent
+  now uses `reference/prompts/aa-index-migration.md` through
+  `LlmSiteConfig.prompt_path`, receives deterministic old/new index context,
+  role/capacity/distribution/percentile facts, and no longer gets selected-model
+  JSON as its prompt. `aa-index analyze` lets the shared runtime resolver own
+  model selection, proposals use typed `threshold_value` fields, validation
+  emits explicit operational error codes, invalid advice enters a bounded repair
+  loop, and rollout revalidates current repository state before inserting
+  threshold versions. Focused verification: AA migration/advisory/runtime/spec
+  coverage tests, ruff, and OpenSpec strict for the change. Code Simplifier
+  prep added explicit validator/context/rollout anchors and kept the
+  machine-used proposal schema to `threshold_value`. Archive merged
+  aa-index-migration and llm-runtime deltas into living specs.
 - `update-smart-combo-review-context` is archived: the diff stage now
   builds a deterministic reviewer context containing role id, current combo,
   target combo, minimal diff, role requirements, demand forecast, allocation

@@ -5,15 +5,15 @@
 - Server-side default combo grid bootstrap — separate deploy task. Regenerate
   seed models with the live FMO matcher, back up `GET /api/combos`, then create
   the default one-seed combos from `docs/combo-grid-bootstrap.md` on OmniRoute.
-- `update-aa-index-migration-inspector` — active proposal captures the AA
-  migration inspector hardening slice: real prompt-file loading, deterministic
-  migration context, shared resolver model selection, typed machine-used
-  proposal fields, operational validation/repair, rollout revalidation, and
-  audit snapshot persistence. Bind new scenarios to tests during implementation
-  and remove any pending coverage entries as tests land.
-
 ## Resolved
 
+- `update-aa-index-migration-inspector` — archived 2026-06-23. AA migration
+  now renders the external prompt file with deterministic migration context,
+  leaves model selection to the shared resolver, normalizes proposals to typed
+  `threshold_value`, validates operational errors with bounded repair attempts,
+  persists baseline/attempt reports, and revalidates rollout against current
+  repository state before threshold mutation. Full pytest deferred to final
+  all-slice verification by request.
 - `update-smart-combo-review-context` — archived 2026-06-23. Reviewer calls
   now receive deterministic current/target/diff context plus role, demand,
   allocation, candidate, quota, diversity, validation, and apply-precondition
