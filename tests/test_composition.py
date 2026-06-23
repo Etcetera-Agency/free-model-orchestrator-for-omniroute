@@ -1457,10 +1457,10 @@ def test_quota_sync_stage_writes_remaining_quota_state(postgres_url):
     assert result.exit_code == 0
     assert result.stage_results[0]["details"]["effect"] == "repository_write"
     assert client.get_calls[-1] == "/api/usage/quota"
-    assert float(observation["limit_value"]) == 100.0
-    assert float(observation["used_value"]) == 40.0
-    assert float(observation["remaining_value"]) == 60.0
-    assert access["effective_remaining"]["requests"] == 60.0
+    assert float(observation["limit_value"]) == 200_000.0
+    assert float(observation["used_value"]) == 80_000.0
+    assert float(observation["remaining_value"]) == 120_000.0
+    assert access["effective_remaining"]["requests"] == 100.0
 
 
 @pytest.mark.spec("hermes-inventory::Inventory persisted from the selected mode")

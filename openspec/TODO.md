@@ -16,8 +16,6 @@ behavior-preservation oracle for every slice. All add structural requirements to
 the `system-architecture` capability. Implement in order — each depends on the
 package/shim the previous one establishes.
 
-- `refactor-split-stages-discovery` — start the `composition_stages/` package and
-  extract the discovery / quota-research+sync / access-classification clusters.
 - `refactor-split-stages-runtime` — extract the probing / telemetry / Hermes
   inventory / role-lifecycle+scoring clusters (carries the largest helper set).
 - `refactor-split-stages-apply` — extract allocation / diff+apply / rollback /
@@ -36,6 +34,11 @@ slices that own the affected modules rather than tracked as separate scenarios.
 
 ## Resolved
 
+- `refactor-split-stages-discovery` — archived 2026-06-23.
+  `fmo.composition_stages` is now a package with discovery, quota, and access
+  cluster modules plus a shim preserving existing composition imports and
+  adapter wiring. Focused discovery/quota/composition tests and `make check` are
+  green.
 - `refactor-split-persistence` — archived 2026-06-23. `fmo.persistence` is now a
   package with `_base.py` plus per-aggregate repository modules, while
   `__init__.py` keeps the public import surface stable. Persistence package

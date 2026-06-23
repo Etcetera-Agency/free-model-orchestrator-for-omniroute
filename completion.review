@@ -1,5 +1,10 @@
 # Completion Review
 
+- `refactor-split-stages-discovery` is archived: `fmo.composition_stages` now
+  starts as a package, with discovery/quota/access cluster modules and a shim
+  preserving existing composition imports and production adapter wiring. Code
+  Simplifier review kept the package-shim anchor and focused the wrappers on the
+  moved front-stage boundary.
 - `refactor-split-persistence` is archived: `fmo.persistence` is now a package
   with `_base.py` plus one repository module per aggregate, `__init__.py`
   re-exports the previous public API, and static pyright issues that surfaced

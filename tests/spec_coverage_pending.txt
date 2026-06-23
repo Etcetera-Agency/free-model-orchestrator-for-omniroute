@@ -6,10 +6,6 @@
 # Active proposal slices awaiting TDD implementation (see openspec/TODO.md and
 # openspec/changes/<id>/). Each line is dropped when its test lands.
 #
-# refactor-split-stages-discovery
-system-architecture::Discovery, quota, and access stages live in dedicated modules
-system-architecture::Stage package re-exports preserve composition wiring
-#
 # refactor-split-stages-runtime
 system-architecture::Probing, telemetry, inventory, and role stages live in dedicated modules
 system-architecture::Role scoring helpers move with the role stage
