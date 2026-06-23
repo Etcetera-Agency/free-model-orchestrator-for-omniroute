@@ -52,6 +52,8 @@ anchor only and SHALL NOT be added as a routable member.
 - WHEN the combo is rebalanced
 - THEN the seed is resolved through `providerId` and `model`
 - AND the role's band is derived from the matching canonical AA metric
+- AND a live role id that already includes the managed `fmo-` prefix is updated
+  directly, without stripping the prefix first
 
 #### Scenario: Re-seeding re-anchors the band
 - GIVEN a combo whose members are reduced back to a single model
