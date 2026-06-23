@@ -23,6 +23,15 @@ dependencies = [
 test = [
   "pytest>=9.1.0,<10",
 ]
+# Static-analysis toolchain. Pinned with upper bounds like the runtime deps so a
+# surprise ruff/pyright release can't silently change what the gate flags.
+# Install with: pip install -e '.[dev]'
+dev = [
+  "ruff>=0.15,<0.16",
+  "vulture>=2.16,<3",
+  "pyright>=1.1.390,<2",
+  "pytest>=9.1.0,<10",
+]
 
 [project.scripts]
 free-model-orchestrator = "fmo.cli:main"
@@ -37,3 +46,69 @@ markers = [
   "live: hits real external services (models.dev / Artificial Analysis); skips when unavailable",
   "spec(scenario_id): bind this test to an openspec scenario, id 'capability::Scenario name'",
 ]
+
+# --------------------------------------------------------------------------- #
+# Static analysis                                                             #
+# --------------------------------------------------------------------------- #
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+src = ["src", "tests"]
+extend-exclude = [".venv", "reference", "openspec"]
+
+[tool.ruff.lint]
+# Curated rule set: correctness (F/E/W/B), import hygiene (I/TID), modernization
+# (UP), comprehension/simplification (C4/SIM/RET), pathlib (PTH), unused args
+# (ARG) and a subset of Pylint (PL*). Add rules deliberately, not in bulk.
+select = [
+  "F", "E", "W",        # pyflakes + pycodestyle
+  "I",                  # isort
+  "UP",                 # pyupgrade
+  "B",                  # flake8-bugbear
+  "C4",                 # comprehensions
+  "SIM",                # flake8-simplify
+  "RET",                # flake8-return
+  "PTH",                # prefer pathlib
+  "ARG",                # unused arguments
+  "TID",                # tidy imports
+  "RUF",                # ruff-native
+  "PLC", "PLE", "PLW",  # pylint convention/error/warning (skip noisy PLR refactor)
+]
+ignore = [
+  "E501",     # line length is enforced by the formatter, not the linter
+  "B008",     # call-in-default-arg — common, intentional in factory helpers
+  "SIM108",   # ternary-vs-if is a style preference; leave to the author
+  "PLC0415",  # deliberate lazy/in-function imports to break cycles
+  "UP042",    # keep explicit `(str, Enum)` — StrEnum changes str() of DB-persisted values
+  "UP047",    # PEP-695 generics not adopted yet; keep TypeVar style consistent
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests legitimately re-use fixtures and assert on magic values; relax noise.
+"tests/**" = ["ARG001", "ARG002", "ARG005", "PLW", "SIM"]
+"src/fmo/cli.py" = ["T201"]  # CLI prints to stdout by design
+
+[tool.ruff.lint.isort]
+known-first-party = ["fmo"]
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.vulture]
+# Dead-code detection. Start strict (>=80% confidence) so the signal stays
+# actionable; lower locally with `vulture src --min-confidence 60` when hunting.
+# whitelist.py captures intentional-but-unreferenced names (pydantic fields,
+# protocol methods, CLI entry points) so they don't show up as dead.
+paths = ["src"]
+min_confidence = 80
+sort_by_size = true
+exclude = [".venv", "reference"]
+ignore_decorators = ["@app.command", "@pytest.fixture"]
+
+[tool.pyright]
+include = ["src"]
+exclude = ["**/.venv", "**/__pycache__", "reference", "openspec"]
+pythonVersion = "3.12"
+typeCheckingMode = "basic"
+reportMissingTypeStubs = false

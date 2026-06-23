@@ -3,10 +3,10 @@ from __future__ import annotations
 from psycopg.types.json import Jsonb
 
 from fmo.aa_migration import run_migration_agent
+from fmo.composition_contracts import RuntimeCliResult
 from fmo.config import StartupConfig
 from fmo.llm_runtime import SharedInstructorRuntime
 from fmo.persistence import Repository
-from fmo.composition_contracts import RuntimeCliResult
 
 
 def select_llm_model(repository: Repository, config: StartupConfig) -> str | None:
@@ -72,7 +72,9 @@ def _run_aa_index_command(
     return RuntimeCliResult(exit_code=3, changed=False, error_reason="unknown_aa_index_command")
 
 
-def _run_aa_index_proposal(repository: Repository, llm_runtime: SharedInstructorRuntime, config: StartupConfig) -> RuntimeCliResult:
+def _run_aa_index_proposal(
+    repository: Repository, llm_runtime: SharedInstructorRuntime, config: StartupConfig
+) -> RuntimeCliResult:
     with repository.database.transaction() as transaction:
         latest = transaction.execute(
             """
@@ -215,4 +217,3 @@ def _rollback_latest_aa_migration(repository: Repository) -> RuntimeCliResult:
             {"migration_id": row["id"]},
         )
     return RuntimeCliResult(exit_code=0, changed=True)
-

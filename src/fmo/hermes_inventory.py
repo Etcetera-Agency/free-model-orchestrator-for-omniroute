@@ -89,8 +89,14 @@ def normalize_http_inventory(payload: dict, *, env: dict[str, str]) -> Inventory
 
 
 def inventory_diff(old: Inventory, new: Inventory) -> InventoryDiff:
-    old_set = {(consumer.role_id, consumer.consumer_type, consumer.consumer, consumer.cadence, consumer.calls_per_run) for consumer in old.consumers}
-    new_set = {(consumer.role_id, consumer.consumer_type, consumer.consumer, consumer.cadence, consumer.calls_per_run) for consumer in new.consumers}
+    old_set = {
+        (consumer.role_id, consumer.consumer_type, consumer.consumer, consumer.cadence, consumer.calls_per_run)
+        for consumer in old.consumers
+    }
+    new_set = {
+        (consumer.role_id, consumer.consumer_type, consumer.consumer, consumer.cadence, consumer.calls_per_run)
+        for consumer in new.consumers
+    }
     changed = old_set != new_set
     return InventoryDiff(forecast_stale=changed, run_inspector=changed)
 
@@ -98,7 +104,9 @@ def inventory_diff(old: Inventory, new: Inventory) -> InventoryDiff:
 def assemble_inspector_prompt(inventory: Inventory, *, changes: list[str], secrets: dict[str, str]) -> str:
     lines = ["Hermes inventory forecast request", "Changes:", *changes, "Consumers:"]
     for consumer in inventory.consumers:
-        lines.append(f"{consumer.role_id} {consumer.consumer_type} {consumer.consumer} {consumer.cadence} {consumer.calls_per_run}")
+        lines.append(
+            f"{consumer.role_id} {consumer.consumer_type} {consumer.consumer} {consumer.cadence} {consumer.calls_per_run}"
+        )
     prompt = "\n".join(lines)
     for secret in secrets.values():
         prompt = prompt.replace(secret, "[REDACTED]")
@@ -112,7 +120,9 @@ def run_inspector(call_instructor, prompt: str) -> InspectorForecast:
         max_prompt_chars=6000,
     )
     if hasattr(call_instructor, "complete"):
-        payload = call_instructor.complete(site=site, context={"prompt": prompt}, response_model=InspectorForecastResponse)
+        payload = call_instructor.complete(
+            site=site, context={"prompt": prompt}, response_model=InspectorForecastResponse
+        )
     else:
         payload = complete_with_adapter(
             call_instructor,
@@ -182,8 +192,7 @@ def observe_session_demand(connection: sqlite3.Connection) -> dict[str, float]:
     by the hermes-inventory spec; roles with no observed sessions are absent.
     """
     cursor = connection.execute(
-        "SELECT model, AVG(api_call_count) FROM sessions "
-        "WHERE model IS NOT NULL AND api_call_count > 0 GROUP BY model"
+        "SELECT model, AVG(api_call_count) FROM sessions WHERE model IS NOT NULL AND api_call_count > 0 GROUP BY model"
     )
     return {row[0]: float(row[1]) for row in cursor.fetchall() if row[0]}
 

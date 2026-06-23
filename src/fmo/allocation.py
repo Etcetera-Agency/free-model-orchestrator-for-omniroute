@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 
-
 HEAVY_ROLES = {"research_scout", "health_reasoning", "cross_domain_orchestrator"}
 
 

@@ -30,10 +30,7 @@ _MARK_RE = re.compile(r"""mark\.spec\(\s*["']([^"']+)["']""")
 
 def _scenarios_in(spec: Path) -> set[str]:
     capability = spec.parent.name
-    return {
-        f"{capability}::{name}"
-        for name in _SCENARIO_RE.findall(spec.read_text(encoding="utf-8"))
-    }
+    return {f"{capability}::{name}" for name in _SCENARIO_RE.findall(spec.read_text(encoding="utf-8"))}
 
 
 def scenarios_in_specs() -> set[str]:

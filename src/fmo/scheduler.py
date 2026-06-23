@@ -7,14 +7,13 @@ from dataclasses import dataclass
 from fmo.persistence import Repository
 from fmo.pipeline import PipelineRunResult
 
-
 PipelineInvoker = Callable[[str, str], PipelineRunResult]
 RecalibrationInvoker = Callable[[], object]
 
 
 @dataclass(frozen=True)
 class RunLock:
-    manager: "RunLockManager"
+    manager: RunLockManager
     name: str
     token: str | None
     acquired: bool

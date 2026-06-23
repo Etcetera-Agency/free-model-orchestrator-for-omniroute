@@ -1,12 +1,11 @@
 import pytest
 
+from _fixtures import fixture_body
 from fmo.aa_migration import run_migration_agent
 from fmo.hermes_inventory import run_inspector
 from fmo.llm_runtime import LlmRuntimeError, LlmSiteConfig, complete_with_adapter
 from fmo.quota_research import QuotaClaimResponse, run_quota_inspector
 from fmo.smart_review import run_combo_review
-
-from _fixtures import fixture_body
 
 
 class RecordingCompletionTransport:

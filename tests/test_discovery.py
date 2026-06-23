@@ -1,16 +1,20 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-import psycopg
 import pytest
 
 from fmo.accounts import group_quota_pools, usable_capacity
 from fmo.candidates import build_free_candidates
 from fmo.db import MigrationRunner
 from fmo.matcher import MatchMethod, effective_context, match_model
-from fmo.models_dev import MODELS_DEV_API_URL, ExternalMetadataError, fetch_models_dev_catalog, sync_models_dev_candidates
-from fmo.registry import sync_free_registry
+from fmo.models_dev import (
+    MODELS_DEV_API_URL,
+    ExternalMetadataError,
+    fetch_models_dev_catalog,
+    sync_models_dev_candidates,
+)
 from fmo.persistence import Database, Repository
+from fmo.registry import sync_free_registry
 from fmo.scanner import CatalogScanner, CatalogSnapshot, diff_catalogs, should_mark_removed
 
 
@@ -332,11 +336,15 @@ def test_diff_emits_events_and_false_removal_guard():
     events = diff_catalogs(previous, current)
 
     assert [event.kind for event in events] == ["provider_model_added", "provider_model_removed"]
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     assert not should_mark_removed([CatalogSnapshot(True, now - timedelta(minutes=10))], now)
-    assert not should_mark_removed([CatalogSnapshot(False, now - timedelta(minutes=10)), CatalogSnapshot(True, now)], now)
+    assert not should_mark_removed(
+        [CatalogSnapshot(False, now - timedelta(minutes=10)), CatalogSnapshot(True, now)], now
+    )
     assert not should_mark_removed([CatalogSnapshot(True, now - timedelta(minutes=6)), CatalogSnapshot(True, now)], now)
-    assert should_mark_removed([CatalogSnapshot(True, now - timedelta(minutes=10)), CatalogSnapshot(True, now - timedelta(minutes=6))], now)
+    assert should_mark_removed(
+        [CatalogSnapshot(True, now - timedelta(minutes=10)), CatalogSnapshot(True, now - timedelta(minutes=6))], now
+    )
 
 
 @pytest.mark.spec("provider-scanner::Failed snapshot not previous")
@@ -352,7 +360,9 @@ def test_scanner_failed_snapshot_is_not_previous_for_unchanged_detection(postgre
     )
     scanner.store_snapshot(provider_id=provider_id, catalog={"models": [{"id": "m1"}]}, fetch_status="success")
     failed = scanner.store_snapshot(provider_id=provider_id, catalog={"models": [{"id": "m2"}]}, fetch_status="error")
-    repeated = scanner.store_snapshot(provider_id=provider_id, catalog={"models": [{"id": "m2"}]}, fetch_status="success")
+    repeated = scanner.store_snapshot(
+        provider_id=provider_id, catalog={"models": [{"id": "m2"}]}, fetch_status="success"
+    )
 
     assert failed.is_unchanged is False
     assert repeated.is_unchanged is False
@@ -420,7 +430,13 @@ def test_free_registry_deduplicates_pool_key_and_excludes_web_cookie():
         "models": [
             {"provider": "noauth", "modelId": "a", "monthlyTokens": 100, "poolKey": "shared", "authType": "none"},
             {"provider": "noauth", "modelId": "b", "monthlyTokens": 200, "poolKey": "shared", "authType": "none"},
-            {"provider": "cookie", "modelId": "c", "monthlyTokens": 1000, "poolKey": "cookie", "authType": "web_cookie"},
+            {
+                "provider": "cookie",
+                "modelId": "c",
+                "monthlyTokens": 1000,
+                "poolKey": "cookie",
+                "authType": "web_cookie",
+            },
         ]
     }
 

@@ -7,9 +7,6 @@ ROOT = Path(__file__).resolve().parents[1]
 # tests/spec_coverage_pending.txt (and here) when its test lands. Slices are
 # listed in openspec/TODO.md and openspec/changes/<id>/.
 EXPECTED_ACTIVE_PENDING = {
-    # refactor-split-persistence
-    "system-architecture::Persistence layer is split into per-aggregate modules",
-    "system-architecture::Persistence public API stays import-stable",
     # refactor-split-stages-discovery
     "system-architecture::Discovery, quota, and access stages live in dedicated modules",
     "system-architecture::Stage package re-exports preserve composition wiring",

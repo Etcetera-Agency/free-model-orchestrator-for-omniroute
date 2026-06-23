@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fmo.accounts import expand_account_scopes
@@ -119,7 +119,9 @@ class CatalogScanner:
             )
         return StoredSnapshot(catalog_hash=snapshot["catalog_hash"], is_unchanged=snapshot["is_unchanged"])
 
-    def upsert_endpoint(self, provider_account_id: str, provider_model_id: str, model_type: str = "chat") -> ProviderEndpoint:
+    def upsert_endpoint(
+        self, provider_account_id: str, provider_model_id: str, model_type: str = "chat"
+    ) -> ProviderEndpoint:
         with self.repository.database.transaction() as transaction:
             endpoint = self.repository.provider_endpoints.upsert(
                 transaction,
@@ -147,11 +149,13 @@ def diff_catalogs(previous: list[dict[str, Any]], current: list[dict[str, Any]])
 
 
 def should_mark_removed(snapshots: list[CatalogSnapshot], now: datetime | None = None) -> bool:
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     if len(snapshots) < 2:
         return False
     last_two = snapshots[-2:]
-    return all(snapshot.fetch_success for snapshot in last_two) and last_two[-1].fetched_at <= now - timedelta(minutes=5)
+    return all(snapshot.fetch_success for snapshot in last_two) and last_two[-1].fetched_at <= now - timedelta(
+        minutes=5
+    )
 
 
 def scan_live_omniroute_catalogs(
@@ -199,7 +203,9 @@ def _fetch_provider_accounts(client: Any) -> list[dict[str, Any]]:
     connections = payload.get("connections") if isinstance(payload, dict) else None
     if not isinstance(connections, list):
         raise CatalogFetchError("omniroute_catalog", "invalid_payload")
-    provider_accounts = [connection for connection in connections if isinstance(connection, dict) and connection.get("provider")]
+    provider_accounts = [
+        connection for connection in connections if isinstance(connection, dict) and connection.get("provider")
+    ]
     return expand_account_scopes(provider_accounts)
 
 

@@ -4,14 +4,14 @@ import sys
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import cast
 
 from fmo.bootstrap import bootstrap_and_dispatch
-from fmo.config import StartupConfig
 from fmo.composition import compose_runtime
+from fmo.config import StartupConfig
 from fmo.external_metadata import ExternalMetadataError
 from fmo.metadata_sync import sync_external_metadata
-
 
 COMMANDS = [
     "sync-free-registry",
@@ -153,23 +153,27 @@ def _dispatch_cli(argv: list[str], preconditions_ok: bool, config: StartupConfig
     return run_cli(
         argv,
         preconditions_ok=preconditions_ok,
-        pipeline_runner=runtime.run_command,
+        pipeline_runner=cast(PipelineRunner, runtime.run_command),
         diagnostics_reader=runtime.read_diagnostics,
-        scheduler_runner=runtime.run_scheduler_once,
-        aa_index_handler=runtime.run_aa_index,
-        profile_normalizer=runtime.normalize_profiles,
+        scheduler_runner=cast(SchedulerRunner, runtime.run_scheduler_once),
+        aa_index_handler=cast(AaIndexHandler, runtime.run_aa_index),
+        profile_normalizer=cast(ProfileNormalizer, runtime.normalize_profiles),
     ).exit_code
 
 
 def _run_aa_index(args: argparse.Namespace, handler: AaIndexHandler | None) -> CliResult:
     if handler is None:
-        return CliResult(exit_code=EXIT_CODES["validation_failed"], changed=False, error_reason="aa_index_handler_required")
+        return CliResult(
+            exit_code=EXIT_CODES["validation_failed"], changed=False, error_reason="aa_index_handler_required"
+        )
     return handler(args.aa_command, args)
 
 
 def _run_profile_normalization(args: argparse.Namespace, normalizer: ProfileNormalizer | None) -> CliResult:
     if normalizer is None:
-        return CliResult(exit_code=EXIT_CODES["validation_failed"], changed=False, error_reason="profile_normalizer_required")
+        return CliResult(
+            exit_code=EXIT_CODES["validation_failed"], changed=False, error_reason="profile_normalizer_required"
+        )
     return normalizer(args)
 
 
@@ -198,7 +202,7 @@ def _run_scheduler(args: argparse.Namespace, scheduler_runner: SchedulerRunner |
 
 
 def _utc_timestamp() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def _add_common_flags(parser: argparse.ArgumentParser) -> None:

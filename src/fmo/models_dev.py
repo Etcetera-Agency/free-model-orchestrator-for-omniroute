@@ -1,11 +1,11 @@
 import time
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import httpx
 
 from fmo.candidates import FreeCandidate, build_free_candidates
 from fmo.external_metadata import ExternalMetadataError
-
 
 MODELS_DEV_API_URL = "https://models.dev/api.json"
 MODELS_DEV_FETCH_ATTEMPTS = 3

@@ -1,10 +1,9 @@
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
 from fmo.external_metadata import ExternalMetadataError
-
 
 ARTIFICIAL_ANALYSIS_URL = "https://artificialanalysis.ai/api/v2/language/models"
 ARTIFICIAL_ANALYSIS_FREE_URL = "https://artificialanalysis.ai/api/v2/language/models/free"
@@ -138,8 +137,8 @@ def _parse_snapshot(payload: Any) -> AASnapshot:
 def _parse_model(row: Any) -> AAModelMetrics:
     if not isinstance(row, dict) or not isinstance(row.get("slug"), str):
         raise ExternalMetadataError("artificial_analysis", "invalid_payload")
-    evaluations = row.get("evaluations") if isinstance(row.get("evaluations"), dict) else {}
-    performance = row.get("performance") if isinstance(row.get("performance"), dict) else {}
+    evaluations = cast(dict[str, Any], row.get("evaluations") if isinstance(row.get("evaluations"), dict) else {})
+    performance = cast(dict[str, Any], row.get("performance") if isinstance(row.get("performance"), dict) else {})
     metrics = _extract_metrics(evaluations, performance)
     return AAModelMetrics(model_id=row["slug"], metrics=metrics, available=row.get("available"))
 

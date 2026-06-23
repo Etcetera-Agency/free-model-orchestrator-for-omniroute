@@ -42,7 +42,7 @@ def source_web_cookie_endpoints(
     static: list[dict],
     manual: list[dict],
     previous: list[dict],
-    daily_refresh: bool,
+    daily_refresh: bool,  # noqa: ARG001 - reserved interface param
 ) -> list[WebCookieEndpoint]:
     endpoints = []
     for source, items in (("connection", connections), ("static", static), ("manual", manual), ("previous", previous)):
@@ -123,7 +123,12 @@ def acquire_web_cookie_sessions(
 
     for source in configured_sources:
         source_id = source["source_id"]
-        endpoint = endpoint_by_id.get(source.get("endpoint_id"))
+        if not isinstance(source_id, str):
+            continue
+        endpoint_id = source.get("endpoint_id")
+        if not isinstance(endpoint_id, str):
+            continue
+        endpoint = endpoint_by_id.get(endpoint_id)
         if endpoint is None or source_id not in eligible_source_ids:
             continue
 

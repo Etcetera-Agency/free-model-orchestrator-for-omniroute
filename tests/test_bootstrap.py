@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -253,7 +253,7 @@ def _seed_healthy_apply_guard(postgres_url):
         # Keep the seeded smoke probe inside the apply staleness window
         # (APPLY_STAGE_EVIDENCE_MAX_AGE = 1 day) so the guard stays "healthy"
         # regardless of when the suite runs.
-        probe_started = datetime.now(timezone.utc) - timedelta(minutes=1)
+        probe_started = datetime.now(UTC) - timedelta(minutes=1)
         repository.probes.record(
             transaction,
             endpoint_id=endpoint["id"],

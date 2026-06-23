@@ -28,7 +28,7 @@ def classify_access(evidence: dict) -> AccessDecision:
 
 
 def _has_free_quota_preconditions(evidence: dict) -> bool:
-    return all(
-        evidence.get(key) is not None
-        for key in ("limit", "remaining", "reset_at")
-    ) and evidence.get("hard_stop") is True
+    return (
+        all(evidence.get(key) is not None for key in ("limit", "remaining", "reset_at"))
+        and evidence.get("hard_stop") is True
+    )

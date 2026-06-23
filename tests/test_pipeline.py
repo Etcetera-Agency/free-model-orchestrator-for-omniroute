@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+from tests._stage_effects import assert_success_has_declared_effect
 
 from fmo.db import MigrationRunner
 from fmo.persistence import Database, Repository
@@ -11,7 +12,6 @@ from fmo.pipeline import (
     StageResult,
     outcome_exit_code,
 )
-from tests._stage_effects import assert_success_has_declared_effect
 
 
 @pytest.fixture()

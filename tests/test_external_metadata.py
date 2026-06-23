@@ -1,5 +1,6 @@
 import pytest
 
+from _fixtures import fixture_body
 from fmo.aa_migration import detect_index_change
 from fmo.artificial_analysis import (
     ARTIFICIAL_ANALYSIS_FREE_URL,
@@ -8,8 +9,6 @@ from fmo.artificial_analysis import (
     fetch_artificial_analysis_snapshot,
 )
 from fmo.external_metadata import ExternalMetadataError
-
-from _fixtures import fixture_body
 
 
 class FakeResponse:
@@ -97,7 +96,9 @@ def test_artificial_analysis_fetcher_normalizes_scoring_metrics():
         ],
     }
 
-    snapshot = fetch_artificial_analysis_snapshot(client=FakeHttpClient(FakeResponse(200, payload)), api_key="aa-secret")
+    snapshot = fetch_artificial_analysis_snapshot(
+        client=FakeHttpClient(FakeResponse(200, payload)), api_key="aa-secret"
+    )
 
     assert snapshot.index_version == "4.1"
     assert snapshot.models[0].model_id == "provider-model-a"
@@ -122,7 +123,9 @@ def test_artificial_analysis_missing_metric_remains_missing():
         ],
     }
 
-    snapshot = fetch_artificial_analysis_snapshot(client=FakeHttpClient(FakeResponse(200, payload)), api_key="aa-secret")
+    snapshot = fetch_artificial_analysis_snapshot(
+        client=FakeHttpClient(FakeResponse(200, payload)), api_key="aa-secret"
+    )
 
     assert snapshot.models[0].metrics == {"intelligence_index": 80}
     assert "agentic_index" not in snapshot.models[0].metrics
@@ -163,9 +166,13 @@ def test_artificial_analysis_snapshot_index_version_feeds_migration_detection():
         "intelligence_index_version": 4.2,
         "data": [{"slug": "m", "evaluations": {"artificial_analysis_intelligence_index": 80}, "available": True}],
     }
-    snapshot = fetch_artificial_analysis_snapshot(client=FakeHttpClient(FakeResponse(200, payload)), api_key="aa-secret")
+    snapshot = fetch_artificial_analysis_snapshot(
+        client=FakeHttpClient(FakeResponse(200, payload)), api_key="aa-secret"
+    )
 
-    migration = detect_index_change(active_version="v1", fetched_version=snapshot.index_version, thresholds={"r": 40}, combos={"r": ["e1"]})
+    migration = detect_index_change(
+        active_version="v1", fetched_version=snapshot.index_version, thresholds={"r": 40}, combos={"r": ["e1"]}
+    )
 
     assert migration.created is True
 
@@ -195,10 +202,7 @@ def _aa_page(version, slugs, *, has_more, page, page_size=200):
             "tier": "free",
             "intelligence_index_version": version,
             "pagination": {"page": page, "page_size": page_size, "has_more": has_more},
-            "data": [
-                {"slug": slug, "evaluations": {"artificial_analysis_intelligence_index": 80}}
-                for slug in slugs
-            ],
+            "data": [{"slug": slug, "evaluations": {"artificial_analysis_intelligence_index": 80}} for slug in slugs],
         },
     )
 

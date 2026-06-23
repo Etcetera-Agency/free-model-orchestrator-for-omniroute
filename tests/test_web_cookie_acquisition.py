@@ -1,13 +1,11 @@
 import pytest
 
+from _fixtures import fixture_body
 from fmo.web_cookie import (
     WebCookieEndpoint,
     acquire_web_cookie_sessions,
     classify_web_cookie_probe,
 )
-
-from _fixtures import fixture_body
-import pytest
 
 
 def _web_cookie_fixture():

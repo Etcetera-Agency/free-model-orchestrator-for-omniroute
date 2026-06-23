@@ -1,4 +1,7 @@
-from datetime import datetime, timedelta, timezone
+import importlib
+import inspect
+import pkgutil
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -10,8 +13,83 @@ from fmo.registry import FreeRegistry, FreeRegistrySyncOutcome
 # Relative probe timestamps so stored-evidence fixtures never drift past a
 # wall-clock freshness window. Computed once per run; dedup keys off request_hash,
 # not these values.
-_PROBE_STARTED_AT = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
-_PROBE_FINISHED_AT = (datetime.now(timezone.utc) - timedelta(minutes=1) + timedelta(seconds=1)).isoformat()
+_PROBE_STARTED_AT = (datetime.now(UTC) - timedelta(minutes=1)).isoformat()
+_PROBE_FINISHED_AT = (datetime.now(UTC) - timedelta(minutes=1) + timedelta(seconds=1)).isoformat()
+
+_PUBLIC_PERSISTENCE_CLASSES = {
+    "AllocationPlanRepository",
+    "AuditRepository",
+    "CanonicalModelRepository",
+    "ComboSnapshotRepository",
+    "Database",
+    "ExternalMetadataRepository",
+    "FreeRegistryRepository",
+    "LockRepository",
+    "ProbeRepository",
+    "ProviderAccountRepository",
+    "ProviderCatalogRepository",
+    "ProviderEndpointRepository",
+    "ProviderRepository",
+    "QuotaRuleRepository",
+    "Repository",
+    "RoleConsumerRepository",
+    "RoleRepository",
+    "RunRepository",
+    "ScoreRepository",
+    "SnapshotRepository",
+}
+
+
+@pytest.mark.spec("system-architecture::Persistence public API stays import-stable")
+def test_persistence_public_api_reexports_repository_classes():
+    module = importlib.import_module("fmo.persistence")
+
+    for name in sorted(_PUBLIC_PERSISTENCE_CLASSES):
+        exported = getattr(module, name)
+        assert inspect.isclass(exported), name
+
+
+@pytest.mark.spec("system-architecture::Persistence layer is split into per-aggregate modules")
+def test_persistence_layer_is_package_with_small_aggregate_modules():
+    package = importlib.import_module("fmo.persistence")
+
+    assert hasattr(package, "__path__")
+    modules = {item.name for item in pkgutil.iter_modules(package.__path__)}
+    assert "_base" in modules
+    assert {
+        "account",
+        "allocation_plan",
+        "audit",
+        "canonical_model",
+        "catalog",
+        "combo_snapshot",
+        "endpoint",
+        "external_metadata",
+        "lock",
+        "probe",
+        "provider",
+        "quota_rule",
+        "registry",
+        "role",
+        "role_consumer",
+        "run",
+        "score",
+        "snapshot",
+    }.issubset(modules)
+
+    base = importlib.import_module("fmo.persistence._base")
+    assert base.Database is Database
+    assert base.Repository is Repository
+    for helper in ("_one", "_optional", "_many", "_jsonb", "_content_hash"):
+        assert callable(getattr(base, helper))
+
+    package_dir = Path(package.__path__[0])
+    oversized = {
+        path.name: len(path.read_text(encoding="utf-8").splitlines())
+        for path in package_dir.glob("*.py")
+        if path.name not in {"__init__.py", "_base.py"} and len(path.read_text(encoding="utf-8").splitlines()) > 250
+    }
+    assert oversized == {}
 
 
 @pytest.fixture()

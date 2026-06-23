@@ -183,6 +183,19 @@ Validate OpenSpec:
 npx --yes @fission-ai/openspec@latest validate --all --strict
 ```
 
+### Static analysis
+
+Install the toolchain and run the gates (config in `pyproject.toml`):
+
+```bash
+pip install -e '.[dev]'   # ruff, vulture, pyright
+make check                # lint + format + typecheck + deadcode (no mutation)
+make fix                  # auto-apply ruff lint fixes + formatting
+make analysis             # one-screen health snapshot
+```
+
+See `docs/code-analysis.md` for the current baseline and the refactoring plan.
+
 ### Executable-spec coverage gate
 
 OpenSpec scenarios are executable: `tests/test_spec_coverage.py` statically

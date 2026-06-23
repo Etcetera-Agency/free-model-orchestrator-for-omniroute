@@ -10,11 +10,10 @@ from urllib.parse import urlsplit
 
 import pytest
 
+from _fixtures import fixture_body, load_fixture
 from fmo.accounts import group_quota_pools, usable_capacity
 from fmo.omniroute import OmniRouteClient
 from fmo.registry import sync_free_registry
-
-from _fixtures import fixture_body, load_fixture
 
 # OmniRoute management path -> recorded fixture name.
 PATH_FIXTURES = {

@@ -1,11 +1,11 @@
 import json
 import re
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Mapping, TypeVar
+from typing import Any, TypeVar, cast
 
 from pydantic import BaseModel, ValidationError
-
 
 SECRET_PATTERNS = (
     re.compile(r"postgresql://[^:\s]+:[^@\s]+@"),
@@ -41,7 +41,9 @@ ResponseModel = TypeVar("ResponseModel", bound=BaseModel)
 
 
 class SharedInstructorRuntime:
-    def __init__(self, *, provider: LlmProviderConfig, transport, model_resolver: Callable[[], str | None] | None = None):
+    def __init__(
+        self, *, provider: LlmProviderConfig, transport, model_resolver: Callable[[], str | None] | None = None
+    ):
         self.provider = provider
         self.transport = transport
         self.model_resolver = model_resolver
@@ -102,7 +104,7 @@ def build_instructor_runtime(
         return instructor_client.chat.completions.create(
             model=str(payload["model"]),
             messages=[{"role": "user", "content": str(payload["prompt"])}],
-            response_model=payload["response_model"],
+            response_model=cast(Any, payload["response_model"]),
         )
 
     return SharedInstructorRuntime(provider=provider, transport=transport, model_resolver=model_resolver)
@@ -136,11 +138,7 @@ def _import_instructor_from_openai():
 
 def assemble_prompt(site: LlmSiteConfig, context: Mapping[str, object]) -> str:
     template = site.prompt_path.read_text(encoding="utf-8") if site.prompt_path else str(context.get("prompt", ""))
-    safe_context = {
-        key: value
-        for key, value in context.items()
-        if not _looks_secret_key(key)
-    }
+    safe_context = {key: value for key, value in context.items() if not _looks_secret_key(key)}
     prompt = template
     for key, value in safe_context.items():
         prompt = prompt.replace("{{ " + key + " }}", str(value))
@@ -214,7 +212,7 @@ def _json_from_text(text: str) -> Any:
         start = text.find("{")
         end = text.rfind("}")
         if start == -1 or end == -1 or end <= start:
-            raise LlmRuntimeError("structured_completion_not_json")
+            raise LlmRuntimeError("structured_completion_not_json") from None
         try:
             return json.loads(text[start : end + 1])
         except json.JSONDecodeError as exc:

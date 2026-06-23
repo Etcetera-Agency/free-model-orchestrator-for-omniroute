@@ -4,12 +4,11 @@ from urllib.parse import urlsplit
 import psycopg
 import pytest
 
+from _fixtures import fixture_body
 from fmo.db import MigrationRunner
 from fmo.omniroute import OmniRouteClient
 from fmo.persistence import Database, Repository
 from fmo.scanner import CatalogFetchError, CatalogScanner, scan_live_omniroute_catalogs
-
-from _fixtures import fixture_body
 
 
 class _FixtureResponse:
@@ -81,8 +80,7 @@ def test_live_catalog_scan_fans_models_out_to_fingerprint_accounts(postgres_url)
     provider = next(
         connection
         for connection in providers_body["connections"]
-        if connection.get("provider") == "mimocode"
-        and connection.get("providerSpecificData", {}).get("fingerprints")
+        if connection.get("provider") == "mimocode" and connection.get("providerSpecificData", {}).get("fingerprints")
     )
     models_body = {"object": "list", "data": [{"id": "mimocode/mimo-auto"}]}
     transport = _CatalogTransport(providers_body={"connections": [provider]}, models_body=models_body)

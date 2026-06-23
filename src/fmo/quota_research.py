@@ -9,7 +9,6 @@ from pydantic import BaseModel, Field
 from fmo.llm_runtime import LlmSiteConfig, complete_with_adapter
 from fmo.omniroute import OmniRouteRequestError
 
-
 VALID_METRICS = {"requests", "tokens"}
 VALID_WINDOWS = {"minute", "hour", "day", "month"}
 # AICODE-NOTE: no-auth aliases are shared quota/model pools, not independent
@@ -96,10 +95,16 @@ def build_quota_query(provider: str, model_id: str, *, today: datetime) -> str:
     return f"{provider} free tier quota for {model_id} today {today:%Y-%m-%d}"
 
 
-def run_quota_search(client, *, provider: str, model_id: str, query: str) -> SearchSnapshot:
+def run_quota_search(client, *, provider: str, model_id: str, query: str) -> SearchSnapshot:  # noqa: ARG001 - provider/model_id kept for call-site symmetry
     response = client.post(
         "/v1/search",
-        {"query": query, "provider": "gemini-grounded-search", "search_type": "web", "max_results": 10, "time_range": "month"},
+        {
+            "query": query,
+            "provider": "gemini-grounded-search",
+            "search_type": "web",
+            "max_results": 10,
+            "time_range": "month",
+        },
     )
     answer_text = response.get("answer", {}).get("text", "")
     urls = tuple(result["url"] for result in response.get("results", []) if result.get("url"))
@@ -191,6 +196,8 @@ def promote_noauth_calibration(
     evidence: NoAuthCalibrationEvidence,
 ) -> NoAuthQuotaResolution:
     if not _complete_calibration(evidence):
+        return _calibration_required(provider=provider, model_id=model_id)
+    if evidence.inferred_limit is None:
         return _calibration_required(provider=provider, model_id=model_id)
     claim = validate_claim(
         QuotaClaim(

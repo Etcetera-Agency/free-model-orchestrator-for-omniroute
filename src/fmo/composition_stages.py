@@ -37,6 +37,7 @@ from fmo.hermes_inventory import (
 )
 from fmo.llm_runtime import SharedInstructorRuntime
 from fmo.matcher import match_model
+from fmo.metadata_sync import MetadataSyncResult
 from fmo.model_registration import register_new_free_models
 from fmo.omniroute import OmniRouteClient, OmniRouteRequestError
 from fmo.persistence import Repository
@@ -45,7 +46,12 @@ from fmo.probes import probe_endpoint
 from fmo.quality import evaluate_quality_gate
 from fmo.quota_manager import QuotaFetchError, fetch_live_quota_snapshot
 from fmo.quota_research import research_quota_rule
-from fmo.registry import RegistryFetchError, persist_free_registry_outcome, sync_live_free_registry
+from fmo.registry import (
+    FreeRegistrySyncOutcome,
+    RegistryFetchError,
+    persist_free_registry_outcome,
+    sync_live_free_registry,
+)
 from fmo.scanner import CatalogFetchError, CatalogScanner, scan_live_omniroute_catalogs
 from fmo.scoring import EligibilityDecision, aa_subscore, eligible_for_scoring, latency_score_source, score_endpoint
 from fmo.smart_review import ComboReviewResult, run_combo_review
@@ -60,12 +66,12 @@ AA_SCORE_PERCENTILES = {
 }
 
 
-MetadataSync = Callable[..., object]
-RegistrySync = Callable[[Any], object]
+MetadataSync = Callable[..., MetadataSyncResult]
+RegistrySync = Callable[[Any], FreeRegistrySyncOutcome]
 CatalogScan = Callable[[CatalogScanner, Any, str], object]
 AccountDiscovery = Callable[..., object]
 StageAdapter = Callable[["StageDependencies", PipelineContext], StageResult]
-HermesInventoryAdapter = Callable[[StartupConfig], object]
+HermesInventoryAdapter = Callable[[StartupConfig], Inventory]
 
 
 @dataclass(frozen=True)
@@ -1161,19 +1167,21 @@ def _role_scoring_stage(_dependencies: StageDependencies, context: PipelineConte
                     percentiles=AA_SCORE_PERCENTILES,
                 )
                 health = latest_health.get(str(endpoint["id"]), {})
+                endpoint_p95 = health.get("endpoint_p95")
+                provider_p95 = health.get("provider_p95")
                 latency = latency_score_source(
-                    endpoint_p95=health.get("endpoint_p95"),
-                    provider_p95=health.get("provider_p95"),
+                    endpoint_p95=int(endpoint_p95) if isinstance(endpoint_p95, int | float) else None,
+                    provider_p95=int(provider_p95) if isinstance(provider_p95, int | float) else None,
                     aa_latency=metrics_row.get("aa_latency"),
                 )
                 score = score_endpoint(
                     {
                         "benchmark_fit": benchmark.value or 0.0,
                         "capability_fit": 1.0 if eligibility.eligible else 0.0,
-                        "health": health.get("health", 0.0),
+                        "health": float(health.get("health") or 0.0),
                         "latency": _latency_component(*latency),
                         "quota_headroom": min(remaining / 100, 1.0),
-                        "stability": health.get("stability", 0.0),
+                        "stability": float(health.get("stability") or 0.0),
                         "uncertainty": benchmark.uncertainty_penalty + (0.1 if benchmark.unknown else 0.0),
                     }
                 )

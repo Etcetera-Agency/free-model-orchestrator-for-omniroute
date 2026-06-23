@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 
-
 ALLOWED_ACCESS = {"free_unlimited", "free_quota_available", "free_promotional_available"}
 
 
@@ -58,7 +57,9 @@ def aa_subscore(
     return AASubscore(value=value, uncertainty_penalty=missing_count * 0.05)
 
 
-def latency_score_source(*, endpoint_p95: int | None, provider_p95: int | None, aa_latency: float | None) -> tuple[str, float | None]:
+def latency_score_source(
+    *, endpoint_p95: int | None, provider_p95: int | None, aa_latency: float | None
+) -> tuple[str, float | None]:
     if endpoint_p95 is not None:
         return ("endpoint", endpoint_p95)
     if provider_p95 is not None:

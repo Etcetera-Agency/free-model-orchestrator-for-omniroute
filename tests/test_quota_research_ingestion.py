@@ -1,8 +1,9 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from urllib.parse import urlsplit
 
 import pytest
 
+from _fixtures import fixture_body
 from fmo.omniroute import OmniRouteClient
 from fmo.quota_research import (
     ActiveQuotaRule,
@@ -16,8 +17,6 @@ from fmo.quota_research import (
     research_quota_rule,
     resolve_noauth_quota,
 )
-
-from _fixtures import fixture_body
 
 
 class _FixtureResponse:
@@ -67,7 +66,7 @@ def test_live_quota_research_calls_omniroute_search_and_extracts_summary_rule():
         client,
         provider="kilo",
         model_id="kilo/free-model",
-        today=datetime(2026, 6, 18, tzinfo=timezone.utc),
+        today=datetime(2026, 6, 18, tzinfo=UTC),
         summary_confidence_cap=0.7,
     )
 
@@ -127,7 +126,7 @@ def test_summary_request_rate_only_does_not_activate_capacity_rule():
         client,
         provider="kilo",
         model_id="kilo/free-model",
-        today=datetime(2026, 6, 18, tzinfo=timezone.utc),
+        today=datetime(2026, 6, 18, tzinfo=UTC),
         summary_confidence_cap=0.7,
     )
 
@@ -145,7 +144,7 @@ def test_inspector_token_claim_is_carried_through_to_active_rule():
         client,
         provider="kilo",
         model_id="kilo/free-model",
-        today=datetime(2026, 6, 18, tzinfo=timezone.utc),
+        today=datetime(2026, 6, 18, tzinfo=UTC),
         summary_confidence_cap=0.7,
         instructor_call=lambda _payload: {
             "metric": "tokens",
@@ -173,7 +172,7 @@ def test_inspector_request_rate_claim_does_not_activate_capacity_rule():
         client,
         provider="kilo",
         model_id="kilo/free-model",
-        today=datetime(2026, 6, 18, tzinfo=timezone.utc),
+        today=datetime(2026, 6, 18, tzinfo=UTC),
         summary_confidence_cap=0.7,
         instructor_call=lambda _payload: {
             "metric": "requests",
@@ -201,7 +200,7 @@ def test_live_quota_research_unavailable_source_produces_no_rule():
         client,
         provider="kilo",
         model_id="kilo/free-model",
-        today=datetime(2026, 6, 18, tzinfo=timezone.utc),
+        today=datetime(2026, 6, 18, tzinfo=UTC),
         summary_confidence_cap=0.7,
     )
 

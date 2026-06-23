@@ -1,7 +1,7 @@
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 from urllib.parse import urljoin
 
 import httpx
@@ -97,7 +97,7 @@ class OmniRouteClient:
             if 200 <= response.status_code < 300:
                 return response.json()
             break
-        raise OmniRouteRequestError(method, path, last_response.status_code)
+        raise OmniRouteRequestError(method, path, last_response.status_code if last_response is not None else 0)
 
     def _headers(self, *, idempotency_key: str | None = None) -> dict[str, str]:
         headers = {"X-Request-Id": str(uuid.uuid4())}

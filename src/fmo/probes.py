@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 
-
 PROBE_ALLOWED_ACCESS = {"free_unlimited", "free_quota_available", "free_promotional_available"}
 
 
@@ -16,7 +15,11 @@ def should_probe(access_status: str, *, reserved_capacity: bool) -> bool:
 
 def probe_endpoint(client, *, provider: str, model: str, capabilities: dict[str, bool]) -> ProbeResult:
     suites = ["basic_text"]
-    for capability, suite in (("structured_output", "structured_output"), ("tools", "tool_calling"), ("vision", "vision")):
+    for capability, suite in (
+        ("structured_output", "structured_output"),
+        ("tools", "tool_calling"),
+        ("vision", "vision"),
+    ):
         if capabilities.get(capability):
             suites.append(suite)
     response = client.post(

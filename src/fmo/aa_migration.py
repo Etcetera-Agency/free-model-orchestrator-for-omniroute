@@ -25,7 +25,13 @@ class MigrationProposalResponse(BaseModel):
     roles: dict[str, dict] = Field(default_factory=dict)
 
 
-def detect_index_change(*, active_version: str, fetched_version: str, thresholds: dict, combos: dict[str, list[str]]) -> MigrationRecord:
+def detect_index_change(
+    *,
+    active_version: str,
+    fetched_version: str,
+    thresholds: dict,  # noqa: ARG001 - reserved interface param
+    combos: dict[str, list[str]],
+) -> MigrationRecord:
     changed = active_version != fetched_version
     return MigrationRecord(
         created=changed,
@@ -67,7 +73,9 @@ def run_migration_agent(instructor_call, selected_model: dict | None) -> dict:
     return proposal.model_dump()
 
 
-def validate_migration_proposal(proposal: dict, *, new_version: str, role_capacity: dict[str, dict], approved: bool) -> MigrationValidation:
+def validate_migration_proposal(
+    proposal: dict, *, new_version: str, role_capacity: dict[str, dict], approved: bool
+) -> MigrationValidation:
     if proposal.get("index_version") != new_version:
         raise ValueError("wrong_index_version")
     for role, policy in proposal.get("roles", {}).items():

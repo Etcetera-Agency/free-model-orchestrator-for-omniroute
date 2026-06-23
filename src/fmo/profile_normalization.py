@@ -170,7 +170,7 @@ def _combo_by_canonical(current_combos: dict[str, list[str]]) -> dict[str, str]:
 
 
 def _canonical(model_id: str) -> str:
-    return model_id.split("/")[-1].lower()
+    return model_id.rsplit("/", maxsplit=1)[-1].lower()
 
 
 def _set_slot(config: dict[str, Any], slot: str, value: str) -> None:
@@ -202,7 +202,8 @@ def _atomic_write_yaml(path: Path, config: dict[str, Any]) -> None:
     try:
         with os.fdopen(fd, "w") as tmp:
             yaml.safe_dump(config, tmp, sort_keys=False)
-        os.replace(tmp_name, path)
+        Path(tmp_name).replace(path)
     finally:
-        if os.path.exists(tmp_name):
-            os.unlink(tmp_name)
+        tmp_path = Path(tmp_name)
+        if tmp_path.exists():
+            tmp_path.unlink()

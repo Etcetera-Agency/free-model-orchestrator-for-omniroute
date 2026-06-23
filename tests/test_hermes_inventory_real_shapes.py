@@ -19,6 +19,7 @@ from threading import Thread
 import pytest
 import yaml
 
+from _fixtures import hermes_fixture_path, load_hermes_fixture
 from fmo.forecast import aggregate_demand
 from fmo.hermes_inventory import (
     BOOTSTRAP_CALLS_PER_RUN,
@@ -26,17 +27,15 @@ from fmo.hermes_inventory import (
     build_hermes_inventory,
     enumerate_live_profiles,
     observe_session_demand,
-    parse_gateway_services,
     parse_cron_jobs,
+    parse_gateway_services,
     parse_profiles,
     parse_webhook_subscriptions,
-    read_profile_slots,
     read_hermes_command_sources,
     read_hermes_home,
     read_hermes_http_sources,
+    read_profile_slots,
 )
-
-from _fixtures import hermes_fixture_path, load_hermes_fixture
 
 
 def _build_state_db(path):

@@ -6,7 +6,6 @@ from typing import Any
 
 from fmo.persistence import Repository
 
-
 EXIT_CODES = {
     "success": 0,
     "partial_stale": 2,

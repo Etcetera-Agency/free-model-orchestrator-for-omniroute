@@ -3,10 +3,9 @@ from urllib.parse import urlsplit
 
 import pytest
 
+from _fixtures import fixture_body
 from fmo.accounts import discover_live_accounts, group_quota_pools, usable_capacity
 from fmo.omniroute import OmniRouteClient
-
-from _fixtures import fixture_body
 
 
 class _FixtureResponse:
@@ -81,9 +80,7 @@ def test_live_account_discovery_rate_limit_failure_is_conservative():
 def test_fingerprint_fixture_connection_creates_independent_quota_pools():
     providers_body = deepcopy(fixture_body("omniroute_api_providers"))
     connection = next(
-        item
-        for item in providers_body["connections"]
-        if item.get("providerSpecificData", {}).get("fingerprints")
+        item for item in providers_body["connections"] if item.get("providerSpecificData", {}).get("fingerprints")
     )
     connection.update({"quota": 100, "status": "confirmed"})
 

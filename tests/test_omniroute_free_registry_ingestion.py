@@ -5,13 +5,11 @@ from urllib.parse import urlsplit
 import psycopg
 import pytest
 
+from _fixtures import fixture_body
 from fmo.db import MigrationRunner
 from fmo.omniroute import OmniRouteClient
 from fmo.persistence import Database, Repository
 from fmo.registry import persist_free_registry_outcome, sync_live_free_registry, validate_free_registry_payload
-
-from _fixtures import fixture_body
-import pytest
 
 
 class _FixtureResponse:

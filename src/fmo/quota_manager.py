@@ -120,6 +120,7 @@ def endpoint_quota_axes(
     axes.extend(_rule_axes(calibration_rule))
     # AICODE-NOTE: OmniRoute learned live quota is a reactive request-rate signal,
     # not a daily-budget axis; daily capacity comes from research/calibration.
+    del live_quota
     return axes
 
 

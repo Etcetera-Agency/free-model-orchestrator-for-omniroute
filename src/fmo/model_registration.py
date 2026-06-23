@@ -67,10 +67,7 @@ def _confirmed_free_models(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return [
         item
         for item in models
-        if isinstance(item, dict)
-        and item.get("provider")
-        and item.get("modelId")
-        and _free_type(item.get("freeType"))
+        if isinstance(item, dict) and item.get("provider") and item.get("modelId") and _free_type(item.get("freeType"))
     ]
 
 
@@ -107,5 +104,5 @@ def _existing_endpoint_keys(repository: Repository) -> set[tuple[str, str]]:
 
 
 def _idempotency_key(provider: str, model_id: str) -> str:
-    digest = hashlib.sha256(f"{provider}:{model_id}".encode("utf-8")).hexdigest()
+    digest = hashlib.sha256(f"{provider}:{model_id}".encode()).hexdigest()
     return f"fmo-provider-model:{digest}"

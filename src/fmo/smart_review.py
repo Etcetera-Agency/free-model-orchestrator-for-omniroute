@@ -5,7 +5,6 @@ from pydantic import BaseModel, Field
 
 from fmo.llm_runtime import LlmSiteConfig, complete_with_adapter
 
-
 ALLOWED_OPS = {"add", "remove", "move"}
 
 
@@ -71,7 +70,9 @@ def apply_review_diffs(
     return working, {"rejected": rejected}
 
 
-def _apply_one(combo: dict[str, list[str]], diff: dict, *, candidate_registry: set[str], minimum_combo_size: int) -> None:
+def _apply_one(
+    combo: dict[str, list[str]], diff: dict, *, candidate_registry: set[str], minimum_combo_size: int
+) -> None:
     role = diff["role"]
     endpoints = combo.setdefault(role, [])
     endpoint_id = diff["endpoint_id"]

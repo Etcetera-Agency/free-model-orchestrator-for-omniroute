@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Any, cast
 
 import psycopg
 
@@ -10,7 +11,7 @@ class MigrationRunner:
     def apply_schema(self, schema_path: Path) -> None:
         sql = schema_path.read_text(encoding="utf-8")
         with psycopg.connect(self.database_url, autocommit=True) as connection:
-            connection.execute(sql)
+            connection.execute(cast(Any, sql))
 
     def table_names(self) -> set[str]:
         with psycopg.connect(self.database_url) as connection:

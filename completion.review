@@ -1,5 +1,10 @@
 # Completion Review
 
+- `refactor-split-persistence` is archived: `fmo.persistence` is now a package
+  with `_base.py` plus one repository module per aggregate, `__init__.py`
+  re-exports the previous public API, and static pyright issues that surfaced
+  after enabling the gate were narrowed/fixed. Code Simplifier review added the
+  import-stability anchor on the package shim before commit.
 - `prefer-learned-quota-with-liveness` is archived: live OmniRoute learned
   `quotaTotal`/`quotaUsed` now remain a reactive request-rate signal, live
   liveness (`percentRemaining`, lockout, null healthy `resetAt`) is persisted

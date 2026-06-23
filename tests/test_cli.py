@@ -1,6 +1,6 @@
 import pytest
 
-from fmo.cli import CliResult, EXIT_CODES, run_cli
+from fmo.cli import EXIT_CODES, CliResult, run_cli
 
 
 class FakeRunner:
@@ -16,7 +16,9 @@ class FakeRunner:
 
 
 @pytest.mark.spec("cli-and-operations::Stage command invokes its stage")
-@pytest.mark.parametrize("command", ["scan-providers", "match-models", "probe-models", "score-roles", "allocate", "diff"])
+@pytest.mark.parametrize(
+    "command", ["scan-providers", "match-models", "probe-models", "score-roles", "allocate", "diff"]
+)
 def test_stage_commands_invoke_pipeline_runner(command):
     runner = FakeRunner()
 

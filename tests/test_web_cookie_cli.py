@@ -45,14 +45,19 @@ def test_web_cookie_connection_source_filters_non_cookie_auth():
 def test_capability_gate_default_text_only_and_raise_after_probe():
     capabilities = default_web_cookie_capabilities()
     assert web_cookie_role_eligible(required_capabilities={"text_chat"}, confirmed_capabilities=capabilities) is True
-    assert web_cookie_role_eligible(required_capabilities={"tool_calling"}, confirmed_capabilities=capabilities) is False
+    assert (
+        web_cookie_role_eligible(required_capabilities={"tool_calling"}, confirmed_capabilities=capabilities) is False
+    )
     raised = web_cookie_text_probe("plain answer", requested_capability="structured_output")
     assert raised.confirmed_capabilities["structured_output"] is True
 
 
 @pytest.mark.spec("web-cookie-candidates::Capability false or missing")
 def test_web_cookie_role_ineligible_when_capability_false_or_missing():
-    assert web_cookie_role_eligible(required_capabilities={"tool_calling"}, confirmed_capabilities={"tool_calling": False}) is False
+    assert (
+        web_cookie_role_eligible(required_capabilities={"tool_calling"}, confirmed_capabilities={"tool_calling": False})
+        is False
+    )
     assert web_cookie_role_eligible(required_capabilities={"vision"}, confirmed_capabilities={}) is False
 
 

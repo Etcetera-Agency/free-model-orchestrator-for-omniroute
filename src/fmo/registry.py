@@ -50,7 +50,7 @@ class FreeRegistrySyncOutcome:
     errors: list[str]
 
 
-def sync_free_registry(payload: dict[str, Any], *, rankings_payload: dict[str, Any] | None = None) -> FreeRegistry:
+def sync_free_registry(payload: dict[str, Any], *, rankings_payload: dict[str, Any] | None = None) -> FreeRegistry:  # noqa: ARG001 - reserved interface param
     models: dict[tuple[str, str | None], RegistryModel] = {}
     pool_budgets: dict[str, float] = {}
     for item in payload.get("models", []):

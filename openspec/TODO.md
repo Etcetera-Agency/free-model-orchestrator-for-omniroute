@@ -16,10 +16,6 @@ behavior-preservation oracle for every slice. All add structural requirements to
 the `system-architecture` capability. Implement in order — each depends on the
 package/shim the previous one establishes.
 
-- `refactor-split-persistence` — turn `persistence.py` (1240 lines, 16
-  repositories) into a `persistence/` package, one module per aggregate over a
-  shared `_base`, behind an `__init__` re-export shim. Proves the shim pattern;
-  fixes the persistence pyright errors in the moved code.
 - `refactor-split-stages-discovery` — start the `composition_stages/` package and
   extract the discovery / quota-research+sync / access-classification clusters.
 - `refactor-split-stages-runtime` — extract the probing / telemetry / Hermes
@@ -40,6 +36,11 @@ slices that own the affected modules rather than tracked as separate scenarios.
 
 ## Resolved
 
+- `refactor-split-persistence` — archived 2026-06-23. `fmo.persistence` is now a
+  package with `_base.py` plus per-aggregate repository modules, while
+  `__init__.py` keeps the public import surface stable. Persistence package
+  pyright, ruff/format, vulture, focused persistence tests, and spec coverage are
+  green.
 - `prefer-learned-quota-with-liveness` — archived 2026-06-23. Live OmniRoute
   `quotaTotal`/`quotaUsed` are now stored as a learned sub-day request-rate
   signal, not a daily budget; quota sync persists `percentRemaining`/lockout

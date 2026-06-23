@@ -21,7 +21,9 @@ class QualityBand:
     degraded: bool
 
 
-def aggregate_demand(agent_runs: dict[str, float], bindings: list[tuple[str, str, float]], dependencies: list[tuple[str, str, float]]) -> dict[str, float]:
+def aggregate_demand(
+    agent_runs: dict[str, float], bindings: list[tuple[str, str, float]], dependencies: list[tuple[str, str, float]]
+) -> dict[str, float]:
     _reject_cycles(dependencies)
     demand: dict[str, float] = {}
     for agent_id, role_id, calls_per_run in bindings:
@@ -47,7 +49,9 @@ def apply_historical_reserve(value: float, *, multiplier: float, already_applied
     return ReservedDemand(base=base, multiplier=multiplier, reserved=reserved)
 
 
-def cold_start_demand(*, schedule: float | None, bootstrap: float | None, role_minimum: float, global_minimum: float) -> ColdStartDemand:
+def cold_start_demand(
+    *, schedule: float | None, bootstrap: float | None, role_minimum: float, global_minimum: float
+) -> ColdStartDemand:
     if schedule is not None:
         return ColdStartDemand(schedule, "schedule")
     if bootstrap is not None:
@@ -78,7 +82,9 @@ def quality_band_for_demand(
                 if minimum <= float(candidate["quality"]) <= maximum
             )
             if capacity >= protected_requests:
-                if (anchor - minimum) + (maximum - anchor) < (anchor - best_minimum) + (best_maximum - anchor) or best_minimum == best_maximum == anchor:
+                if (anchor - minimum) + (maximum - anchor) < (anchor - best_minimum) + (
+                    best_maximum - anchor
+                ) or best_minimum == best_maximum == anchor:
                     best_minimum = minimum
                     best_maximum = maximum
                 break

@@ -6,30 +6,28 @@ from dataclasses import dataclass
 from urllib.parse import urljoin
 
 from fmo.aa_index_runtime import _run_aa_index_command, select_llm_model
+from fmo.composition_contracts import RuntimeCliResult
+from fmo.composition_stages import (
+    MetadataSync,
+    StageAdapters,
+    StageDependencies,
+    _account_discovery_stage,
+    _adapter_stage,
+    _free_candidate_stage,
+    _latest_role_diagnostic,
+    _metadata_stage,
+    _read_current_combos,
+    _rollback_stage,
+)
 from fmo.config import StartupConfig
 from fmo.llm_runtime import LlmProviderConfig, SharedInstructorRuntime, build_instructor_runtime
 from fmo.metadata_sync import sync_external_metadata
 from fmo.omniroute import OmniRouteClient
 from fmo.persistence import Database, Repository
 from fmo.pipeline import CANONICAL_STAGE_NAMES, PipelineRunner, PipelineRunResult, Stage
-from fmo.profile_normalization import ProfileNormalizationResult, normalize_profiles as normalize_profile_configs
+from fmo.profile_normalization import ProfileNormalizationResult
+from fmo.profile_normalization import normalize_profiles as normalize_profile_configs
 from fmo.scheduler import Scheduler
-from fmo.composition_contracts import RuntimeCliResult
-from fmo.composition_stages import (
-    MetadataSync,
-    StageAdapters,
-    StageDependencies,
-    _adapter_stage,
-    _account_discovery_stage,
-    _free_candidate_stage,
-    _latest_role_diagnostic,
-    _metadata_stage,
-    _omniroute_instance_id,
-    _production_stage_adapters,
-    _read_current_combos,
-    _rollback_stage,
-    _scan_catalogs,
-)
 
 
 @dataclass(frozen=True)
@@ -139,7 +137,9 @@ def compose_runtime(
     return ComposedRuntime(
         repository=repository,
         omniroute_client=client,
-        stages=build_canonical_stages(dependencies=dependencies, metadata_sync=metadata_sync, adapters=selected_adapters),
+        stages=build_canonical_stages(
+            dependencies=dependencies, metadata_sync=metadata_sync, adapters=selected_adapters
+        ),
         cron=config.hermes_inventory_cron,
         llm_runtime=llm_runtime,
         config=config,
@@ -188,7 +188,9 @@ def build_canonical_stages(
         "account-discovery": Stage("account-discovery", _account_discovery_stage(deps, stage_adapters)),
         "model-matching": Stage("model-matching", _adapter_stage("model-matching", deps, stage_adapters)),
         "quota-research": Stage("quota-research", _adapter_stage("quota-research", deps, stage_adapters)),
-        "access-classification": Stage("access-classification", _adapter_stage("access-classification", deps, stage_adapters)),
+        "access-classification": Stage(
+            "access-classification", _adapter_stage("access-classification", deps, stage_adapters)
+        ),
         "probing": Stage("probing", _adapter_stage("probing", deps, stage_adapters)),
         "telemetry-sync": Stage("telemetry-sync", _adapter_stage("telemetry-sync", deps, stage_adapters)),
         "quota-sync": Stage("quota-sync", _adapter_stage("quota-sync", deps, stage_adapters)),
@@ -223,10 +225,7 @@ def _cli_result(result: PipelineRunResult) -> RuntimeCliResult:
 
 
 def _profile_normalization_output(result: ProfileNormalizationResult) -> str:
-    lines = [
-        f"{rewrite.config_path}:{rewrite.slot}:{rewrite.old}->{rewrite.new}"
-        for rewrite in result.rewrites
-    ]
+    lines = [f"{rewrite.config_path}:{rewrite.slot}:{rewrite.old}->{rewrite.new}" for rewrite in result.rewrites]
     return "\n".join(lines)
 
 

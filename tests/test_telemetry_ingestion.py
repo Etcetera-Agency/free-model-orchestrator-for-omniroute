@@ -2,10 +2,9 @@ from urllib.parse import urlsplit
 
 import pytest
 
+from _fixtures import fixture_body
 from fmo.omniroute import OmniRouteClient
 from fmo.telemetry import sync_live_telemetry
-
-from _fixtures import fixture_body
 
 
 class _FixtureResponse:

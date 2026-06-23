@@ -1,7 +1,8 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from _fixtures import hermes_fixture_path, load_hermes_fixture
 from fmo.hermes_inventory import (
     InspectorForecast,
     assemble_inspector_prompt,
@@ -11,7 +12,6 @@ from fmo.hermes_inventory import (
     run_inspector,
 )
 from fmo.role_lifecycle import reconcile_roles
-from _fixtures import hermes_fixture_path, load_hermes_fixture
 
 
 def _profiles_with_config_paths(tmp_path):
@@ -42,7 +42,12 @@ def test_daily_inventory_records_all_consumer_types(tmp_path):
         profiles=_profiles_with_config_paths(tmp_path),
     )
 
-    assert {consumer.consumer_type for consumer in inventory.consumers} >= {"agent_profile", "cron_job", "webhook", "service"}
+    assert {consumer.consumer_type for consumer in inventory.consumers} >= {
+        "agent_profile",
+        "cron_job",
+        "webhook",
+        "service",
+    }
 
 
 @pytest.mark.spec("hermes-inventory::Schedule changed")
@@ -73,8 +78,19 @@ def test_inspector_prompt_and_scope_no_secret_or_file_reads():
         webhook_subscriptions=load_hermes_fixture("webhook_subscriptions.json"),
         profiles=load_hermes_fixture("profiles.json"),
     )
-    prompt = assemble_inspector_prompt(inventory, changes=["cadence changed"], secrets={"HERMES_INVENTORY_TOKEN": "secret"})
-    forecast = run_inspector(lambda prompt: {"role": "r", "expected_calls": 9, "average_input_tokens": 100, "average_output_tokens": 20, "confidence": "low"}, prompt)
+    prompt = assemble_inspector_prompt(
+        inventory, changes=["cadence changed"], secrets={"HERMES_INVENTORY_TOKEN": "secret"}
+    )
+    forecast = run_inspector(
+        lambda prompt: {
+            "role": "r",
+            "expected_calls": 9,
+            "average_input_tokens": 100,
+            "average_output_tokens": 20,
+            "confidence": "low",
+        },
+        prompt,
+    )
     assert "secret" not in prompt
     assert isinstance(forecast, InspectorForecast)
     assert forecast.model_choice is None
@@ -85,7 +101,7 @@ def test_inspector_prompt_and_scope_no_secret_or_file_reads():
 @pytest.mark.spec("dynamic-role-lifecycle::Role reappears within grace")
 @pytest.mark.spec("dynamic-role-lifecycle::Brand-new role")
 def test_reconcile_retire_grace_reactivate_and_new_role_bootstrap():
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     roles = {
         "old": {"status": "active", "combo": ["e1"], "recent_usage": 0},
         "back": {"status": "retiring", "missing_since": now - timedelta(days=1), "combo": ["e2"], "recent_usage": 1},

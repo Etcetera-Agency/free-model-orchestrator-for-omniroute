@@ -53,7 +53,7 @@ def degrade_endpoint(health: dict, *, sibling_ids: list[str]) -> DegradationResu
     degraded = health.get("consecutive_errors", 0) >= 3 or health.get("breaker") == "open"
     return DegradationResult(
         endpoint_status="degraded" if degraded else "active",
-        sibling_statuses={sibling_id: "unchanged" for sibling_id in sibling_ids},
+        sibling_statuses=dict.fromkeys(sibling_ids, "unchanged"),
     )
 
 

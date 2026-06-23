@@ -1,11 +1,11 @@
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import psycopg
-from psycopg.rows import dict_row
 import pytest
+from psycopg.rows import dict_row
 
 from fmo.db import MigrationRunner
 from fmo.persistence import Database, Repository
@@ -178,7 +178,7 @@ def test_scheduler_fires_full_pipeline_at_configured_cron(repository):
 
     scheduler = Scheduler(repository, cron="0 4 * * *", pipeline_runner=runner)
 
-    cron_now = datetime.now(timezone.utc).replace(hour=4, minute=0, second=0, microsecond=0)
+    cron_now = datetime.now(UTC).replace(hour=4, minute=0, second=0, microsecond=0)
     result = scheduler.tick(cron_now.isoformat())
 
     assert result.exit_code == 0
@@ -200,7 +200,7 @@ def test_scheduler_fires_weekly_recalibration_at_configured_cron(repository):
     calls = []
     scheduler = _recalibration_scheduler(repository, calls)
 
-    cron_now = datetime.now(timezone.utc).replace(hour=5, minute=0, second=0, microsecond=0)
+    cron_now = datetime.now(UTC).replace(hour=5, minute=0, second=0, microsecond=0)
     result = scheduler.tick_recalibration(cron_now.isoformat())
 
     assert result == "done"
@@ -212,7 +212,7 @@ def test_scheduler_weekly_recalibration_non_matching_tick_noops(repository):
     calls = []
     scheduler = _recalibration_scheduler(repository, calls)
 
-    cron_now = datetime.now(timezone.utc).replace(hour=5, minute=1, second=0, microsecond=0)
+    cron_now = datetime.now(UTC).replace(hour=5, minute=1, second=0, microsecond=0)
 
     assert scheduler.tick_recalibration(cron_now.isoformat()) is None
     assert calls == []
@@ -224,7 +224,7 @@ def test_scheduler_weekly_recalibration_noops_when_daily_lock_held(repository):
     lock = RunLockManager(repository).acquire("daily")
     scheduler = _recalibration_scheduler(repository, calls)
 
-    cron_now = datetime.now(timezone.utc).replace(hour=5, minute=0, second=0, microsecond=0)
+    cron_now = datetime.now(UTC).replace(hour=5, minute=0, second=0, microsecond=0)
 
     try:
         assert scheduler.tick_recalibration(cron_now.isoformat()) is None

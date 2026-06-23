@@ -42,7 +42,9 @@ def apply_group_evidence(groups: list[AttributionGroup], *, evidence: dict) -> l
         ]
     if evidence.get("confirmed_independence"):
         return [
-            AttributionGroup(group_id=group.group_id, status="confirmed", limit=group.limit, recalculate_allocation=True)
+            AttributionGroup(
+                group_id=group.group_id, status="confirmed", limit=group.limit, recalculate_allocation=True
+            )
             for group in groups
         ]
     return groups

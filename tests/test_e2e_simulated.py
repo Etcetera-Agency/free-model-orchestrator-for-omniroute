@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -67,7 +67,7 @@ def test_simulated_daily_batch_builds_and_applies_free_combo():
             "quota_rule": True,
             "limit": rule.claim.amount,
             "remaining": 90,
-            "reset_at": datetime.now(timezone.utc) + timedelta(hours=12),
+            "reset_at": datetime.now(UTC) + timedelta(hours=12),
             "hard_stop": True,
         }
     )
@@ -76,7 +76,9 @@ def test_simulated_daily_batch_builds_and_applies_free_combo():
     probe_client = SimProbeClient()
     assert should_probe(access.status, reserved_capacity=True)
     probe = probe_endpoint(probe_client, provider="free-provider", model="free-chat", capabilities={"tools": False})
-    match = match_model("free-provider/free-chat", canonical_slugs={"free-chat"}, provider_catalog_ids={"free-provider/free-chat"})
+    match = match_model(
+        "free-provider/free-chat", canonical_slugs={"free-chat"}, provider_catalog_ids={"free-provider/free-chat"}
+    )
     context = context_eligible(
         effective_context=effective_context_window([128_000, 64_000]),
         minimum_context=32_000,
@@ -111,7 +113,9 @@ def test_simulated_daily_batch_builds_and_applies_free_combo():
     demand["routing_fast"] = protected_demand(expected=demand["routing_fast"], p95=6, peak_multiplier=1.2)
     plan = allocate_globally(
         roles=["routing_fast"],
-        endpoints=[{"id": "free-provider/free-chat", "pool": "free-provider:pool", "score": score.total, "capacity": remaining}],
+        endpoints=[
+            {"id": "free-provider/free-chat", "pool": "free-provider:pool", "score": score.total, "capacity": remaining}
+        ],
         demand=demand,
     )
     combo = build_priority_combo(

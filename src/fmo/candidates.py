@@ -2,7 +2,6 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-
 FREE_TOKEN_RE = re.compile(r"(^|[^a-z0-9])free([^a-z0-9]|$)")
 
 

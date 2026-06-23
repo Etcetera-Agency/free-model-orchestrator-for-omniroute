@@ -8,7 +8,13 @@ from fmo.allocation import (
 )
 from fmo.applier import ComboApplier, ComboConflict
 from fmo.audit import audit_change, rollback_run
-from fmo.forecast import aggregate_demand, apply_historical_reserve, cold_start_demand, protected_demand, quality_band_for_demand
+from fmo.forecast import (
+    aggregate_demand,
+    apply_historical_reserve,
+    cold_start_demand,
+    protected_demand,
+    quality_band_for_demand,
+)
 
 
 @pytest.mark.spec("demand-forecast::Multiple agents and a shared role")
@@ -23,7 +29,9 @@ def test_demand_aggregation_expands_shared_role_dag_and_rejects_cycle():
     assert demand["fetch"] == 105
 
     with pytest.raises(ValueError):
-        aggregate_demand({"a": 1}, [("a", "fetch", 1)], [("fetch", "research_scout", 1), ("research_scout", "fetch", 1)])
+        aggregate_demand(
+            {"a": 1}, [("a", "fetch", 1)], [("fetch", "research_scout", 1), ("research_scout", "fetch", 1)]
+        )
 
 
 @pytest.mark.spec("demand-forecast::Reserve applied once")
@@ -296,7 +304,16 @@ def test_applier_manages_only_fmo_transaction_smoke_rollback_and_drift():
 @pytest.mark.spec("audit-rollback::Inspect an assignment")
 def test_audit_change_log_and_rollback_run():
     log = []
-    audit_change(log, run_id="r1", entity_type="combo", entity_id="fmo-role", before=["a"], after=["b"], reasons=["score"], sources=["plan"])
+    audit_change(
+        log,
+        run_id="r1",
+        entity_type="combo",
+        entity_id="fmo-role",
+        before=["a"],
+        after=["b"],
+        reasons=["score"],
+        sources=["plan"],
+    )
     restored = rollback_run(log, run_id="r1", catalog_snapshots=["keep"])
     assert log[0]["before_json"] == ["a"]
     assert restored["fmo-role"] == ["a"]
