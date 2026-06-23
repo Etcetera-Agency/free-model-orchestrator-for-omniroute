@@ -148,7 +148,7 @@ class PartiallyFailingQuotaSearchClient(PipelineOpsClient):
     def post(self, path, payload, headers=None, idempotency_key=None):
         if path == "/v1/search":
             query = str(payload["query"])
-            model_id = query.split(" free tier quota for ", 1)[1].split(" today ", 1)[0]
+            model_id = query.split("model ", 1)[1].split(",", 1)[0].split(" on provider", 1)[0]
             self.attempted_models.append(model_id)
             if model_id == self.failing_model:
                 raise OmniRouteRequestError("POST", path, 503)

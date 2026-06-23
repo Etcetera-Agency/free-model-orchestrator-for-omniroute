@@ -20,26 +20,65 @@ def _quota_research_stage(dependencies: StageDependencies, context: PipelineCont
     if dependencies.omniroute_client is None:
         return StageResult(status="external_dependency_failed", reason="omniroute_client_required")
     endpoint_filter = context.config.get("endpoint")
+    provider_filter = context.config.get("provider")
+    account_filter = context.config.get("account")
     with context.repository.database.transaction() as transaction:
         changes = _detect_free_model_changes(transaction, dependencies.omniroute_client)
         if not changes.triggered:
             return _quota_research_skipped_result()
+        # AICODE-NOTE: default quota research is provider-account scoped;
+        # endpoint-scoped exact rules are only for explicit live diagnostics.
         endpoints = transaction.execute(
             """
-            SELECT pe.id, pe.provider_model_id, pa.id AS account_id,
-                   pa.omniroute_connection_id, p.id AS provider_id, p.omniroute_provider_id
-            FROM provider_endpoints pe
-            JOIN provider_accounts pa ON pa.id = pe.provider_account_id
-            JOIN providers p ON p.id = pa.provider_id
-            WHERE pe.canonical_model_id IS NOT NULL
-              AND (
-                %(endpoint_filter)s IS NULL
-                OR pe.id::text = %(endpoint_filter)s
-                OR pe.provider_model_id = %(endpoint_filter)s
-              )
-            ORDER BY pe.provider_model_id
+            WITH candidates AS (
+              SELECT pe.id, pe.provider_model_id, pa.id AS account_id,
+                     pa.omniroute_connection_id, p.id AS provider_id, p.omniroute_provider_id
+              FROM provider_endpoints pe
+              JOIN provider_accounts pa ON pa.id = pe.provider_account_id
+              JOIN providers p ON p.id = pa.provider_id
+              WHERE pe.canonical_model_id IS NOT NULL
+                AND (
+                  %(endpoint_filter)s IS NULL
+                  OR pe.id::text = %(endpoint_filter)s
+                  OR pe.provider_model_id = %(endpoint_filter)s
+                )
+                AND (
+                  %(provider_filter)s IS NULL
+                  OR p.id::text = %(provider_filter)s
+                  OR p.omniroute_provider_id = %(provider_filter)s
+                )
+                AND (
+                  %(account_filter)s IS NULL
+                  OR pa.id::text = %(account_filter)s
+                  OR pa.omniroute_connection_id = %(account_filter)s
+                )
+            ),
+            scoped AS (
+              SELECT *,
+                     CASE WHEN %(endpoint_filter)s IS NULL THEN provider_id ELSE id END AS provider_group,
+                     CASE WHEN %(endpoint_filter)s IS NULL THEN account_id ELSE id END AS account_group,
+                     CASE WHEN %(endpoint_filter)s IS NULL THEN '*' ELSE provider_model_id END AS rule_model_pattern
+              FROM candidates
+            ),
+            ranked AS (
+              SELECT *,
+                     row_number() OVER (
+                       PARTITION BY provider_group, account_group
+                       ORDER BY provider_model_id
+                     ) AS row_rank
+              FROM scoped
+            )
+            SELECT id, provider_model_id, account_id, omniroute_connection_id,
+                   provider_id, omniroute_provider_id, rule_model_pattern
+            FROM ranked
+            WHERE row_rank = 1
+            ORDER BY provider_model_id
             """,
-            {"endpoint_filter": endpoint_filter},
+            {
+                "endpoint_filter": endpoint_filter,
+                "provider_filter": provider_filter,
+                "account_filter": account_filter,
+            },
         ).fetchall()
     quota_limit_hints = _quota_limit_hints(dependencies.omniroute_client)
     written = 0
@@ -87,7 +126,7 @@ def _quota_research_stage(dependencies: StageDependencies, context: PipelineCont
                 provider_id=endpoint["provider_id"],
                 provider_account_id=endpoint["account_id"],
                 source_snapshot_id=snapshot["id"],
-                model_pattern=endpoint["provider_model_id"],
+                model_pattern=endpoint["rule_model_pattern"],
                 access_type="free_quota",
                 limits={claim.metric: claim.amount, "window": claim.window},
                 reset_policy={"window": claim.window},

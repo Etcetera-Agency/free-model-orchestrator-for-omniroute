@@ -60,6 +60,8 @@ class ComposedRuntime:
                 "dry_run": getattr(args, "dry_run", False),
                 "run_id": getattr(args, "run_id", None),
                 "endpoint": getattr(args, "endpoint", None),
+                "provider": getattr(args, "provider", None),
+                "account": getattr(args, "account", None),
                 "role": getattr(args, "role", None),
             },
         ).run(trigger=command, run_type=_run_type(command))

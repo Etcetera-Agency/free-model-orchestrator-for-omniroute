@@ -184,9 +184,9 @@ def test_quota_research_skips_when_free_registry_snapshot_is_unchanged(postgres_
     assert not [call for call in client.calls if call[0] == "/v1/search"]
 
 
-@pytest.mark.spec("quota-research::Recalc re-searches all on new free model")
+@pytest.mark.spec("quota-research::Provider account recalc researches one quota pool")
 @pytest.mark.spec("pipeline-orchestration::Quota research is triggered by new free models")
-def test_new_reachable_free_model_triggers_full_recalc_and_uses_quota_total_hint(postgres_url):
+def test_new_reachable_free_model_triggers_provider_account_recalc_and_uses_quota_total_hint(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     repository = Repository(Database(postgres_url))
     seed_endpoint(repository, model_id="free-chat")
@@ -208,8 +208,8 @@ def test_new_reachable_free_model_triggers_full_recalc_and_uses_quota_total_hint
     with repository.database.transaction() as transaction:
         rule_rows = transaction.execute("SELECT limits FROM quota_rules ORDER BY model_pattern").fetchall()
     assert result.exit_code == 0
-    assert [call[0] for call in client.calls if call[0] == "/v1/search"] == ["/v1/search", "/v1/search"]
-    assert [row["limits"]["requests"] for row in rule_rows] == [50.0, 50.0]
+    assert [call[0] for call in client.calls if call[0] == "/v1/search"] == ["/v1/search"]
+    assert [row["limits"]["requests"] for row in rule_rows] == [50.0]
 
 
 @pytest.mark.spec("quota-research::Endpoint filter researches one endpoint")
@@ -241,19 +241,85 @@ def test_quota_research_endpoint_filter_limits_research_to_one_endpoint(postgres
     assert [row["model_pattern"] for row in rules] == ["selected-free"]
 
 
+@pytest.mark.spec("access-classifier::Provider account wildcard quota rule applies to endpoint")
+def test_access_classification_uses_provider_account_wildcard_quota_rule(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    first_endpoint = seed_endpoint(repository, model_id="first-free")
+    second_endpoint = seed_endpoint(repository, model_id="second-free")
+    run_composed_stage(repository, "model-matching")
+    with repository.database.transaction() as transaction:
+        row = transaction.execute(
+            """
+            SELECT p.id AS provider_id, pa.id AS account_id
+            FROM provider_endpoints pe
+            JOIN provider_accounts pa ON pa.id = pe.provider_account_id
+            JOIN providers p ON p.id = pa.provider_id
+            WHERE pe.id = %(endpoint_id)s
+            """,
+            {"endpoint_id": first_endpoint["id"]},
+        ).fetchone()
+        repository.quota_rules.upsert(
+            transaction,
+            provider_id=row["provider_id"],
+            provider_account_id=row["account_id"],
+            source_snapshot_id=None,
+            model_pattern="*",
+            access_type="free_quota",
+            limits={"requests": 100, "window": "day"},
+            reset_policy={"window": "day"},
+            hard_stop_capable=True,
+            confidence=0.7,
+            status="active",
+            rule_hash="provider-account:test",
+        )
+
+    result = run_composed_stage(repository, "access-classification")
+
+    with repository.database.transaction() as transaction:
+        states = transaction.execute(
+            """
+            SELECT pe.provider_model_id, eas.status, eas.reason_code
+            FROM provider_endpoints pe
+            JOIN endpoint_access_states eas ON eas.endpoint_id = pe.id
+            WHERE pe.id IN (%(first_endpoint)s, %(second_endpoint)s)
+            ORDER BY pe.provider_model_id
+            """,
+            {"first_endpoint": first_endpoint["id"], "second_endpoint": second_endpoint["id"]},
+        ).fetchall()
+    assert result.exit_code == 0
+    assert [(row["provider_model_id"], row["status"], row["reason_code"]) for row in states] == [
+        ("first-free", "confirmed", "quota_rule_remaining"),
+        ("second-free", "confirmed", "quota_rule_remaining"),
+    ]
+
+
 @pytest.mark.spec("quota-research::One endpoint error does not stop research for the rest")
 @pytest.mark.spec("quota-research::Per-endpoint failures mark the run partial")
 def test_quota_research_continues_after_one_endpoint_error(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     repository = Repository(Database(postgres_url))
     for model_id in ["good-free", "bad-free", "later-free"]:
-        seed_endpoint(repository, model_id=model_id)
+        seed_endpoint(
+            repository,
+            model_id=model_id,
+            provider_id=f"{model_id}-provider",
+            connection_id=f"{model_id}-connection",
+        )
     run_composed_stage(repository, "model-matching")
     now = datetime.now(UTC)
-    seed_free_registry_snapshot(repository, models=[("provider-a", "good-free")], created_at=now - timedelta(days=1))
     seed_free_registry_snapshot(
         repository,
-        models=[("provider-a", "good-free"), ("provider-a", "bad-free"), ("provider-a", "later-free")],
+        models=[("good-free-provider", "good-free")],
+        created_at=now - timedelta(days=1),
+    )
+    seed_free_registry_snapshot(
+        repository,
+        models=[
+            ("good-free-provider", "good-free"),
+            ("bad-free-provider", "bad-free"),
+            ("later-free-provider", "later-free"),
+        ],
         created_at=now,
     )
     client = PartiallyFailingQuotaSearchClient(failing_model="bad-free")

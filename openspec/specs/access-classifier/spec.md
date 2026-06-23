@@ -57,6 +57,9 @@ The system SHALL fail closed when evidence is missing, empty or stale.
 During batch access classification, missing quota evidence for one endpoint SHALL
 be stored as endpoint-local `unknown` state with `quota_rule_missing`; it SHALL
 NOT abort classification for other endpoints that have usable quota evidence.
+Access classification SHALL prefer an exact model quota rule when present, and
+otherwise apply an active provider/account wildcard quota rule
+(`model_pattern = '*'`) to endpoints under that same provider account.
 
 #### Scenario: Empty evidence
 - GIVEN no usable evidence is present
@@ -71,3 +74,10 @@ NOT abort classification for other endpoints that have usable quota evidence.
 - AND the endpoint without the rule is stored as `unknown` with
   `quota_rule_missing`
 - AND the stage succeeds so downstream stages can use confirmed endpoints
+
+#### Scenario: Provider account wildcard quota rule applies to endpoint
+- GIVEN a provider/account has an active wildcard quota rule
+- AND two endpoints belong to that provider/account
+- WHEN access classification runs
+- THEN both endpoints are classified from the wildcard rule unless an exact
+  model rule overrides it

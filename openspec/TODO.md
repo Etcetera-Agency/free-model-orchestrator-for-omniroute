@@ -112,9 +112,10 @@
   search summaries but no numeric daily/monthly amount, and their live
   `/api/usage/quota` rows may expose only liveness (`percentRemaining`) without
   `quotaTotal`. Keep those endpoints fail-closed as `quota_rule_missing` while
-  allowing endpoints with active rules to classify/probe/allocate. Add a
-  calibration or provider-specific quota source before treating those silent
-  models as usable capacity.
+  allowing endpoints with active rules to classify/probe/allocate. Main quota
+  research is provider/account scoped; add calibration or provider-specific
+  quota sources for silent provider pools before treating them as usable
+  capacity.
 - `fix-selection-correctness` — archived 2026-06-22. Production role scoring now
   uses AA metrics, latency source priority, health/stability telemetry, and
   missing-AA uncertainty instead of constant placeholders. Allocation now uses

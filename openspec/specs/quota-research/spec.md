@@ -17,11 +17,14 @@ connection: either a newly detected confirmed-free model (models.dev
 changed in either direction (free to paid, paid to free, 0-cost to priced). When
 no such change is detected, the stage is a no-op for that run; the daily live
 quota/probe/health path is unaffected. When triggered, the system SHALL perform
-a full recalc that re-verifies every endpoint, overriding the not-stale daily
-skip for that run, because one free-model change is a signal that other models'
-policies may also have changed. OmniRoute `quotaTotal` (`GET /api/usage/quota`),
-where present, SHALL be used as the known-limit input; search SHALL still
-establish hard-stop behaviour for each endpoint.
+a full recalc that re-verifies every provider/account quota pool, overriding the
+not-stale daily skip for that run, because one free-model change is a signal
+that other provider policies may also have changed. OmniRoute `quotaTotal`
+(`GET /api/usage/quota`), where present, SHALL be used as the known-limit input;
+search SHALL still establish hard-stop behaviour for each provider/account
+quota pool. Provider/account recalc SHALL persist provider-wide rules with
+`model_pattern = '*'`; exact endpoint/model rules are reserved for explicit
+endpoint-filtered research.
 
 #### Scenario: Endpoint absent from OmniRoute registry
 - GIVEN an endpoint with no confirmed quota from any official API or OmniRoute
@@ -39,19 +42,22 @@ establish hard-stop behaviour for each endpoint.
 - GIVEN an existing model whose free/0-cost status changed since the prior run
   (free to paid or paid to free), reachable via an existing connection
 - WHEN free-model-change detection runs
-- THEN a full recalc is triggered and all endpoints are re-searched
+- THEN a full recalc is triggered and all affected provider/account quota pools
+  are re-searched
 
-#### Scenario: Recalc re-searches all on new free model
+#### Scenario: Provider account recalc researches one quota pool
 - GIVEN a new confirmed-free model reachable via an existing connection
 - WHEN quota research runs
-- THEN all endpoints are re-searched (the not-stale daily skip is overridden)
+- THEN each provider/account quota pool is searched once (the not-stale daily
+  skip is overridden)
+- AND the resulting quota rule is provider-wide for that account
 - AND an OmniRoute-known `quotaTotal` is used as the limit while search sets
   hard-stop behaviour
 
 #### Scenario: Endpoint filter researches one endpoint
 - GIVEN multiple endpoints need quota research during a triggered recalc
 - WHEN quota research is run with a specific endpoint id or provider model id
-- THEN only that endpoint is searched and persisted
+- THEN only that endpoint is searched and an exact model rule is persisted
 - AND other endpoints are left unchanged for later research
 
 #### Scenario: New model outside our connections does not trigger

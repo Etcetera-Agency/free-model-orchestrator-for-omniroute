@@ -1,5 +1,15 @@
 # Completion Review
 
+- Deploy fix: quota research now defaults to provider/account pool scope instead
+  of per-model scanning. A triggered recalc searches each provider/account once,
+  persists wildcard rules with `model_pattern='*'`, and access classification
+  applies exact model rules first, then provider/account wildcard rules. The
+  explicit `--endpoint` path remains only for diagnostics and writes an exact
+  model rule. Code Simplifier review replaced repeated `DISTINCT ON` expressions
+  with explicit grouping keys and `row_number()`. Focused verification:
+  provider-pool/access/quota-filter tests invoked on Python 3.12 venv (skipped
+  locally due PostgreSQL `/dev/shm` exhaustion), ruff on touched files, and
+  OpenSpec strict validation.
 - Deploy fix: provider probes now use the shared `/v1/chat/completions` route
   with a tiny completion budget and no-cache header, and the shared OmniRoute
   client returns text/SSE bodies as probe content when a successful response is

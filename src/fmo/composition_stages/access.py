@@ -32,10 +32,13 @@ def _access_classification_stage(_dependencies: StageDependencies, context: Pipe
              AND fmd.provider_model_id = pe.provider_model_id
             LEFT JOIN quota_rules qr
               ON qr.provider_id = p.id
-             AND qr.model_pattern = pe.provider_model_id
+             AND (qr.provider_account_id IS NULL OR qr.provider_account_id = pa.id)
+             AND qr.model_pattern IN (pe.provider_model_id, '*')
              AND qr.status = 'active'
             WHERE pe.canonical_model_id IS NOT NULL
-            ORDER BY pe.id, qr.created_at DESC NULLS LAST
+            ORDER BY pe.id,
+                     CASE WHEN qr.model_pattern = pe.provider_model_id THEN 0 ELSE 1 END,
+                     qr.created_at DESC NULLS LAST
             """
         ).fetchall()
         lost_free_rows = [
