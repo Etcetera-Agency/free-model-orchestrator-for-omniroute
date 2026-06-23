@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 
+from fmo.idempotency import combo_models_idempotency_key
 from fmo.pipeline import PipelineContext, StageResult
 from fmo.smart_review import ComboReviewResult
 
@@ -38,7 +39,7 @@ def _rollback_apply_mutations(
 
 
 def _combo_models_idempotency_key(combo_id: str, models: Sequence[str]) -> str:
-    return _legacy._combo_models_idempotency_key(combo_id, models)
+    return combo_models_idempotency_key(combo_id, models)
 
 
 def _delete_applied_snapshots_for_run(

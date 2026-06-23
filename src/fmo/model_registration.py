@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import hashlib
 from dataclasses import dataclass
 from typing import Any
 
+from fmo.idempotency import provider_model_idempotency_key
 from fmo.persistence import Repository
 
 
@@ -50,7 +50,7 @@ def register_new_free_models(
                 "supportedEndpoints": model.get("supportedEndpoints"),
                 "targetFormat": model.get("targetFormat"),
             },
-            idempotency_key=_idempotency_key(*key),
+            idempotency_key=provider_model_idempotency_key(*key),
         )
         registered.append(key)
     return RegistrationReport(
@@ -101,8 +101,3 @@ def _existing_endpoint_keys(repository: Repository) -> set[tuple[str, str]]:
             """
         ).fetchall()
     return {(str(row["omniroute_provider_id"]), str(row["provider_model_id"])) for row in rows}
-
-
-def _idempotency_key(provider: str, model_id: str) -> str:
-    digest = hashlib.sha256(f"{provider}:{model_id}".encode()).hexdigest()
-    return f"fmo-provider-model:{digest}"

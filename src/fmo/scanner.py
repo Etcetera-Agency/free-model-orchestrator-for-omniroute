@@ -1,8 +1,9 @@
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from fmo.accounts import expand_account_scopes
+from fmo.idempotency import utcnow
 from fmo.omniroute import OmniRouteRequestError
 from fmo.persistence import Repository
 
@@ -149,7 +150,7 @@ def diff_catalogs(previous: list[dict[str, Any]], current: list[dict[str, Any]])
 
 
 def should_mark_removed(snapshots: list[CatalogSnapshot], now: datetime | None = None) -> bool:
-    now = now or datetime.now(UTC)
+    now = now or utcnow()
     if len(snapshots) < 2:
         return False
     last_two = snapshots[-2:]

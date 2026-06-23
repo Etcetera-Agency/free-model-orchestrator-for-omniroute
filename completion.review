@@ -1,5 +1,10 @@
 # Completion Review
 
+- `refactor-unify-shared-helpers` is archived: row helpers remain single-home in
+  `persistence/_base.py`, timestamp/slug/hash/idempotency-key helpers now live
+  in `idempotency.py`, quota payload math lives in `quota_normalize.py`, and the
+  stage shims import those canonical helpers. Code Simplifier review preserved
+  exact combo-state hash behavior while removing duplicate local definitions.
 - `refactor-extract-test-fakes` is archived: the shared composition fake
   clients/runtimes now live in `tests/_clients.py`, common test helpers live in
   `tests/_composition_support.py`, composition tests are split by stage domain,

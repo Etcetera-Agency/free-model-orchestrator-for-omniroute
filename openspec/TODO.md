@@ -6,28 +6,16 @@
 
 ## Active proposal slices (awaiting TDD implementation)
 
-These were opened from the 2026-06-23 implementation review. Each carries
-uncovered scenarios in `tests/spec_coverage_pending.txt` until its tests land.
-
-### Refactor program (2026-06-23 static-analysis review)
-
-Behavior-preserving structure work; the existing pytest suite is the
-behavior-preservation oracle for every slice. All add structural requirements to
-the `system-architecture` capability. Implement in order — each depends on the
-package/shim the previous one establishes.
-
-- `refactor-unify-shared-helpers` — deduplicate row helpers, `utcnow`, slug/hash/
-  idempotency-key builders, and quota-math helpers into one canonical home each,
-  now that the target modules exist.
-
-Final verification after the last active slice: run the full suite once through
-both `.venv/bin/pytest` and `.venv/bin/python -m pytest`.
-
-Type-error triage (66 pyright errors) and the import-path fix are folded into the
-slices that own the affected modules rather than tracked as separate scenarios.
+- (none open)
 
 ## Resolved
 
+- `refactor-unify-shared-helpers` — archived 2026-06-23. Row helpers remain
+  canonical in `persistence/_base.py`; `utcnow`, slug/hash, and idempotency-key
+  helpers now live in `idempotency.py`; quota payload math lives in
+  `quota_normalize.py`; and production call sites import those canonical
+  definitions. `make check`, OpenSpec validation, and full pytest under both
+  entry points are green.
 - `refactor-extract-test-fakes` — archived 2026-06-23. Shared composition fakes
   now live in `tests/_clients.py`, shared helpers live in
   `tests/_composition_support.py`, composition coverage is split across

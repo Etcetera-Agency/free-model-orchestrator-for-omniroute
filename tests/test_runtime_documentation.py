@@ -1,6 +1,8 @@
+import ast
 import importlib
 import inspect
 import pkgutil
+import re
 from pathlib import Path
 
 import pytest
@@ -9,11 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 # Active proposal slices awaiting TDD implementation. Each entry is dropped from
 # tests/spec_coverage_pending.txt (and here) when its test lands. Slices are
 # listed in openspec/TODO.md and openspec/changes/<id>/.
-EXPECTED_ACTIVE_PENDING = {
-    # refactor-unify-shared-helpers
-    "system-architecture::Row access helpers are defined once in the persistence base",
-    "system-architecture::Timestamp and hashing helpers are centralized",
-}
+EXPECTED_ACTIVE_PENDING = set()
 
 
 @pytest.mark.spec("runtime-documentation::Active docs state")
@@ -171,15 +169,58 @@ def test_shared_stage_helpers_live_in_helpers_module():
 
     for helper in (
         "_effect_result",
-        "_canonical_slug",
-        "_hash_parts",
-        "_quota_metric",
-        "_quota_limit",
-        "_remaining_amount",
         "_adapter_stage",
         "_omniroute_instance_id",
     ):
         assert inspect.getmodule(getattr(helpers, helper)).__name__.endswith("._helpers")
+
+
+@pytest.mark.spec("system-architecture::Row access helpers are defined once in the persistence base")
+def test_row_access_helpers_have_one_persistence_definition():
+    helper_names = {"_one", "_optional", "_many", "_jsonb", "_content_hash"}
+    definitions: dict[str, list[Path]] = {name: [] for name in helper_names}
+
+    for path in (ROOT / "src" / "fmo").rglob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in tree.body:
+            if isinstance(node, ast.FunctionDef) and node.name in helper_names:
+                definitions[node.name].append(path.relative_to(ROOT))
+
+    assert definitions == {name: [Path("src/fmo/persistence/_base.py")] for name in helper_names}
+
+
+@pytest.mark.spec("system-architecture::Timestamp and hashing helpers are centralized")
+def test_timestamp_hash_and_quota_helpers_are_centralized():
+    idempotency = importlib.import_module("fmo.idempotency")
+    quota_normalize = importlib.import_module("fmo.quota_normalize")
+    stage_helpers = importlib.import_module("fmo.composition_stages._helpers")
+    legacy_source = (ROOT / "src" / "fmo" / "composition_stages" / "_legacy.py").read_text(encoding="utf-8")
+    model_registration_source = (ROOT / "src" / "fmo" / "model_registration.py").read_text(encoding="utf-8")
+
+    for helper in (
+        "utcnow",
+        "canonical_slug",
+        "hash_parts",
+        "combo_models_idempotency_key",
+        "provider_model_idempotency_key",
+    ):
+        assert inspect.getmodule(getattr(idempotency, helper)).__name__ == "fmo.idempotency"
+    for helper in ("quota_metric", "quota_limit", "remaining_amount"):
+        assert inspect.getmodule(getattr(quota_normalize, helper)).__name__ == "fmo.quota_normalize"
+    for helper in ("_canonical_slug", "_hash_parts", "_quota_metric", "_quota_limit", "_remaining_amount"):
+        assert inspect.getmodule(getattr(stage_helpers, helper)).__name__ != "fmo.composition_stages._helpers"
+
+    for old_definition in (
+        r"def _canonical_slug\(",
+        r"def _hash_parts\(",
+        r"def _combo_models_idempotency_key\(",
+        r"def _quota_metric\(",
+        r"def _quota_limit\(",
+        r"def _remaining_amount\(",
+    ):
+        assert re.search(old_definition, legacy_source) is None
+    assert "datetime.now(UTC)" not in legacy_source
+    assert "def _idempotency_key" not in model_registration_source
 
 
 @pytest.mark.spec("system-architecture::Test fakes live in a shared test-support module")
@@ -224,5 +265,5 @@ def test_pytest_entry_points_have_shared_import_path():
     tests_package = ROOT / "tests" / "__init__.py"
 
     assert tests_package.exists()
-    assert 'pythonpath = ["src", "."]' in pyproject
+    assert 'pythonpath = ["src", ".", "tests"]' in pyproject
     assert "$(VENV)/pytest -q" in makefile

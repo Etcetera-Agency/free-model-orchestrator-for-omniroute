@@ -1,8 +1,9 @@
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
+from fmo.idempotency import utcnow
 from fmo.omniroute import OmniRouteRequestError
 from fmo.quota_normalize import DEFAULT_TOKENS_PER_REQUEST, binding_capacity, to_requests_per_day
 
@@ -73,7 +74,7 @@ def fetch_live_quota_snapshot(
     max_age: timedelta = timedelta(minutes=15),
     tokens_per_request: int = DEFAULT_TOKENS_PER_REQUEST,
 ) -> LiveQuotaSnapshot:
-    now = now or datetime.now(UTC)
+    now = now or utcnow()
     payload = _client_get(client, "/api/usage/quota")
     generated_at = _parse_timestamp(payload.get("meta", {}).get("generatedAt"))
     if generated_at is None:

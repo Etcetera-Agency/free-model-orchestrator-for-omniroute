@@ -10,8 +10,8 @@ from fmo.db import MigrationRunner
 from fmo.model_registration import register_new_free_models
 from fmo.persistence import Database, Repository
 from fmo.pipeline import PipelineRunner
-from test_composition import (
-    PipelineOpsClient,
+from tests._clients import PipelineOpsClient
+from tests._composition_support import (
     run_composed_stage,
     run_rebalance_stages,
     seed_confirmed_llm_candidate,

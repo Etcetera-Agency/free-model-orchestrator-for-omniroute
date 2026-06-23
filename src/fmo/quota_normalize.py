@@ -12,17 +12,53 @@ excluded here.
 """
 
 from dataclasses import dataclass
+from typing import Any
 
 DEFAULT_TOKENS_PER_REQUEST = 2000
 
 # Only cumulative budgets are planned here; minute/hour are reactive rate gates.
 _BUDGET_WINDOW_DAYS = {"day": 1, "month": 30}
 _VALID_METRICS = {"requests", "tokens"}
+_QUOTA_METRICS = ("requests", "tokens")
 
 # Quota whose numbers we derived ourselves (search summary or self-calculated
 # calibration) rather than read from an authoritative live source. Only these are
 # recomputed when the global tokens-per-request factor is refined.
 DERIVED_SOURCES = {"summary", "calibrated"}
+
+
+def quota_metric(limits: Any) -> tuple[str, float]:
+    """Return the quota metric and amount stored in a quota limits payload."""
+    mapping = limits if isinstance(limits, dict) else None
+    for metric in _QUOTA_METRICS:
+        if mapping is not None:
+            if metric in mapping:
+                return metric, float(mapping[metric] or 0)
+        else:
+            try:
+                return metric, float(limits[metric] or 0)
+            except (KeyError, TypeError):
+                continue
+    return "requests", 0.0
+
+
+def quota_limit(limits: Any) -> float:
+    return quota_metric(limits)[1]
+
+
+def remaining_amount(effective_remaining: Any) -> float:
+    """Remaining quota regardless of which metric key is stored."""
+    if isinstance(effective_remaining, dict):
+        for metric in _QUOTA_METRICS:
+            if metric in effective_remaining:
+                return float(effective_remaining[metric] or 0)
+        return 0.0
+    for metric in _QUOTA_METRICS:
+        try:
+            return float(effective_remaining[metric] or 0)
+        except (KeyError, TypeError):
+            continue
+    return 0.0
 
 
 def to_requests_per_day(

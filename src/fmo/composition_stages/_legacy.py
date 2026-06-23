@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import hashlib
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -35,6 +34,10 @@ from fmo.hermes_inventory import (
     read_hermes_http_sources,
     run_inspector,
 )
+from fmo.idempotency import canonical_slug as _canonical_slug
+from fmo.idempotency import combo_models_idempotency_key as _combo_models_idempotency_key
+from fmo.idempotency import hash_parts as _hash_parts
+from fmo.idempotency import utcnow
 from fmo.llm_runtime import SharedInstructorRuntime
 from fmo.matcher import match_model
 from fmo.metadata_sync import MetadataSyncResult
@@ -45,6 +48,8 @@ from fmo.pipeline import PipelineContext, StageResult
 from fmo.probes import probe_endpoint
 from fmo.quality import evaluate_quality_gate
 from fmo.quota_manager import QuotaFetchError, fetch_live_quota_snapshot
+from fmo.quota_normalize import quota_metric as _quota_metric
+from fmo.quota_normalize import remaining_amount as _remaining_amount
 from fmo.quota_research import research_quota_rule
 from fmo.registry import (
     FreeRegistrySyncOutcome,
@@ -413,7 +418,7 @@ def _quota_research_stage(dependencies: StageDependencies, context: PipelineCont
     written = 0
     failed = 0
     first_failure_reason = "quota_rule_missing"
-    today = datetime.now(UTC)
+    today = utcnow()
     for endpoint in endpoints:
         result = research_quota_rule(
             dependencies.omniroute_client,
@@ -636,7 +641,7 @@ def _access_classification_stage(_dependencies: StageDependencies, context: Pipe
         written = 0
         for row in [item for item in rows if item["quota_rule_id"] is not None]:
             metric, limit = _quota_metric(row["limits"])
-            reset_at = datetime.now(UTC) + timedelta(days=1)
+            reset_at = utcnow() + timedelta(days=1)
             evidence = {
                 "quota_rule": True,
                 "limit": limit,
@@ -788,14 +793,14 @@ def _probing_stage(dependencies: StageDependencies, context: PipelineContext) ->
     for row in rows:
         if _remaining_requests(row["effective_remaining"]) <= 0:
             continue
-        started_at = datetime.now(UTC)
+        started_at = utcnow()
         result = probe_endpoint(
             dependencies.omniroute_client,
             provider=row["omniroute_provider_id"],
             model=row["provider_model_id"],
             capabilities=dict(row["capabilities"] or {}),
         )
-        finished_at = datetime.now(UTC)
+        finished_at = utcnow()
         request_hash = _hash_parts(str(row["id"]), started_at.date().isoformat(), "basic")
         with context.repository.database.transaction() as transaction:
             context.repository.probes.record(
@@ -824,7 +829,7 @@ def _telemetry_sync_stage(dependencies: StageDependencies, context: PipelineCont
     snapshot = sync_live_telemetry(dependencies.omniroute_client)
     if snapshot.errors:
         return StageResult(status="external_dependency_failed", reason=snapshot.errors[0].reason)
-    observed_at = datetime.now(UTC)
+    observed_at = utcnow()
     written = 0
     with context.repository.database.transaction() as transaction:
         for provider_id, metric in snapshot.provider_metrics.items():
@@ -1833,10 +1838,6 @@ def _rollback_apply_mutations(
     return not rollback_failed
 
 
-def _combo_models_idempotency_key(combo_id: str, models: Sequence[str]) -> str:
-    return ComboApplier(current={combo_id: list(models)}).state_hash(combo_id)
-
-
 def _delete_applied_snapshots_for_run(
     context: PipelineContext,
     applied: Sequence[tuple[Any, list[str], list[str]]],
@@ -1903,7 +1904,7 @@ def _desired_endpoints_have_current_quota_safety(
     ).fetchall()
     if len(rows) != len(endpoint_ids):
         return False
-    now = datetime.now(UTC)
+    now = utcnow()
     oldest_allowed = now - APPLY_STAGE_EVIDENCE_MAX_AGE
     return all(
         _endpoint_quota_row_is_safe(
@@ -1955,7 +1956,7 @@ def _desired_endpoints_have_current_probe_success(transaction: Any, endpoint_ids
     ).fetchall()
     if len(rows) != len(endpoint_ids):
         return False
-    oldest_allowed = datetime.now(UTC) - APPLY_STAGE_EVIDENCE_MAX_AGE
+    oldest_allowed = utcnow() - APPLY_STAGE_EVIDENCE_MAX_AGE
     return all(row["passed"] is True and row["finished_at"] >= oldest_allowed for row in rows)
 
 
@@ -2208,59 +2209,6 @@ def _effect_result(stage_name: str, *, changed: bool) -> StageResult:
         idempotency_key=f"{stage_name}:production",
         details={"adapter": stage_name, "effect": effect},
     )
-
-
-def _canonical_slug(provider_model_id: str) -> str:
-    return provider_model_id.lower().split("/")[-1].replace("_", "-")
-
-
-def _hash_parts(*parts: str) -> str:
-    return hashlib.sha256(":".join(parts).encode("utf-8")).hexdigest()
-
-
-# Metric precedence mirrors the SQL COALESCE(requests, tokens) in
-# aa_index_runtime.py: requests is canonical, tokens is the no-auth
-# calibration fallback. requests and tokens are not interconvertible, so the
-# actual metric is carried through the pipeline rather than collapsed.
-_QUOTA_METRICS = ("requests", "tokens")
-
-
-def _quota_metric(limits: Any) -> tuple[str, float]:
-    """Return (metric, amount) from a quota_rules.limits payload.
-
-    Picks the metric actually present in ``limits`` instead of assuming
-    "requests"; "window" and other non-metric keys are ignored.
-    """
-    mapping = limits if isinstance(limits, dict) else None
-    for metric in _QUOTA_METRICS:
-        if mapping is not None:
-            if metric in mapping:
-                return metric, float(mapping[metric] or 0)
-        else:
-            try:
-                return metric, float(limits[metric] or 0)
-            except (KeyError, TypeError):
-                continue
-    return "requests", 0.0
-
-
-def _quota_limit(limits: Any) -> float:
-    return _quota_metric(limits)[1]
-
-
-def _remaining_amount(effective_remaining: Any) -> float:
-    """Remaining quota regardless of which metric key is stored."""
-    if isinstance(effective_remaining, dict):
-        for metric in _QUOTA_METRICS:
-            if metric in effective_remaining:
-                return float(effective_remaining[metric] or 0)
-        return 0.0
-    for metric in _QUOTA_METRICS:
-        try:
-            return float(effective_remaining[metric] or 0)
-        except (KeyError, TypeError):
-            continue
-    return 0.0
 
 
 _remaining_requests = _remaining_amount

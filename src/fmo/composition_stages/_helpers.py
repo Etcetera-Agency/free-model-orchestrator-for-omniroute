@@ -1,36 +1,23 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
 
+from fmo.idempotency import canonical_slug, hash_parts
 from fmo.pipeline import PipelineContext, StageResult
+from fmo.quota_normalize import quota_limit, quota_metric, remaining_amount
 
 from . import _legacy
 from ._legacy import StageAdapter, StageDependencies
 
+_canonical_slug = canonical_slug
+_hash_parts = hash_parts
+_quota_metric = quota_metric
+_quota_limit = quota_limit
+_remaining_amount = remaining_amount
+
 
 def _effect_result(stage_name: str, *, changed: bool) -> StageResult:
     return _legacy._effect_result(stage_name, changed=changed)
-
-
-def _canonical_slug(provider_model_id: str) -> str:
-    return _legacy._canonical_slug(provider_model_id)
-
-
-def _hash_parts(*parts: str) -> str:
-    return _legacy._hash_parts(*parts)
-
-
-def _quota_metric(limits: Any) -> tuple[str, float]:
-    return _legacy._quota_metric(limits)
-
-
-def _quota_limit(limits: Any) -> float:
-    return _legacy._quota_limit(limits)
-
-
-def _remaining_amount(effective_remaining: Any) -> float:
-    return _legacy._remaining_amount(effective_remaining)
 
 
 def _not_implemented_stage(name: str) -> StageAdapter:

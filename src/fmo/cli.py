@@ -4,13 +4,13 @@ import sys
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from typing import cast
 
 from fmo.bootstrap import bootstrap_and_dispatch
 from fmo.composition import compose_runtime
 from fmo.config import StartupConfig
 from fmo.external_metadata import ExternalMetadataError
+from fmo.idempotency import utcnow
 from fmo.metadata_sync import sync_external_metadata
 
 COMMANDS = [
@@ -202,7 +202,7 @@ def _run_scheduler(args: argparse.Namespace, scheduler_runner: SchedulerRunner |
 
 
 def _utc_timestamp() -> str:
-    return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return utcnow().replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def _add_common_flags(parser: argparse.ArgumentParser) -> None:
