@@ -1,5 +1,12 @@
 # Completion Review
 
+- Deploy fix: Hermes inventory now treats a present but empty Hermes
+  `state.db` with no `sessions` table as no observed demand instead of
+  crashing. This matches the live shlinker Hermes state shape and keeps
+  `sync-hermes-inventory` on bootstrap defaults until runtime sessions appear.
+  Code Simplifier review kept the fix scoped to the `sessions` table probe.
+  Focused verification: `tests/test_hermes_inventory_real_shapes.py`,
+  `tests/test_spec_coverage.py`, and `git diff --check`.
 - `update-aa-index-migration-inspector` is archived: the migration agent
   now uses `reference/prompts/aa-index-migration.md` through
   `LlmSiteConfig.prompt_path`, receives deterministic old/new index context,
