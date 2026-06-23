@@ -14,6 +14,7 @@ DEFAULT_AUTO_ROUTER_TAIL = (
     AutoRouterEntry("openrouter/free", ("text", "image")),
 )
 DEFAULT_APPLY_MIN_SAFETY_BUFFER = 1.0
+DEFAULT_APPLY_MIN_PERCENT_REMAINING = 1.0
 
 
 @dataclass(frozen=True)
@@ -29,6 +30,7 @@ class StartupConfig:
     tokens_per_request: int = 2000
     tokens_per_request_recalibration_cron: str = "0 5 * * 0"
     apply_min_safety_buffer: float = DEFAULT_APPLY_MIN_SAFETY_BUFFER
+    apply_min_percent_remaining: float = DEFAULT_APPLY_MIN_PERCENT_REMAINING
     auto_router_tail: tuple[AutoRouterEntry, ...] = DEFAULT_AUTO_ROUTER_TAIL
     hermes_home: str | None = None
     hermes_agents_path: str | None = None
@@ -38,7 +40,7 @@ class StartupConfig:
     hermes_inventory_cron: str = "0 4 * * *"
 
 
-def validate_startup(config: StartupConfig, *, health_check, model_endpoint_check=None) -> dict:
+def validate_startup(config: StartupConfig, *, health_check, model_endpoint_check=None) -> dict:  # noqa: ARG001 - reserved interface param
     validate_static_config(config)
     health = health_check()
     if not isinstance(health, dict):
@@ -62,6 +64,8 @@ def validate_static_config(config: StartupConfig) -> None:
         raise ValueError("TOKENS_PER_REQUEST must be positive")
     if config.apply_min_safety_buffer <= 0:
         raise ValueError("APPLY_MIN_SAFETY_BUFFER must be positive")
+    if config.apply_min_percent_remaining <= 0:
+        raise ValueError("APPLY_MIN_PERCENT_REMAINING must be positive")
     if not _valid_cron(config.tokens_per_request_recalibration_cron):
         raise ValueError("TOKENS_PER_REQUEST_RECALIBRATION_CRON is invalid")
     if not config.auto_router_tail:

@@ -9,7 +9,6 @@ from fmo.config import StartupConfig, validate_startup
 from fmo.omniroute import OmniRouteClient
 from fmo.persistence import Database, Repository
 
-
 Dispatcher = Callable[[list[str], bool, StartupConfig], int]
 
 
@@ -24,6 +23,7 @@ def build_startup_config(env: Mapping[str, str] | None = None) -> StartupConfig:
         llm_quota_research_call_limit=_non_negative_int(values.get("LLM_QUOTA_RESEARCH_CALL_LIMIT"), 1),
         llm_smart_review_call_limit=_non_negative_int(values.get("LLM_SMART_REVIEW_CALL_LIMIT"), 1),
         apply_min_safety_buffer=_positive_float(values.get("APPLY_MIN_SAFETY_BUFFER"), 1.0),
+        apply_min_percent_remaining=_positive_float(values.get("APPLY_MIN_PERCENT_REMAINING"), 1.0),
         hermes_inventory_mode=values.get("HERMES_INVENTORY_MODE", "filesystem"),
         hermes_home=_empty_to_none(values.get("HERMES_HOME")),
         hermes_agents_path=_empty_to_none(values.get("HERMES_AGENTS_PATH")),

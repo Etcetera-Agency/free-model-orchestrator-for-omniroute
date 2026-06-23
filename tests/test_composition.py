@@ -1,13 +1,16 @@
 import argparse
 from copy import deepcopy
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 from psycopg.types.json import Jsonb
 
-from fmo.applier import ComboApplier
+from _fixtures import fixture_body, load_hermes_fixture
+from _stage_effects import assert_success_has_declared_effect, effectful_success
+from fmo.aa_migration import MigrationProposalResponse
 from fmo.accounts import AccountDiscoveryOutcome
+from fmo.applier import ComboApplier
 from fmo.artificial_analysis import AAModelMetrics, AASnapshot
 from fmo.bootstrap import build_startup_config
 from fmo.candidates import FreeCandidate
@@ -24,18 +27,14 @@ from fmo.composition import (
 )
 from fmo.composition_stages import _smoke_combo
 from fmo.db import MigrationRunner
-from fmo.omniroute import OmniRouteRequestError
-from fmo.aa_migration import MigrationProposalResponse
-from fmo.hermes_inventory import Consumer, Inventory, InspectorForecastResponse
+from fmo.hermes_inventory import Consumer, InspectorForecastResponse, Inventory
 from fmo.metadata_sync import MetadataSyncResult
+from fmo.omniroute import OmniRouteRequestError
 from fmo.persistence import Database, Repository
 from fmo.pipeline import CANONICAL_STAGE_NAMES, PipelineRunner
 from fmo.quota_research import QuotaClaimResponse
 from fmo.registry import FreeRegistry, FreeRegistrySyncOutcome
 from fmo.smart_review import ComboReviewResponse
-from _fixtures import fixture_body, load_hermes_fixture
-from _stage_effects import assert_success_has_declared_effect, effectful_success
-
 
 OPENAI_CHAT_COMPLETION_BODY = {
     "id": "chatcmpl-fmo-smoke",
@@ -184,7 +183,8 @@ class PipelineOpsClient(QuotaSearchClient):
                 "quotaTotal": 200_000,
                 "quotaUsed": 80_000,
                 "quotaWindow": "day",
-                "resetAt": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
+                "percentRemaining": 100,
+                "resetAt": None,
             }
         )
 
@@ -227,7 +227,7 @@ class PipelineOpsClient(QuotaSearchClient):
             return self.analytics_body
         if path == "/api/usage/quota":
             body = deepcopy(self.quota_body)
-            body.setdefault("meta", {})["generatedAt"] = datetime.now(timezone.utc).isoformat()
+            body.setdefault("meta", {})["generatedAt"] = datetime.now(UTC).isoformat()
             return body
         if path == "/api/combos":
             return {"combos": [{"id": combo_id, "models": models} for combo_id, models in self.combos.items()]}
@@ -412,7 +412,7 @@ def seed_endpoint(repository, *, model_id="free-chat", provider_id="provider-a",
             provider_id=provider["id"],
             omniroute_connection_id=connection_id,
         )
-        endpoint = repository.provider_endpoints.upsert(
+        return repository.provider_endpoints.upsert(
             transaction,
             provider_account_id=account["id"],
             provider_model_id=model_id,
@@ -420,16 +420,12 @@ def seed_endpoint(repository, *, model_id="free-chat", provider_id="provider-a",
             access_status="access_pending",
             metadata_hash=f"{model_id}:hash",
         )
-    return endpoint
 
 
 def seed_free_registry_snapshot(repository, *, models, created_at):
     payload = {
         "free_models": {
-            "models": [
-                {"provider": provider, "modelId": model_id, "freeType": "free"}
-                for provider, model_id in models
-            ]
+            "models": [{"provider": provider, "modelId": model_id, "freeType": "free"} for provider, model_id in models]
         },
         "rankings": {"providers": []},
     }
@@ -636,7 +632,7 @@ def seed_confirmed_llm_candidate(
             )
             VALUES (
               %(endpoint_id)s, 'confirmed', 'free_quota_available',
-              %(remaining)s, now() + interval '1 day', true, %(evidence)s
+              %(remaining)s, null, true, %(evidence)s
             )
             ON CONFLICT (endpoint_id)
             DO UPDATE SET effective_remaining = EXCLUDED.effective_remaining
@@ -644,7 +640,15 @@ def seed_confirmed_llm_candidate(
             {
                 "endpoint_id": endpoint["id"],
                 "remaining": Jsonb({"requests": remaining}),
-                "evidence": Jsonb({"remaining_source": "live_observed", "safety_buffer": 1.0}),
+                "evidence": Jsonb(
+                    {
+                        "remaining_source": "live_observed",
+                        "daily_budget_source": "research",
+                        "percent_remaining": 100,
+                        "locked_out": False,
+                        "safety_buffer": 1.0,
+                    }
+                ),
             },
         )
         transaction.execute(
@@ -685,7 +689,7 @@ def seed_apply_ready_diff(repository, *, role_id, combo_id, before, after_model_
         intelligence_index=80,
         remaining=100,
     )
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     with repository.database.transaction() as transaction:
         repository.roles.upsert(
             transaction,
@@ -835,7 +839,7 @@ def test_quota_research_skips_when_free_registry_snapshot_is_unchanged(postgres_
     repository = Repository(Database(postgres_url))
     seed_endpoint(repository)
     run_composed_stage(repository, "model-matching")
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     seed_free_registry_snapshot(repository, models=[("provider-a", "free-chat")], created_at=now - timedelta(days=1))
     seed_free_registry_snapshot(repository, models=[("provider-a", "free-chat")], created_at=now)
     client = PipelineOpsClient()
@@ -856,7 +860,7 @@ def test_new_reachable_free_model_triggers_full_recalc_and_uses_quota_total_hint
     seed_endpoint(repository, model_id="free-chat")
     seed_endpoint(repository, model_id="new-free")
     run_composed_stage(repository, "model-matching")
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     seed_free_registry_snapshot(repository, models=[("provider-a", "free-chat")], created_at=now - timedelta(days=1))
     seed_free_registry_snapshot(
         repository,
@@ -884,7 +888,7 @@ def test_quota_research_continues_after_one_endpoint_error(postgres_url):
     for model_id in ["good-free", "bad-free", "later-free"]:
         seed_endpoint(repository, model_id=model_id)
     run_composed_stage(repository, "model-matching")
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     seed_free_registry_snapshot(repository, models=[("provider-a", "good-free")], created_at=now - timedelta(days=1))
     seed_free_registry_snapshot(
         repository,
@@ -909,7 +913,7 @@ def test_new_free_model_outside_our_connections_does_not_trigger_recalc(postgres
     repository = Repository(Database(postgres_url))
     seed_endpoint(repository)
     run_composed_stage(repository, "model-matching")
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     seed_free_registry_snapshot(repository, models=[("provider-a", "free-chat")], created_at=now - timedelta(days=1))
     seed_free_registry_snapshot(
         repository,
@@ -931,7 +935,7 @@ def test_changed_free_status_triggers_recalc_and_deactivates_lost_free_rule(post
     repository = Repository(Database(postgres_url))
     seed_endpoint(repository, model_id="lost-free")
     run_composed_stage(repository, "model-matching")
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     seed_free_registry_snapshot(repository, models=[("provider-a", "lost-free")], created_at=now - timedelta(days=1))
     seed_free_registry_snapshot(repository, models=[], created_at=now)
     client = PipelineOpsClient()
@@ -940,8 +944,12 @@ def test_changed_free_status_triggers_recalc_and_deactivates_lost_free_rule(post
 
     with repository.database.transaction() as transaction:
         rule = transaction.execute("SELECT status FROM quota_rules WHERE model_pattern = 'lost-free'").fetchone()
-        endpoint = transaction.execute("SELECT access_status FROM provider_endpoints WHERE provider_model_id = 'lost-free'").fetchone()
-        definition = transaction.execute("SELECT status FROM free_model_definitions WHERE provider_model_id = 'lost-free'").fetchone()
+        endpoint = transaction.execute(
+            "SELECT access_status FROM provider_endpoints WHERE provider_model_id = 'lost-free'"
+        ).fetchone()
+        definition = transaction.execute(
+            "SELECT status FROM free_model_definitions WHERE provider_model_id = 'lost-free'"
+        ).fetchone()
     assert result.exit_code == 0
     assert [call[0] for call in client.calls if call[0] == "/v1/search"] == ["/v1/search"]
     assert rule["status"] == "inactive"
@@ -973,7 +981,7 @@ def test_lost_free_model_is_removed_from_existing_combo_on_rebalance(postgres_ur
             expected_load={"requests": 1},
             criticality=1,
         )
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     seed_free_registry_snapshot(
         repository,
         models=[("provider-a", "lost-free"), ("provider-a", "still-free")],
@@ -1014,7 +1022,7 @@ def test_gained_free_model_is_added_to_existing_combo_on_rebalance(postgres_url)
             expected_load={"requests": 1},
             criticality=1,
         )
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     seed_free_registry_snapshot(repository, models=[("provider-a", "old-free")], created_at=now - timedelta(days=1))
     seed_free_registry_snapshot(
         repository,
@@ -1057,7 +1065,9 @@ def test_full_pipeline_runs_through_apply_and_audit(postgres_url):
     )
     stages = build_canonical_stages(
         dependencies=dependencies,
-        metadata_sync=lambda **_kwargs: MetadataSyncResult(candidates={}, aa_snapshot=AASnapshot(index_version="4.1", models=())),
+        metadata_sync=lambda **_kwargs: MetadataSyncResult(
+            candidates={}, aa_snapshot=AASnapshot(index_version="4.1", models=())
+        ),
         adapters=adapters,
     )
 
@@ -1253,7 +1263,9 @@ def test_account_discovery_stage_rate_limit_failure_stays_conservative(postgres_
     with repository.database.transaction() as transaction:
         statuses = [
             row["quota_independence_status"]
-            for row in transaction.execute("SELECT quota_independence_status FROM provider_accounts ORDER BY omniroute_connection_id").fetchall()
+            for row in transaction.execute(
+                "SELECT quota_independence_status FROM provider_accounts ORDER BY omniroute_connection_id"
+            ).fetchall()
         ]
         snapshot = transaction.execute("SELECT snapshot_json FROM account_discovery_snapshots").fetchone()
     assert result.exit_code == 0
@@ -1280,7 +1292,9 @@ def test_discover_accounts_command_selects_account_discovery_stage(postgres_url)
         omniroute_client=AccountDiscoveryOpsClient(),
         stages=build_canonical_stages(
             dependencies=StageDependencies(repository=repository, omniroute_client=AccountDiscoveryOpsClient()),
-            metadata_sync=lambda **_kwargs: MetadataSyncResult(candidates={}, aa_snapshot=AASnapshot(index_version="4.1", models=())),
+            metadata_sync=lambda **_kwargs: MetadataSyncResult(
+                candidates={}, aa_snapshot=AASnapshot(index_version="4.1", models=())
+            ),
         ),
         cron="0 4 * * *",
         llm_runtime=None,
@@ -1346,7 +1360,9 @@ def test_allocation_uses_account_quota_pool_not_per_account_capacity(postgres_ur
     result = run_composed_stage(repository, "allocation")
 
     with repository.database.transaction() as transaction:
-        plan = transaction.execute("SELECT status, targets, constraint_report FROM allocation_plans WHERE role_id = 'shared_capacity'").fetchone()
+        plan = transaction.execute(
+            "SELECT status, targets, constraint_report FROM allocation_plans WHERE role_id = 'shared_capacity'"
+        ).fetchone()
     assert result.exit_code == 0
     assert plan["status"] == "degraded"
     assert plan["targets"] == []
@@ -1434,7 +1450,9 @@ def test_quota_sync_stage_writes_remaining_quota_state(postgres_url):
     result = run_composed_stage(repository, "quota-sync", client=client)
 
     with repository.database.transaction() as transaction:
-        observation = transaction.execute("SELECT limit_value, used_value, remaining_value FROM quota_observations").fetchone()
+        observation = transaction.execute(
+            "SELECT limit_value, used_value, remaining_value FROM quota_observations"
+        ).fetchone()
         access = transaction.execute("SELECT effective_remaining FROM endpoint_access_states").fetchone()
     assert result.exit_code == 0
     assert result.stage_results[0]["details"]["effect"] == "repository_write"
@@ -1452,22 +1470,30 @@ def test_quota_sync_stage_writes_remaining_quota_state(postgres_url):
 def test_hermes_inventory_stage_uses_selected_adapter_and_persists_prompt_only_forecast(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     repository = Repository(Database(postgres_url))
-    config = build_startup_config(valid_env(DATABASE_URL=postgres_url, HERMES_INVENTORY_MODE="command", HERMES_INVENTORY_COMMAND="inventory"))
+    config = build_startup_config(
+        valid_env(DATABASE_URL=postgres_url, HERMES_INVENTORY_MODE="command", HERMES_INVENTORY_COMMAND="inventory")
+    )
     llm_runtime = RecordingLlmRuntime()
     dependencies = StageDependencies(
         repository=repository,
         omniroute_client=PipelineOpsClient(),
         config=config,
         llm_runtime=llm_runtime,
-        hermes_inventory_adapter=lambda received: hermes_inventory_fixture() if received.hermes_inventory_mode == "command" else None,
+        hermes_inventory_adapter=lambda received: (
+            hermes_inventory_fixture() if received.hermes_inventory_mode == "command" else None
+        ),
     )
 
     result = run_composed_stage_with_dependencies(repository, "hermes-inventory", dependencies)
 
     with repository.database.transaction() as transaction:
-        role = transaction.execute("SELECT id, expected_load, role_lifecycle_status FROM roles WHERE id = 'routing_fast'").fetchone()
+        role = transaction.execute(
+            "SELECT id, expected_load, role_lifecycle_status FROM roles WHERE id = 'routing_fast'"
+        ).fetchone()
         consumer = transaction.execute("SELECT consumer_key, calls_per_run FROM role_consumers").fetchone()
-        inventory_run = transaction.execute("SELECT source_mode, status, roles_found, routines_found FROM hermes_inventory_runs").fetchone()
+        inventory_run = transaction.execute(
+            "SELECT source_mode, status, roles_found, routines_found FROM hermes_inventory_runs"
+        ).fetchone()
     assert result.exit_code == 0
     assert result.stage_results[0]["details"]["effect"] == "repository_write"
     assert role["expected_load"]["requests"] == 25
@@ -1812,7 +1838,9 @@ def test_role_scoring_stage_penalizes_missing_aa_metrics(postgres_url):
 def test_role_scoring_stage_rejects_below_context_endpoint(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     repository = Repository(Database(postgres_url))
-    endpoint = seed_confirmed_llm_candidate(repository, model_id="tiny-context", intelligence_index=80, context_window=4096)
+    endpoint = seed_confirmed_llm_candidate(
+        repository, model_id="tiny-context", intelligence_index=80, context_window=4096
+    )
     with repository.database.transaction() as transaction:
         repository.roles.upsert(
             transaction,
@@ -1931,18 +1959,28 @@ def test_role_scoring_stage_sets_quality_band_from_single_seed_and_keeps_existin
     seed = seed_confirmed_llm_candidate(repository, model_id="seed-mid", intelligence_index=60)
     other = seed_confirmed_llm_candidate(repository, model_id="other-high", intelligence_index=80)
     with repository.database.transaction() as transaction:
-        repository.roles.upsert(transaction, role_id="routing_fast", requirements={"capabilities": []}, expected_load={"requests": 1}, criticality=1)
+        repository.roles.upsert(
+            transaction,
+            role_id="routing_fast",
+            requirements={"capabilities": []},
+            expected_load={"requests": 1},
+            criticality=1,
+        )
     client = PipelineOpsClient()
     client.combos["fmo-routing_fast"] = [str(seed["id"])]
 
     run_composed_stage(repository, "role-scoring", client=client)
     client.combos["fmo-routing_fast"] = [str(seed["id"]), str(other["id"])]
     with repository.database.transaction() as transaction:
-        transaction.execute("UPDATE roles SET minimum_quality_value = 55, maximum_quality_value = 65 WHERE id = 'routing_fast'")
+        transaction.execute(
+            "UPDATE roles SET minimum_quality_value = 55, maximum_quality_value = 65 WHERE id = 'routing_fast'"
+        )
     run_composed_stage(repository, "role-scoring", client=client)
 
     with repository.database.transaction() as transaction:
-        role = transaction.execute("SELECT minimum_quality_value, maximum_quality_value FROM roles WHERE id = 'routing_fast'").fetchone()
+        role = transaction.execute(
+            "SELECT minimum_quality_value, maximum_quality_value FROM roles WHERE id = 'routing_fast'"
+        ).fetchone()
     assert float(role["minimum_quality_value"]) == 55
     assert float(role["maximum_quality_value"]) == 65
 
@@ -1954,7 +1992,13 @@ def test_role_scoring_stage_reanchors_when_combo_is_stripped_to_single_member(po
     first = seed_confirmed_llm_candidate(repository, model_id="seed-low", intelligence_index=50)
     second = seed_confirmed_llm_candidate(repository, model_id="seed-high", intelligence_index=75)
     with repository.database.transaction() as transaction:
-        repository.roles.upsert(transaction, role_id="routing_fast", requirements={"capabilities": []}, expected_load={"requests": 1}, criticality=1)
+        repository.roles.upsert(
+            transaction,
+            role_id="routing_fast",
+            requirements={"capabilities": []},
+            expected_load={"requests": 1},
+            criticality=1,
+        )
     client = PipelineOpsClient()
     client.combos["fmo-routing_fast"] = [str(first["id"])]
     run_composed_stage(repository, "role-scoring", client=client)
@@ -1962,7 +2006,9 @@ def test_role_scoring_stage_reanchors_when_combo_is_stripped_to_single_member(po
     run_composed_stage(repository, "role-scoring", client=client)
 
     with repository.database.transaction() as transaction:
-        role = transaction.execute("SELECT minimum_quality_value, maximum_quality_value FROM roles WHERE id = 'routing_fast'").fetchone()
+        role = transaction.execute(
+            "SELECT minimum_quality_value, maximum_quality_value FROM roles WHERE id = 'routing_fast'"
+        ).fetchone()
     assert float(role["minimum_quality_value"]) <= 75 <= float(role["maximum_quality_value"])
     assert float(role["minimum_quality_value"]) > 50
 
@@ -1974,9 +2020,17 @@ def test_paid_seed_sets_anchor_but_is_excluded_from_allocated_members(postgres_u
     paid_seed = seed_confirmed_llm_candidate(repository, model_id="paid-seed", intelligence_index=70)
     free_member = seed_confirmed_llm_candidate(repository, model_id="free-member", intelligence_index=68)
     with repository.database.transaction() as transaction:
-        transaction.execute("UPDATE provider_endpoints SET access_status = 'paid' WHERE id = %(id)s", {"id": paid_seed["id"]})
+        transaction.execute(
+            "UPDATE provider_endpoints SET access_status = 'paid' WHERE id = %(id)s", {"id": paid_seed["id"]}
+        )
         transaction.execute("DELETE FROM endpoint_access_states WHERE endpoint_id = %(id)s", {"id": paid_seed["id"]})
-        repository.roles.upsert(transaction, role_id="routing_fast", requirements={"capabilities": []}, expected_load={"requests": 1}, criticality=1)
+        repository.roles.upsert(
+            transaction,
+            role_id="routing_fast",
+            requirements={"capabilities": []},
+            expected_load={"requests": 1},
+            criticality=1,
+        )
     client = PipelineOpsClient()
     client.combos["fmo-routing_fast"] = [str(paid_seed["id"])]
 
@@ -1985,8 +2039,12 @@ def test_paid_seed_sets_anchor_but_is_excluded_from_allocated_members(postgres_u
     run_composed_stage(repository, "allocation", client=client)
 
     with repository.database.transaction() as transaction:
-        role = transaction.execute("SELECT minimum_quality_value, maximum_quality_value FROM roles WHERE id = 'routing_fast'").fetchone()
-        plan = transaction.execute("SELECT targets FROM allocation_plans WHERE role_id = 'routing_fast' ORDER BY created_at DESC LIMIT 1").fetchone()
+        role = transaction.execute(
+            "SELECT minimum_quality_value, maximum_quality_value FROM roles WHERE id = 'routing_fast'"
+        ).fetchone()
+        plan = transaction.execute(
+            "SELECT targets FROM allocation_plans WHERE role_id = 'routing_fast' ORDER BY created_at DESC LIMIT 1"
+        ).fetchone()
     target_ids = [target["endpoint_id"] for target in plan["targets"]]
     assert float(role["minimum_quality_value"]) <= 70 <= float(role["maximum_quality_value"])
     assert str(paid_seed["id"]) not in target_ids
@@ -2003,7 +2061,9 @@ def test_role_scoring_stage_rejects_unverifiable_quality_unless_role_allows(post
             ("strict_quality", {"capabilities": []}),
             ("allow_unverified", {"capabilities": [], "allow_unverified_quality_gate": True}),
         ]:
-            repository.roles.upsert(transaction, role_id=role_id, requirements=requirements, expected_load={"requests": 1}, criticality=1)
+            repository.roles.upsert(
+                transaction, role_id=role_id, requirements=requirements, expected_load={"requests": 1}, criticality=1
+            )
         transaction.execute(
             """
             UPDATE roles
@@ -2053,7 +2113,9 @@ def test_quality_gate_index_version_mismatch_skips_new_allocation_plan(postgres_
 
     with repository.database.transaction() as transaction:
         score = transaction.execute("SELECT eligibility, rejection_reasons FROM role_scores").fetchone()
-        plan_count = transaction.execute("SELECT count(*) AS total FROM allocation_plans WHERE role_id = 'stale_gate'").fetchone()["total"]
+        plan_count = transaction.execute(
+            "SELECT count(*) AS total FROM allocation_plans WHERE role_id = 'stale_gate'"
+        ).fetchone()["total"]
     assert score["eligibility"] is False
     assert score["rejection_reasons"] == ["quality_gate:needs_recalibration"]
     assert allocation.exit_code == 0
@@ -2121,14 +2183,18 @@ def test_allocation_stage_persists_plan_and_constraint_report(postgres_url):
     result = run_composed_stage(repository, "allocation", client=client)
 
     with repository.database.transaction() as transaction:
-        plan = transaction.execute("SELECT role_id, status, targets, constraint_report FROM allocation_plans").fetchone()
+        plan = transaction.execute(
+            "SELECT role_id, status, targets, constraint_report FROM allocation_plans"
+        ).fetchone()
     assert result.exit_code == 0
     assert result.stage_results[0]["details"]["effect"] == "repository_write"
     assert plan["role_id"] == "routing_fast"
     assert plan["status"] == "planned"
     assert len(plan["targets"]) == 1
     assert plan["constraint_report"]["apply"] is True
-    assert plan["constraint_report"]["pool_reports"][next(iter(plan["constraint_report"]["pool_reports"]))]["usage"] == pytest.approx(39.6)
+    assert plan["constraint_report"]["pool_reports"][next(iter(plan["constraint_report"]["pool_reports"]))][
+        "usage"
+    ] == pytest.approx(39.6)
 
 
 @pytest.mark.spec("pipeline-orchestration::Diff is computed without mutating OmniRoute")
@@ -2173,7 +2239,9 @@ def test_diff_stage_skips_reviewer_when_site_limit_disabled(postgres_url):
     run_composed_stage(repository, "allocation", client=client)
     config = build_startup_config(valid_env(DATABASE_URL=postgres_url, LLM_SMART_REVIEW_CALL_LIMIT="0"))
     llm_runtime = RecordingLlmRuntime(review_diffs=[{"op": "add", "role": "routing_fast", "endpoint_id": "x"}])
-    dependencies = StageDependencies(repository=repository, omniroute_client=client, config=config, llm_runtime=llm_runtime)
+    dependencies = StageDependencies(
+        repository=repository, omniroute_client=client, config=config, llm_runtime=llm_runtime
+    )
 
     result = run_composed_stage_with_dependencies(repository, "diff", dependencies)
 
@@ -2216,6 +2284,8 @@ def test_smoke_combo_maps_non_2xx_response_to_failure():
 @pytest.mark.spec("combo-applier::Apply reads combos through management API bridge")
 @pytest.mark.spec("combo-applier::Apply writes existing combos through management API bridge")
 @pytest.mark.spec("combo-applier::Public combo projection is never used for management apply")
+@pytest.mark.spec("combo-applier::Research budget with healthy liveness passes")
+@pytest.mark.spec("combo-applier::Endpoint with null reset is not rejected")
 @pytest.mark.spec("omniroute-client::Bridge denies combo test helper")
 def test_apply_stage_mutates_fmo_combo_and_reports_real_smoke_signal(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
@@ -2291,12 +2361,14 @@ def test_apply_stage_dry_run_previews_valid_plan_without_combo_mutation(postgres
 
 
 @pytest.mark.spec("combo-applier::Failing quota evidence blocks the apply stage")
+@pytest.mark.spec("combo-applier::Exhausted or locked-out endpoint is excluded")
 @pytest.mark.spec("pipeline-orchestration::Apply still excludes stale evidence")
 @pytest.mark.parametrize(
     "quota_update",
     [
         "UPDATE endpoint_access_states SET hard_stop_capable = false",
-        "UPDATE endpoint_access_states SET reset_at = now() - interval '1 minute'",
+        "UPDATE endpoint_access_states SET evidence = evidence || '{\"percent_remaining\": 1}'::jsonb",
+        "UPDATE endpoint_access_states SET reset_at = now() + interval '1 minute', evidence = evidence || '{\"locked_out\": true}'::jsonb",
         "UPDATE endpoint_access_states SET classified_at = now() - interval '2 days'",
         "DELETE FROM endpoint_access_states",
     ],
@@ -2414,9 +2486,7 @@ def test_apply_stage_smoke_failure_rolls_back_and_maps_failures(postgres_url):
         for call in client.calls
         if call[0] == "/api/combos/fmo-routing_fast" and call[1]["models"] == ["old-endpoint"]
     )
-    assert rollback_put[3] == ComboApplier({"fmo-routing_fast": ["old-endpoint"]}).state_hash(
-        "fmo-routing_fast"
-    )
+    assert rollback_put[3] == ComboApplier({"fmo-routing_fast": ["old-endpoint"]}).state_hash("fmo-routing_fast")
 
     rollback_client = PipelineOpsClient(smoke_status=500, rollback_fails=True)
     rollback_repository = Repository(Database(postgres_url))
@@ -2466,7 +2536,9 @@ def test_apply_stage_blocks_when_live_combo_diverged_from_diff_before(postgres_u
 def test_apply_stage_skips_absent_combo_without_create_or_delete(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     repository = Repository(Database(postgres_url))
-    seed_apply_ready_diff(repository, role_id="missing", combo_id="fmo-missing", before=[], after_model_id="free-missing")
+    seed_apply_ready_diff(
+        repository, role_id="missing", combo_id="fmo-missing", before=[], after_model_id="free-missing"
+    )
     client = PipelineOpsClient()
 
     result = run_composed_stage(repository, "apply", client=client)
@@ -2485,8 +2557,16 @@ def test_apply_stage_skips_absent_combo_without_create_or_delete(postgres_url):
 def test_apply_stage_skips_absent_combo_and_rebalances_present_combo(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     repository = Repository(Database(postgres_url))
-    present_endpoint = seed_apply_ready_diff(repository, role_id="routing_fast", combo_id="fmo-routing_fast", before=["old-endpoint"], after_model_id="free-present")
-    seed_apply_ready_diff(repository, role_id="missing", combo_id="fmo-missing", before=[], after_model_id="free-missing")
+    present_endpoint = seed_apply_ready_diff(
+        repository,
+        role_id="routing_fast",
+        combo_id="fmo-routing_fast",
+        before=["old-endpoint"],
+        after_model_id="free-present",
+    )
+    seed_apply_ready_diff(
+        repository, role_id="missing", combo_id="fmo-missing", before=[], after_model_id="free-missing"
+    )
     client = PipelineOpsClient()
 
     result = run_composed_stage(repository, "apply", client=client)
@@ -2513,7 +2593,9 @@ def test_multi_combo_apply_rolls_back_earlier_combo_on_later_smoke_failure(postg
     result = run_composed_stage(repository, "apply", client=client)
 
     with repository.database.transaction() as transaction:
-        applied = transaction.execute("SELECT count(*) AS total FROM combo_snapshots WHERE phase = 'applied'").fetchone()
+        applied = transaction.execute(
+            "SELECT count(*) AS total FROM combo_snapshots WHERE phase = 'applied'"
+        ).fetchone()
     assert result.exit_code == 6
     assert client.combos["fmo-a"] == ["old-a"]
     assert client.combos["fmo-b"] == ["old-b"]
@@ -2567,8 +2649,7 @@ def test_rollback_command_reverts_run_combos_and_records_audit_without_touching_
     revert_keys = {
         call[0].rsplit("/", 1)[-1]: call[3]
         for call in client.calls
-        if call[0] in {"/api/combos/fmo-a", "/api/combos/fmo-b"}
-        and call[1]["models"] in (["old-a"], ["old-b"])
+        if call[0] in {"/api/combos/fmo-a", "/api/combos/fmo-b"} and call[1]["models"] in (["old-a"], ["old-b"])
     }
     assert revert_keys == {
         "fmo-a": ComboApplier({"fmo-a": ["old-a"]}).state_hash("fmo-a"),
@@ -2703,7 +2784,17 @@ def test_production_llm_runtime_uses_instructor_from_openai_and_bootstrap_model(
     )
 
     response = runtime.complete(
-        site=type("Site", (), {"name": "quota-research-inspector", "model": "paid-static", "prompt_path": None, "max_prompt_chars": 1000, "retries": 1})(),
+        site=type(
+            "Site",
+            (),
+            {
+                "name": "quota-research-inspector",
+                "model": "paid-static",
+                "prompt_path": None,
+                "max_prompt_chars": 1000,
+                "retries": 1,
+            },
+        )(),
         context={"prompt": "quota"},
         response_model=QuotaClaimResponse,
     )
@@ -2776,8 +2867,12 @@ def test_aa_index_runtime_generates_approves_rolls_out_and_rolls_back(postgres_u
     rolled_back = runtime.run_aa_index("rollback", object())
 
     with repository.database.transaction() as transaction:
-        migration = transaction.execute("SELECT status, threshold_proposal_json FROM artificial_analysis_index_migrations").fetchone()
-        threshold = transaction.execute("SELECT role_id, metric, threshold_value, is_active FROM artificial_analysis_threshold_versions").fetchone()
+        migration = transaction.execute(
+            "SELECT status, threshold_proposal_json FROM artificial_analysis_index_migrations"
+        ).fetchone()
+        threshold = transaction.execute(
+            "SELECT role_id, metric, threshold_value, is_active FROM artificial_analysis_threshold_versions"
+        ).fetchone()
     assert proposal.exit_code == 0
     assert approved.exit_code == 0
     assert rolled_out.exit_code == 0
@@ -2808,8 +2903,12 @@ def test_aa_index_analyze_fails_closed_without_aa_snapshot_or_model(postgres_url
     result = runtime.run_aa_index("analyze", object())
 
     with runtime.repository.database.transaction() as transaction:
-        migration_count = transaction.execute("SELECT count(*) AS total FROM artificial_analysis_index_migrations").fetchone()["total"]
-        combo_count = transaction.execute("SELECT count(*) AS total FROM combo_snapshots WHERE omniroute_combo_id LIKE 'fmo-%'").fetchone()["total"]
+        migration_count = transaction.execute(
+            "SELECT count(*) AS total FROM artificial_analysis_index_migrations"
+        ).fetchone()["total"]
+        combo_count = transaction.execute(
+            "SELECT count(*) AS total FROM combo_snapshots WHERE omniroute_combo_id LIKE 'fmo-%'"
+        ).fetchone()["total"]
     assert result.exit_code == 4
     assert result.error_reason == "aa_unavailable"
     assert migration_count == 0
@@ -2933,7 +3032,7 @@ def test_composed_scheduler_run_once_starts_full_pipeline_at_cron(postgres_url):
         adapters=empty_adapters_with_stage_effects(),
     )
 
-    cron_now = datetime.now(timezone.utc).replace(hour=4, minute=0, second=0, microsecond=0)
+    cron_now = datetime.now(UTC).replace(hour=4, minute=0, second=0, microsecond=0)
     cli_result = runtime.run_scheduler_once(cron_now.isoformat())
 
     repository = Repository(Database(postgres_url))
@@ -2974,7 +3073,9 @@ def test_sync_free_registry_command_uses_registry_adapter_and_persists(postgres_
 
     runtime = compose_runtime(
         config,
-        metadata_sync=lambda **_kwargs: MetadataSyncResult(candidates={}, aa_snapshot=AASnapshot(index_version="4.1", models=())),
+        metadata_sync=lambda **_kwargs: MetadataSyncResult(
+            candidates={}, aa_snapshot=AASnapshot(index_version="4.1", models=())
+        ),
         adapters=StageAdapters(registry_sync=registry_sync),
     )
 
@@ -3012,7 +3113,9 @@ def test_scan_providers_command_uses_catalog_adapter_and_persists(postgres_url):
 
     runtime = compose_runtime(
         config,
-        metadata_sync=lambda **_kwargs: MetadataSyncResult(candidates={}, aa_snapshot=AASnapshot(index_version="4.1", models=())),
+        metadata_sync=lambda **_kwargs: MetadataSyncResult(
+            candidates={}, aa_snapshot=AASnapshot(index_version="4.1", models=())
+        ),
         adapters=StageAdapters(catalog_scan=catalog_scan),
     )
 

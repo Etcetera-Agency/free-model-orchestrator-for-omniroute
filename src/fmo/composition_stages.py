@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import argparse
 import hashlib
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
-from urllib.parse import urljoin
 
 from psycopg.types.json import Jsonb
 
@@ -16,8 +14,8 @@ from fmo.accounts import AccountFetchError, discover_live_accounts
 from fmo.allocation import allocate_globally, build_priority_combo, validate_plan
 from fmo.applier import ComboApplier
 from fmo.apply_guard import ApplyPreconditions, check_apply_preconditions
-from fmo.aa_migration import run_migration_agent
 from fmo.config import (
+    DEFAULT_APPLY_MIN_PERCENT_REMAINING,
     DEFAULT_APPLY_MIN_SAFETY_BUFFER,
     DEFAULT_AUTO_ROUTER_TAIL,
     StartupConfig,
@@ -37,13 +35,12 @@ from fmo.hermes_inventory import (
     read_hermes_http_sources,
     run_inspector,
 )
-from fmo.llm_runtime import LlmProviderConfig, SharedInstructorRuntime, build_instructor_runtime
+from fmo.llm_runtime import SharedInstructorRuntime
 from fmo.matcher import match_model
-from fmo.metadata_sync import sync_external_metadata
 from fmo.model_registration import register_new_free_models
 from fmo.omniroute import OmniRouteClient, OmniRouteRequestError
-from fmo.persistence import Database, Repository
-from fmo.pipeline import CANONICAL_STAGE_NAMES, PipelineContext, PipelineRunner, PipelineRunResult, Stage, StageResult
+from fmo.persistence import Repository
+from fmo.pipeline import PipelineContext, StageResult
 from fmo.probes import probe_endpoint
 from fmo.quality import evaluate_quality_gate
 from fmo.quota_manager import QuotaFetchError, fetch_live_quota_snapshot
@@ -51,10 +48,8 @@ from fmo.quota_research import research_quota_rule
 from fmo.registry import RegistryFetchError, persist_free_registry_outcome, sync_live_free_registry
 from fmo.scanner import CatalogFetchError, CatalogScanner, scan_live_omniroute_catalogs
 from fmo.scoring import EligibilityDecision, aa_subscore, eligible_for_scoring, latency_score_source, score_endpoint
-from fmo.scheduler import Scheduler
 from fmo.smart_review import ComboReviewResult, run_combo_review
 from fmo.telemetry import sync_live_telemetry
-
 
 APPLY_STAGE_EVIDENCE_MAX_AGE = timedelta(days=1)
 AA_SCORE_WEIGHTS = {"intelligence_index": 1.0, "coding_index": 0.5, "agentic_index": 0.5}
@@ -87,7 +82,8 @@ class StageAdapters:
     registry_sync: RegistrySync = sync_live_free_registry
     catalog_scan: CatalogScan = field(default_factory=lambda: _scan_catalogs)
     account_discovery: AccountDiscovery = discover_live_accounts
-    stage_adapters: dict[str, StageAdapter] = field(default_factory=lambda: _production_stage_adapters())
+    # Lambda defers the lookup: _production_stage_adapters is defined later in this module.
+    stage_adapters: dict[str, StageAdapter] = field(default_factory=lambda: _production_stage_adapters())  # noqa: PLW0108
     hermes_inventory: HermesInventoryAdapter | None = None
     instructor_from_openai: Any | None = None
     openai_client_factory: Any | None = None
@@ -125,14 +121,18 @@ def _metadata_stage(sync: MetadataSync) -> Callable[[PipelineContext], StageResu
     return run
 
 
-def _free_candidate_stage(dependencies: StageDependencies, adapters: StageAdapters) -> Callable[[PipelineContext], StageResult]:
+def _free_candidate_stage(
+    dependencies: StageDependencies, adapters: StageAdapters
+) -> Callable[[PipelineContext], StageResult]:
     def run(context: PipelineContext) -> StageResult:
         command = str(context.config.get("command") or "full")
         try:
             if command in {"sync-free-registry", "full"}:
                 outcome = adapters.registry_sync(dependencies.omniroute_client)
                 if dependencies.omniroute_client is not None:
-                    register_new_free_models(context.repository, dependencies.omniroute_client, outcome.free_models_payload)
+                    register_new_free_models(
+                        context.repository, dependencies.omniroute_client, outcome.free_models_payload
+                    )
                 persist_free_registry_outcome(context.repository, outcome)
             if command in {"scan-providers", "full"}:
                 scanner = CatalogScanner(context.repository)
@@ -178,7 +178,9 @@ def _not_implemented_stage(name: str) -> StageAdapter:
     return run
 
 
-def _account_discovery_stage(dependencies: StageDependencies, adapters: StageAdapters) -> Callable[[PipelineContext], StageResult]:
+def _account_discovery_stage(
+    dependencies: StageDependencies, adapters: StageAdapters
+) -> Callable[[PipelineContext], StageResult]:
     def run(context: PipelineContext) -> StageResult:
         if dependencies.omniroute_client is None:
             return StageResult(status="external_dependency_failed", reason="omniroute_client_required")
@@ -377,7 +379,9 @@ def _model_matching_stage(_dependencies: StageDependencies, context: PipelineCon
                 },
             )
     if endpoints and matched == 0:
-        return StageResult(status="validation_failed", reason="no_model_matches", details={"adapter": "model-matching", "effect": None})
+        return StageResult(
+            status="validation_failed", reason="no_model_matches", details={"adapter": "model-matching", "effect": None}
+        )
     return _effect_result("model-matching", changed=matched > 0)
 
 
@@ -403,7 +407,7 @@ def _quota_research_stage(dependencies: StageDependencies, context: PipelineCont
     written = 0
     failed = 0
     first_failure_reason = "quota_rule_missing"
-    today = datetime.now(timezone.utc)
+    today = datetime.now(UTC)
     for endpoint in endpoints:
         result = research_quota_rule(
             dependencies.omniroute_client,
@@ -614,14 +618,10 @@ def _access_classification_stage(_dependencies: StageDependencies, context: Pipe
             """
         ).fetchall()
         lost_free_rows = [
-            row
-            for row in rows
-            if row["quota_rule_id"] is None and row["free_definition_status"] == "inactive"
+            row for row in rows if row["quota_rule_id"] is None and row["free_definition_status"] == "inactive"
         ]
         missing_rows = [
-            row
-            for row in rows
-            if row["quota_rule_id"] is None and row["free_definition_status"] != "inactive"
+            row for row in rows if row["quota_rule_id"] is None and row["free_definition_status"] != "inactive"
         ]
         for row in lost_free_rows:
             _record_lost_free_access_state(transaction, row["endpoint_id"])
@@ -630,7 +630,7 @@ def _access_classification_stage(_dependencies: StageDependencies, context: Pipe
         written = 0
         for row in [item for item in rows if item["quota_rule_id"] is not None]:
             metric, limit = _quota_metric(row["limits"])
-            reset_at = datetime.now(timezone.utc) + timedelta(days=1)
+            reset_at = datetime.now(UTC) + timedelta(days=1)
             evidence = {
                 "quota_rule": True,
                 "limit": limit,
@@ -639,6 +639,7 @@ def _access_classification_stage(_dependencies: StageDependencies, context: Pipe
                 "hard_stop": row["hard_stop_capable"],
                 "confidence": float(row["confidence"]),
                 "remaining_source": "assumed",
+                "daily_budget_source": "research",
             }
             decision = classify_access(evidence)
             status = _canonical_access_status(decision.status)
@@ -781,14 +782,14 @@ def _probing_stage(dependencies: StageDependencies, context: PipelineContext) ->
     for row in rows:
         if _remaining_requests(row["effective_remaining"]) <= 0:
             continue
-        started_at = datetime.now(timezone.utc)
+        started_at = datetime.now(UTC)
         result = probe_endpoint(
             dependencies.omniroute_client,
             provider=row["omniroute_provider_id"],
             model=row["provider_model_id"],
             capabilities=dict(row["capabilities"] or {}),
         )
-        finished_at = datetime.now(timezone.utc)
+        finished_at = datetime.now(UTC)
         request_hash = _hash_parts(str(row["id"]), started_at.date().isoformat(), "basic")
         with context.repository.database.transaction() as transaction:
             context.repository.probes.record(
@@ -817,7 +818,7 @@ def _telemetry_sync_stage(dependencies: StageDependencies, context: PipelineCont
     snapshot = sync_live_telemetry(dependencies.omniroute_client)
     if snapshot.errors:
         return StageResult(status="external_dependency_failed", reason=snapshot.errors[0].reason)
-    observed_at = datetime.now(timezone.utc)
+    observed_at = datetime.now(UTC)
     written = 0
     with context.repository.database.transaction() as transaction:
         for provider_id, metric in snapshot.provider_metrics.items():
@@ -892,7 +893,6 @@ def _quota_sync_stage(dependencies: StageDependencies, context: PipelineContext)
                 quota.connection_id,
                 account["id"],
             )
-            used = None if quota.limit is None or quota.remaining is None else quota.limit - quota.remaining
             transaction.execute(
                 """
                 INSERT INTO quota_observations (
@@ -908,19 +908,29 @@ def _quota_sync_stage(dependencies: StageDependencies, context: PipelineContext)
                 {
                     "quota_pool_id": quota_pool_id,
                     "provider_account_id": account["id"],
-                    "limit_value": quota.limit,
-                    "used_value": used,
-                    "remaining_value": quota.remaining,
+                    "limit_value": quota.learned_request_limit,
+                    "used_value": (
+                        None
+                        if quota.learned_request_limit is None or quota.learned_request_remaining is None
+                        else quota.learned_request_limit - quota.learned_request_remaining
+                    ),
+                    "remaining_value": quota.learned_request_remaining,
                     "reset_at": quota.reset_at,
-                    "raw_payload": Jsonb({"provider": quota.provider, "connectionId": quota.connection_id}),
+                    "raw_payload": Jsonb(
+                        {
+                            "provider": quota.provider,
+                            "connectionId": quota.connection_id,
+                            "percentRemaining": quota.percent_remaining,
+                            "lockedOut": quota.locked_out,
+                        }
+                    ),
                     "observed_at": snapshot.observed_at,
                 },
             )
             transaction.execute(
                 """
                 UPDATE endpoint_access_states eas
-                SET effective_remaining = %(effective_remaining)s,
-                    reset_at = %(reset_at)s,
+                SET reset_at = %(reset_at)s,
                     evidence = COALESCE(eas.evidence, '{}'::jsonb) || %(evidence)s,
                     classified_at = now()
                 FROM provider_endpoints pe
@@ -928,11 +938,14 @@ def _quota_sync_stage(dependencies: StageDependencies, context: PipelineContext)
                   AND pe.provider_account_id = %(provider_account_id)s
                 """,
                 {
-                    "effective_remaining": Jsonb({"requests": quota.remaining}),
                     "reset_at": quota.reset_at,
+                    # AICODE-NOTE: quota-sync refreshes live liveness only; it must
+                    # not overwrite research/calibration daily budget remaining.
                     "evidence": Jsonb(
                         {
                             "remaining_source": "live_observed",
+                            "percent_remaining": quota.percent_remaining,
+                            "locked_out": quota.locked_out,
                             "safety_buffer": DEFAULT_APPLY_MIN_SAFETY_BUFFER,
                         }
                     ),
@@ -953,7 +966,13 @@ def _hermes_inventory_stage(dependencies: StageDependencies, context: PipelineCo
     source_hash = _hash_parts(
         dependencies.config.hermes_inventory_mode,
         *[
-            _hash_parts(consumer.role_id, consumer.consumer_type, consumer.consumer, consumer.cadence, str(consumer.calls_per_run))
+            _hash_parts(
+                consumer.role_id,
+                consumer.consumer_type,
+                consumer.consumer,
+                consumer.cadence,
+                str(consumer.calls_per_run),
+            )
             for consumer in inventory.consumers
         ],
     )
@@ -1049,9 +1068,7 @@ def _role_lifecycle_stage(_dependencies: StageDependencies, context: PipelineCon
     with context.repository.database.transaction() as transaction:
         desired = {
             row["role_id"]
-            for row in transaction.execute(
-                "SELECT DISTINCT role_id FROM role_consumers WHERE active = true"
-            ).fetchall()
+            for row in transaction.execute("SELECT DISTINCT role_id FROM role_consumers WHERE active = true").fetchall()
         }
         roles = transaction.execute("SELECT id, role_lifecycle_status FROM roles").fetchall()
         changed = 0
@@ -1117,7 +1134,9 @@ def _role_scoring_stage(_dependencies: StageDependencies, context: PipelineConte
             requirements = role["requirements"] or {}
             required = set(requirements.get("capabilities", []))
             for endpoint in endpoints:
-                remaining = pool_remaining.get(str(endpoint["quota_pool_id"]), _remaining_amount(endpoint["effective_remaining"]))
+                remaining = pool_remaining.get(
+                    str(endpoint["quota_pool_id"]), _remaining_amount(endpoint["effective_remaining"])
+                )
                 eligibility = eligible_for_scoring(
                     {
                         "access": "free_quota_available",
@@ -1132,7 +1151,9 @@ def _role_scoring_stage(_dependencies: StageDependencies, context: PipelineConte
                 if eligibility.eligible:
                     eligibility = _context_window_eligibility(endpoint, requirements)
                 if eligibility.eligible:
-                    eligibility = _quality_gate_eligibility(role, latest_metrics.get(endpoint["canonical_model_id"]), requirements)
+                    eligibility = _quality_gate_eligibility(
+                        role, latest_metrics.get(endpoint["canonical_model_id"]), requirements
+                    )
                 metrics_row = latest_metrics.get(endpoint["canonical_model_id"], {})
                 benchmark = aa_subscore(
                     metrics_row.get("metrics", {}),
@@ -1236,7 +1257,9 @@ def _quality_band_candidates(transaction: Any, metric: str) -> list[dict[str, An
     return [
         {
             "quality": float(row["quality"]),
-            "capacity": _remaining_requests(row["effective_remaining"]) if row["effective_remaining"] is not None else 0,
+            "capacity": _remaining_requests(row["effective_remaining"])
+            if row["effective_remaining"] is not None
+            else 0,
             "confirmed_free": row["status"] == "confirmed" and bool(row["hard_stop_capable"]),
         }
         for row in rows
@@ -1275,7 +1298,9 @@ def _latest_aa_metrics_by_model(transaction: Any) -> dict[Any, dict[str, Any]]:
                 if row[key] is not None
             },
             "index_version": row["index_version"],
-            "aa_latency": float(row["median_end_to_end_seconds"]) if row["median_end_to_end_seconds"] is not None else None,
+            "aa_latency": float(row["median_end_to_end_seconds"])
+            if row["median_end_to_end_seconds"] is not None
+            else None,
         }
         for row in rows
     }
@@ -1310,7 +1335,9 @@ def _latest_health_by_endpoint(transaction: Any) -> dict[str, dict[str, float | 
     ).fetchall()
     return {
         str(row["endpoint_id"]): {
-            "health": _health_component(row["endpoint_status"], row["endpoint_success_rate"], row["endpoint_error_rate"]),
+            "health": _health_component(
+                row["endpoint_status"], row["endpoint_success_rate"], row["endpoint_error_rate"]
+            ),
             "stability": _stability_component(row["endpoint_status"], row["endpoint_sample_count"]),
             "endpoint_p95": row["endpoint_p95"],
             "provider_p95": row["provider_p95"],
@@ -1387,7 +1414,9 @@ def _context_window_eligibility(endpoint: Any, requirements: dict[str, Any]) -> 
     return EligibilityDecision(False, "context")
 
 
-def _quality_gate_eligibility(role: Any, metrics_row: dict[str, Any] | None, requirements: dict[str, Any]) -> EligibilityDecision:
+def _quality_gate_eligibility(
+    role: Any, metrics_row: dict[str, Any] | None, requirements: dict[str, Any]
+) -> EligibilityDecision:
     if role["minimum_quality_metric"] is None or role["minimum_quality_value"] is None:
         return EligibilityDecision(True)
     current_version = metrics_row.get("index_version") if metrics_row else role["quality_gate_index_version"]
@@ -1506,7 +1535,9 @@ def _allocation_stage(_dependencies: StageDependencies, context: PipelineContext
         recalibration_roles = _roles_needing_quality_recalibration(transaction)
         pool_remaining = _latest_remaining_by_pool(transaction)
         demand = {
-            role["id"]: forecast_demand.get(role["id"], cold_start_demand(schedule=None, bootstrap=None, role_minimum=1, global_minimum=1).value)
+            role["id"]: forecast_demand.get(
+                role["id"], cold_start_demand(schedule=None, bootstrap=None, role_minimum=1, global_minimum=1).value
+            )
             for role in roles
         }
         endpoints = [
@@ -1514,7 +1545,9 @@ def _allocation_stage(_dependencies: StageDependencies, context: PipelineContext
                 "id": str(row["endpoint_id"]),
                 "pool": str(row["quota_pool_id"]),
                 "score": float(row["total_score"]),
-                "capacity": pool_remaining.get(str(row["quota_pool_id"]), _remaining_amount(row["effective_remaining"])),
+                "capacity": pool_remaining.get(
+                    str(row["quota_pool_id"]), _remaining_amount(row["effective_remaining"])
+                ),
                 "is_router": is_configured_router(str(row["provider_model_id"])),
                 "input": _configured_router_input(str(row["provider_model_id"])),
                 "effective_context_window": int(row["effective_context_window"] or 0),
@@ -1554,11 +1587,15 @@ def _allocation_stage(_dependencies: StageDependencies, context: PipelineContext
             pool_reports = {
                 pool: {
                     "usage": usage,
-                    "capacity": max((endpoint["capacity"] for endpoint in endpoints if endpoint["pool"] == pool), default=0),
+                    "capacity": max(
+                        (endpoint["capacity"] for endpoint in endpoints if endpoint["pool"] == pool), default=0
+                    ),
                 }
                 for pool, usage in pool_usage.items()
             }
-            validation = validate_plan(pool_reports or {"empty": {"usage": 0, "capacity": 0}}, role_has_primary=allocation is not None)
+            validation = validate_plan(
+                pool_reports or {"empty": {"usage": 0, "capacity": 0}}, role_has_primary=allocation is not None
+            )
             context.repository.allocation_plans.upsert(
                 transaction,
                 role_id=role["id"],
@@ -1664,10 +1701,16 @@ def _apply_stage(dependencies: StageDependencies, context: PipelineContext) -> S
             if dependencies.config is not None
             else DEFAULT_APPLY_MIN_SAFETY_BUFFER
         )
+        minimum_percent_remaining = (
+            dependencies.config.apply_min_percent_remaining
+            if dependencies.config is not None
+            else DEFAULT_APPLY_MIN_PERCENT_REMAINING
+        )
         safety = _derive_apply_stage_safety(
             transaction,
             diffs,
             minimum_safety_buffer=minimum_safety_buffer,
+            minimum_percent_remaining=minimum_percent_remaining,
         )
     try:
         check_apply_preconditions(
@@ -1719,9 +1762,13 @@ def _apply_stage(dependencies: StageDependencies, context: PipelineContext) -> S
         applier.apply(combo_id, desired, expected_hash=expected_hash, smoke_ok=smoke_ok)
         if not smoke_ok:
             if not _rollback_apply_mutations(dependencies.omniroute_client, applied, failed=(combo_id, live_baseline)):
-                return StageResult(status="rollback_failed", reason="rollback_failed", details={"combo_test_called": True})
+                return StageResult(
+                    status="rollback_failed", reason="rollback_failed", details={"combo_test_called": True}
+                )
             _delete_applied_snapshots_for_run(context, applied)
-            return StageResult(status="apply_failed_rolled_back", reason="smoke_failed", details={"combo_test_called": True})
+            return StageResult(
+                status="apply_failed_rolled_back", reason="smoke_failed", details={"combo_test_called": True}
+            )
         _persist_applied_snapshot(context, diff, live_baseline, desired)
         applied.append((diff, live_baseline, desired))
     if dry_run:
@@ -1729,7 +1776,11 @@ def _apply_stage(dependencies: StageDependencies, context: PipelineContext) -> S
             status="success",
             changed=False,
             idempotency_key="apply:dry-run",
-            details={"combo_test_called": False, "effect": "idempotent_no_change", "unmanaged_combos": unmanaged_combos},
+            details={
+                "combo_test_called": False,
+                "effect": "idempotent_no_change",
+                "unmanaged_combos": unmanaged_combos,
+            },
         )
     result = _effect_result("apply", changed=bool(applied))
     return StageResult(
@@ -1800,6 +1851,7 @@ def _derive_apply_stage_safety(
     diffs: Sequence[Any],
     *,
     minimum_safety_buffer: float,
+    minimum_percent_remaining: float,
 ) -> dict[str, bool]:
     endpoint_ids = _desired_apply_endpoint_ids(diffs)
     if not endpoint_ids:
@@ -1809,6 +1861,7 @@ def _derive_apply_stage_safety(
             transaction,
             endpoint_ids,
             minimum_safety_buffer=minimum_safety_buffer,
+            minimum_percent_remaining=minimum_percent_remaining,
         ),
         "probes_passed": _desired_endpoints_have_current_probe_success(transaction, endpoint_ids),
     }
@@ -1829,6 +1882,7 @@ def _desired_endpoints_have_current_quota_safety(
     endpoint_ids: Sequence[str],
     *,
     minimum_safety_buffer: float,
+    minimum_percent_remaining: float,
 ) -> bool:
     rows = transaction.execute(
         """
@@ -1841,7 +1895,7 @@ def _desired_endpoints_have_current_quota_safety(
     ).fetchall()
     if len(rows) != len(endpoint_ids):
         return False
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     oldest_allowed = now - APPLY_STAGE_EVIDENCE_MAX_AGE
     return all(
         _endpoint_quota_row_is_safe(
@@ -1849,6 +1903,7 @@ def _desired_endpoints_have_current_quota_safety(
             now=now,
             oldest_allowed=oldest_allowed,
             minimum_safety_buffer=minimum_safety_buffer,
+            minimum_percent_remaining=minimum_percent_remaining,
         )
         for row in rows
     )
@@ -1860,16 +1915,21 @@ def _endpoint_quota_row_is_safe(
     now: datetime,
     oldest_allowed: datetime,
     minimum_safety_buffer: float,
+    minimum_percent_remaining: float,
 ) -> bool:
     evidence = row["evidence"] if isinstance(row["evidence"], dict) else {}
     safety_buffer = max(float(evidence.get("safety_buffer") or 0), minimum_safety_buffer)
+    percent_remaining = evidence.get("percent_remaining")
     return (
         row["status"] == "confirmed"
         and row["hard_stop_capable"] is True
         and evidence.get("remaining_source") == "live_observed"
+        and evidence.get("daily_budget_source") in {"research", "calibration"}
+        and isinstance(percent_remaining, int | float)
+        and float(percent_remaining) > minimum_percent_remaining
+        and evidence.get("locked_out") is not True
         and _remaining_requests(row["effective_remaining"]) > safety_buffer
-        and row["reset_at"] is not None
-        and row["reset_at"] > now
+        and (row["reset_at"] is None or row["reset_at"] <= now)
         and row["classified_at"] >= oldest_allowed
         and (row["valid_until"] is None or row["valid_until"] > now)
     )
@@ -1887,7 +1947,7 @@ def _desired_endpoints_have_current_probe_success(transaction: Any, endpoint_ids
     ).fetchall()
     if len(rows) != len(endpoint_ids):
         return False
-    oldest_allowed = datetime.now(timezone.utc) - APPLY_STAGE_EVIDENCE_MAX_AGE
+    oldest_allowed = datetime.now(UTC) - APPLY_STAGE_EVIDENCE_MAX_AGE
     return all(row["passed"] is True and row["finished_at"] >= oldest_allowed for row in rows)
 
 

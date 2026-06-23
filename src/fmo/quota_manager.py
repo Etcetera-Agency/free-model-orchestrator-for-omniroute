@@ -1,6 +1,7 @@
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-from typing import Any, Callable
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from fmo.omniroute import OmniRouteRequestError
 from fmo.quota_normalize import DEFAULT_TOKENS_PER_REQUEST, binding_capacity, to_requests_per_day
@@ -20,6 +21,10 @@ class LiveQuota:
     limit: float | None
     remaining: float | None
     reset_at: datetime | None
+    learned_request_limit: float | None = None
+    learned_request_remaining: float | None = None
+    percent_remaining: float | None = None
+    locked_out: bool = False
 
 
 @dataclass(frozen=True)
@@ -68,7 +73,7 @@ def fetch_live_quota_snapshot(
     max_age: timedelta = timedelta(minutes=15),
     tokens_per_request: int = DEFAULT_TOKENS_PER_REQUEST,
 ) -> LiveQuotaSnapshot:
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     payload = _client_get(client, "/api/usage/quota")
     generated_at = _parse_timestamp(payload.get("meta", {}).get("generatedAt"))
     if generated_at is None:
@@ -84,7 +89,7 @@ def fetch_live_quota_snapshot(
     for item in providers:
         if not isinstance(item, dict):
             raise QuotaFetchError("omniroute_quota", "invalid_payload")
-        quota = _normalize_quota(item, tokens_per_request=tokens_per_request)
+        quota = _normalize_quota(item, now=now, tokens_per_request=tokens_per_request)
         quotas[f"{quota.provider}:{quota.connection_id}"] = quota
     return LiveQuotaSnapshot(observed_at=generated_at, quotas=quotas)
 
@@ -113,8 +118,8 @@ def endpoint_quota_axes(
     axes: list[tuple[str, str, float]] = []
     axes.extend(_rule_axes(research_rule))
     axes.extend(_rule_axes(calibration_rule))
-    if live_quota and live_quota.limit is not None:
-        axes.append(("requests", "day", live_quota.limit))
+    # AICODE-NOTE: OmniRoute learned live quota is a reactive request-rate signal,
+    # not a daily-budget axis; daily capacity comes from research/calibration.
     return axes
 
 
@@ -141,23 +146,33 @@ def _client_get(client: Any, path: str) -> dict[str, Any]:
     return payload
 
 
-def _normalize_quota(item: dict[str, Any], *, tokens_per_request: int) -> LiveQuota:
+def _normalize_quota(item: dict[str, Any], *, now: datetime, tokens_per_request: int) -> LiveQuota:
     provider = str(item.get("provider") or "unknown")
     connection_id = str(item.get("connectionId") or "unknown")
     limit_tokens = _number_or_none(item.get("monthlyTokens"))
     window = "month" if limit_tokens is not None else str(item.get("quotaWindow") or "day")
-    if limit_tokens is None:
-        limit_tokens = _number_or_none(item.get("quotaTotal"))
-    used_tokens = _number_or_none(item.get("quotaUsed"))
+    used_tokens = _number_or_none(item.get("monthlyTokensUsed"))
     limit = _tokens_to_requests_per_day(limit_tokens, window=window, tokens_per_request=tokens_per_request)
     used = _tokens_to_requests_per_day(used_tokens, window=window, tokens_per_request=tokens_per_request)
     remaining = limit - used if limit is not None and used is not None else None
+    learned_request_limit = _number_or_none(item.get("quotaTotal"))
+    learned_request_used = _number_or_none(item.get("quotaUsed"))
+    learned_request_remaining = (
+        learned_request_limit - learned_request_used
+        if learned_request_limit is not None and learned_request_used is not None
+        else None
+    )
+    reset_at = _parse_timestamp(item.get("resetAt"))
     return LiveQuota(
         provider=provider,
         connection_id=connection_id,
         limit=limit,
         remaining=remaining,
-        reset_at=_parse_timestamp(item.get("resetAt")),
+        reset_at=reset_at,
+        learned_request_limit=learned_request_limit,
+        learned_request_remaining=learned_request_remaining,
+        percent_remaining=_number_or_none(item.get("percentRemaining")),
+        locked_out=reset_at is not None and reset_at > now,
     )
 
 
@@ -183,5 +198,5 @@ def _tokens_to_requests_per_day(value: float | None, *, window: str, tokens_per_
 def _rule_axes(rule: Any | None) -> list[tuple[str, str, float]]:
     if rule is None:
         return []
-    claims = getattr(rule, "axes", None) or (getattr(rule, "claim"),)
+    claims = getattr(rule, "axes", None) or (rule.claim,)
     return [(claim.metric, claim.window, claim.amount) for claim in claims]

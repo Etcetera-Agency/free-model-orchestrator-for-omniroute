@@ -1,12 +1,13 @@
 from copy import deepcopy
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-from fmo.db import MigrationRunner
+from _fixtures import fixture_body
 from fmo.composition import StageAdapters, StageDependencies, build_canonical_stages
+from fmo.db import MigrationRunner
 from fmo.model_registration import register_new_free_models
 from fmo.persistence import Database, Repository
 from fmo.pipeline import PipelineRunner
@@ -17,8 +18,6 @@ from test_composition import (
     seed_confirmed_llm_candidate,
     seed_endpoint,
 )
-from _fixtures import fixture_body
-
 
 FIXTURE_PROVIDER = fixture_body("omniroute_api_rate_limits")["connections"][0]["provider"]
 FIXTURE_CONNECTION_ID = fixture_body("omniroute_api_rate_limits")["connections"][0]["connectionId"]
@@ -89,7 +88,8 @@ class RegistrationFlowClient(PipelineOpsClient):
                 "quotaTotal": 200_000,
                 "quotaUsed": 80_000,
                 "quotaWindow": "day",
-                "resetAt": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
+                "percentRemaining": 100,
+                "resetAt": None,
             }
         )
 
@@ -97,8 +97,7 @@ class RegistrationFlowClient(PipelineOpsClient):
         if path == "/v1/models":
             body = deepcopy(fixture_body("omniroute_v1_models"))
             body["data"].extend(
-                {"id": model_id, "owned_by": FIXTURE_PROVIDER}
-                for model_id in sorted(self.provider_models)
+                {"id": model_id, "owned_by": FIXTURE_PROVIDER} for model_id in sorted(self.provider_models)
             )
             return body
         return super().get(path)
@@ -196,7 +195,9 @@ def test_new_free_model_under_connection_is_registered(postgres_url):
 def test_existing_endpoint_is_not_registered_again(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     repository = Repository(Database(postgres_url))
-    seed_endpoint(repository, model_id="known-free", provider_id=FIXTURE_PROVIDER, connection_id=f"conn-{FIXTURE_PROVIDER}")
+    seed_endpoint(
+        repository, model_id="known-free", provider_id=FIXTURE_PROVIDER, connection_id=f"conn-{FIXTURE_PROVIDER}"
+    )
     client = RegistrationClient()
 
     report = register_new_free_models(
@@ -293,7 +294,9 @@ def test_registered_model_flows_to_existing_combo_rebalance(postgres_url):
     assert matching.exit_code == 0
     assert "new-free" in {payload["modelId"] for payload, _key in client.registered_payloads}
     assert new_endpoint_ids
-    assert [result.exit_code for result in rebalance_results] == [0] * 9, rebalance_results[-1].stage_results[0]["reason"]
+    assert [result.exit_code for result in rebalance_results] == [0] * 9, rebalance_results[-1].stage_results[0][
+        "reason"
+    ]
     combo_members = set(client.combos["fmo-routing_fast"])
     assert combo_members & old_endpoint_ids
     assert not client.deleted_paths
@@ -318,6 +321,7 @@ def _add_live_quota_rows_for_provider(repository, client, *, provider_id):
                 "quotaTotal": 200_000,
                 "quotaUsed": 80_000,
                 "quotaWindow": "day",
-                "resetAt": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
+                "percentRemaining": 100,
+                "resetAt": None,
             }
         )

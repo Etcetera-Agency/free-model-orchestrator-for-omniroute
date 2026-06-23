@@ -2,12 +2,31 @@ from pathlib import Path
 
 import pytest
 
-
 ROOT = Path(__file__).resolve().parents[1]
 # Active proposal slices awaiting TDD implementation. Each entry is dropped from
 # tests/spec_coverage_pending.txt (and here) when its test lands. Slices are
 # listed in openspec/TODO.md and openspec/changes/<id>/.
-EXPECTED_ACTIVE_PENDING = set()
+EXPECTED_ACTIVE_PENDING = {
+    # refactor-split-persistence
+    "system-architecture::Persistence layer is split into per-aggregate modules",
+    "system-architecture::Persistence public API stays import-stable",
+    # refactor-split-stages-discovery
+    "system-architecture::Discovery, quota, and access stages live in dedicated modules",
+    "system-architecture::Stage package re-exports preserve composition wiring",
+    # refactor-split-stages-runtime
+    "system-architecture::Probing, telemetry, inventory, and role stages live in dedicated modules",
+    "system-architecture::Role scoring helpers move with the role stage",
+    # refactor-split-stages-apply
+    "system-architecture::Allocation, apply, rollback, and audit stages live in dedicated modules",
+    "system-architecture::Shared stage helpers live in one helpers module",
+    # refactor-extract-test-fakes
+    "system-architecture::Test fakes live in a shared test-support module",
+    "system-architecture::Composition tests mirror the stage packages",
+    "system-architecture::Test suite runs from both pytest entry points",
+    # refactor-unify-shared-helpers
+    "system-architecture::Row access helpers are defined once in the persistence base",
+    "system-architecture::Timestamp and hashing helpers are centralized",
+}
 
 
 @pytest.mark.spec("runtime-documentation::Active docs state")

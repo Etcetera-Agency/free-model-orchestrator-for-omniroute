@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -10,8 +10,8 @@ from fmo.quota_attribution import (
 )
 from fmo.quota_manager import (
     LiveQuota,
-    endpoint_binding_capacity,
     effective_remaining,
+    endpoint_binding_capacity,
     require_hard_stop,
     reset_and_reclassify,
     validate_historical_reserve,
@@ -41,7 +41,7 @@ class SearchClient:
 @pytest.mark.spec("quota-research::Quota query")
 def test_research_search_uses_date_aware_query_and_persists_summary():
     client = SearchClient()
-    query = build_quota_query("kilo", "kilo/free-model", today=datetime(2026, 6, 16, tzinfo=timezone.utc))
+    query = build_quota_query("kilo", "kilo/free-model", today=datetime(2026, 6, 16, tzinfo=UTC))
     snapshot = run_quota_search(client, provider="kilo", model_id="kilo/free-model", query=query)
 
     assert "/v1/search" == client.calls[0][0]
@@ -90,9 +90,18 @@ def _quota_rule(claim: QuotaClaim, axes: tuple[QuotaClaim, ...] = ()) -> ActiveQ
 
 
 @pytest.mark.spec("quota-manager::Tightest axis binds the capacity")
-def test_endpoint_binding_capacity_uses_tightest_research_and_live_axis():
+@pytest.mark.spec("quota-manager::Live quota requests do not contribute to the daily budget")
+def test_endpoint_binding_capacity_uses_research_axis_not_live_request_rate():
     research = _quota_rule(QuotaClaim("requests", 100, "day", ["research"], True))
-    live = LiveQuota("provider", "connection", limit=1000, remaining=1000, reset_at=datetime.now(timezone.utc))
+    live = LiveQuota(
+        "provider",
+        "connection",
+        limit=None,
+        remaining=None,
+        reset_at=datetime.now(UTC),
+        learned_request_limit=10_000,
+        learned_request_remaining=10_000,
+    )
 
     capacity = endpoint_binding_capacity(
         research_rule=research,
@@ -135,9 +144,12 @@ def test_access_classifier_order_trust_and_free_quota_preconditions():
     assert classify_access({"disabled": True}).status == "unavailable"
     assert classify_access({"price_input": 0, "price_output": 0}).status == "free_unlimited"
     assert classify_access({"models_dev_free": True, "live_paid_charge": True}).status == "paid_only_excluded"
-    assert classify_access({"quota_rule": True, "limit": 100, "remaining": 50, "hard_stop": True}).status == "unknown_excluded"
+    assert (
+        classify_access({"quota_rule": True, "limit": 100, "remaining": 50, "hard_stop": True}).status
+        == "unknown_excluded"
+    )
     available = classify_access(
-        {"quota_rule": True, "limit": 100, "remaining": 50, "reset_at": datetime.now(timezone.utc), "hard_stop": True}
+        {"quota_rule": True, "limit": 100, "remaining": 50, "reset_at": datetime.now(UTC), "hard_stop": True}
     )
     assert available.status == "free_quota_available"
 
@@ -149,7 +161,7 @@ def test_access_classifier_quota_exhausted_at_safety_buffer_boundary():
             "quota_rule": True,
             "limit": 100,
             "remaining": 10,
-            "reset_at": datetime.now(timezone.utc),
+            "reset_at": datetime.now(UTC),
             "hard_stop": True,
             "safety_buffer": 10,
         }
@@ -174,7 +186,7 @@ def test_access_classifier_quota_rule_missing_precondition(missing):
         "quota_rule": True,
         "limit": 100,
         "remaining": 50,
-        "reset_at": datetime.now(timezone.utc),
+        "reset_at": datetime.now(UTC),
         "hard_stop": True,
     }
     evidence.update(missing)
@@ -244,8 +256,13 @@ def test_attribution_capacity_status_and_merge_split_evidence():
 @pytest.mark.spec("quota-manager::After reset")
 @pytest.mark.spec("quota-manager::Missing reserve")
 def test_effective_remaining_hard_stop_reset_and_historical_reserve():
-    assert effective_remaining(limit=100, provider_remaining=60, local_used=30, pending_reserved=10, safety_buffer=5) == 45
-    assert effective_remaining(limit=None, provider_remaining=None, local_used=None, pending_reserved=0, safety_buffer=0) is None
+    assert (
+        effective_remaining(limit=100, provider_remaining=60, local_used=30, pending_reserved=10, safety_buffer=5) == 45
+    )
+    assert (
+        effective_remaining(limit=None, provider_remaining=None, local_used=None, pending_reserved=0, safety_buffer=0)
+        is None
+    )
 
     with pytest.raises(ValueError):
         require_hard_stop(False)
@@ -256,7 +273,7 @@ def test_effective_remaining_hard_stop_reset_and_historical_reserve():
 
     def fetch_live():
         calls.append("fetch")
-        return {"limit": 100, "remaining": 100, "reset_at": datetime.now(timezone.utc) + timedelta(days=1)}
+        return {"limit": 100, "remaining": 100, "reset_at": datetime.now(UTC) + timedelta(days=1)}
 
     def reclassify(payload):
         calls.append("classify")
@@ -268,17 +285,24 @@ def test_effective_remaining_hard_stop_reset_and_historical_reserve():
 
 @pytest.mark.spec("quota-manager::No reliable counter")
 def test_effective_remaining_all_sources_unknown_is_none():
-    assert effective_remaining(limit=None, provider_remaining=None, local_used=None, pending_reserved=5, safety_buffer=5) is None
+    assert (
+        effective_remaining(limit=None, provider_remaining=None, local_used=None, pending_reserved=5, safety_buffer=5)
+        is None
+    )
 
 
 @pytest.mark.spec("quota-manager::Negative effective remaining")
 def test_effective_remaining_preserves_negative_after_reservations_and_buffer():
-    assert effective_remaining(limit=100, provider_remaining=3, local_used=99, pending_reserved=4, safety_buffer=2) == -5
+    assert (
+        effective_remaining(limit=100, provider_remaining=3, local_used=99, pending_reserved=4, safety_buffer=2) == -5
+    )
 
 
 @pytest.mark.spec("quota-manager::Remaining expressed in request-equivalents per day")
 def test_effective_remaining_uses_converted_request_equivalent_values():
-    assert effective_remaining(limit=10, provider_remaining=7.5, local_used=2, pending_reserved=1, safety_buffer=0.5) == 6
+    assert (
+        effective_remaining(limit=10, provider_remaining=7.5, local_used=2, pending_reserved=1, safety_buffer=0.5) == 6
+    )
 
 
 @pytest.mark.spec("quota-manager::No hard stop")

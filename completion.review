@@ -1,5 +1,12 @@
 # Completion Review
 
+- `prefer-learned-quota-with-liveness` is archived: live OmniRoute learned
+  `quotaTotal`/`quotaUsed` now remain a reactive request-rate signal, live
+  liveness (`percentRemaining`, lockout, null healthy `resetAt`) is persisted
+  separately from research/calibration daily budget capacity, and apply gates on
+  confirmed-free + hard-stop + fresh probe + known daily budget + healthy
+  liveness. Code Simplifier review added anchors at the daily-budget/live-rate
+  boundary so future changes do not remerge those units.
 - `add-rollback-idempotency` is archived: in-apply smoke-failure reverts and
   top-level rollback restores now pass an idempotency key derived from the
   restored combo state; the executable pending coverage allowlist is empty.

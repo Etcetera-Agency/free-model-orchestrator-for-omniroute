@@ -1,14 +1,13 @@
 from copy import deepcopy
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from urllib.parse import urlsplit
 
 import pytest
 
+from _fixtures import fixture_body
 from fmo.access import classify_access
 from fmo.omniroute import OmniRouteClient
 from fmo.quota_manager import QuotaFetchError, fail_closed_quota_evidence, fetch_live_quota_snapshot
-
-from _fixtures import fixture_body
 
 
 class _FixtureResponse:
@@ -50,10 +49,12 @@ def _quota_body(*, generated_at: datetime) -> dict:
 
 
 @pytest.mark.spec("quota-manager::Quota fetched at reset")
-@pytest.mark.spec("quota-manager::Live token budget converted")
-def test_live_quota_fetch_uses_omniroute_fixture_and_recomputes_remaining():
-    now = datetime(2026, 6, 18, 8, 0, tzinfo=timezone.utc)
+@pytest.mark.spec("quota-manager::Percent-remaining and lockout captured from live quota")
+@pytest.mark.spec("quota-manager::Learned request limit captured as a reactive rate, not a daily budget")
+def test_live_quota_fetch_captures_liveness_and_learned_request_rate():
+    now = datetime(2026, 6, 18, 8, 0, tzinfo=UTC)
     body = _quota_body(generated_at=now - timedelta(minutes=2))
+    body["providers"][0]["percentRemaining"] = 75
     target = body["providers"][0]
     transport = _QuotaTransport(body=body)
     client = OmniRouteClient(base_url="https://omniroute.test", api_key="manage-key", transport=transport)
@@ -62,14 +63,37 @@ def test_live_quota_fetch_uses_omniroute_fixture_and_recomputes_remaining():
 
     assert transport.requested_paths == ["/api/usage/quota"]
     quota = snapshot.quotas[f"{target['provider']}:{target['connectionId']}"]
-    assert quota.limit == 10
-    assert quota.remaining == 7.5
+    assert quota.limit is None
+    assert quota.remaining is None
+    assert quota.learned_request_limit == 100
+    assert quota.learned_request_remaining == 75
+    assert quota.percent_remaining == 75
+    assert quota.locked_out is True
     assert quota.reset_at == now - timedelta(minutes=2) + timedelta(hours=6)
+
+
+@pytest.mark.spec("quota-manager::Idle provider yields liveness without an authoritative absolute")
+def test_live_quota_idle_provider_keeps_liveness_without_learned_rate():
+    now = datetime(2026, 6, 18, 8, 0, tzinfo=UTC)
+    body = _quota_body(generated_at=now - timedelta(minutes=2))
+    body["providers"][0].update({"quotaTotal": None, "quotaUsed": 0, "percentRemaining": 100, "resetAt": None})
+    target = body["providers"][0]
+    transport = _QuotaTransport(body=body)
+    client = OmniRouteClient(base_url="https://omniroute.test", api_key="manage-key", transport=transport)
+
+    snapshot = fetch_live_quota_snapshot(client, now=now, max_age=timedelta(minutes=5), tokens_per_request=10)
+
+    quota = snapshot.quotas[f"{target['provider']}:{target['connectionId']}"]
+    assert quota.learned_request_limit is None
+    assert quota.learned_request_remaining is None
+    assert quota.percent_remaining == 100
+    assert quota.locked_out is False
+    assert quota.reset_at is None
 
 
 @pytest.mark.spec("quota-manager::Quota source unavailable")
 def test_live_quota_stale_source_fails_closed():
-    now = datetime(2026, 6, 18, 8, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 6, 18, 8, 0, tzinfo=UTC)
     transport = _QuotaTransport(body=_quota_body(generated_at=now - timedelta(hours=2)))
     client = OmniRouteClient(base_url="https://omniroute.test", api_key="manage-key", transport=transport)
 
@@ -84,7 +108,7 @@ def test_live_quota_stale_source_fails_closed():
 
 @pytest.mark.spec("quota-manager::Quota source unavailable")
 def test_live_quota_unavailable_source_fails_closed():
-    now = datetime(2026, 6, 18, 8, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 6, 18, 8, 0, tzinfo=UTC)
     transport = _QuotaTransport(
         status_code=500,
         body=fixture_body("omniroute_api_usage_quota_http_500"),

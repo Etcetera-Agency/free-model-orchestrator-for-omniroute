@@ -9,10 +9,43 @@
 These were opened from the 2026-06-23 implementation review. Each carries
 uncovered scenarios in `tests/spec_coverage_pending.txt` until its tests land.
 
-- (none open)
+### Refactor program (2026-06-23 static-analysis review)
+
+Behavior-preserving structure work; the existing pytest suite is the
+behavior-preservation oracle for every slice. All add structural requirements to
+the `system-architecture` capability. Implement in order — each depends on the
+package/shim the previous one establishes.
+
+- `refactor-split-persistence` — turn `persistence.py` (1240 lines, 16
+  repositories) into a `persistence/` package, one module per aggregate over a
+  shared `_base`, behind an `__init__` re-export shim. Proves the shim pattern;
+  fixes the persistence pyright errors in the moved code.
+- `refactor-split-stages-discovery` — start the `composition_stages/` package and
+  extract the discovery / quota-research+sync / access-classification clusters.
+- `refactor-split-stages-runtime` — extract the probing / telemetry / Hermes
+  inventory / role-lifecycle+scoring clusters (carries the largest helper set).
+- `refactor-split-stages-apply` — extract allocation / diff+apply / rollback /
+  audit, drain the remaining shared helpers into `_helpers.py`, and delete the
+  monolithic `composition_stages.py`.
+- `refactor-extract-test-fakes` — move the nine shared fakes into
+  `tests/_clients.py`, split `test_composition.py` (3142 lines) into per-domain
+  files mirroring the stage packages, and fix the `tests` import path so the
+  suite runs under both `pytest` and `python -m pytest`.
+- `refactor-unify-shared-helpers` — deduplicate row helpers, `utcnow`, slug/hash/
+  idempotency-key builders, and quota-math helpers into one canonical home each,
+  now that the target modules exist.
+
+Type-error triage (66 pyright errors) and the import-path fix are folded into the
+slices that own the affected modules rather than tracked as separate scenarios.
 
 ## Resolved
 
+- `prefer-learned-quota-with-liveness` — archived 2026-06-23. Live OmniRoute
+  `quotaTotal`/`quotaUsed` are now stored as a learned sub-day request-rate
+  signal, not a daily budget; quota sync persists `percentRemaining`/lockout
+  liveness without overwriting research/calibration capacity. Apply now requires
+  confirmed-free, hard-stop, fresh probe, known daily budget above buffer, fresh
+  liveness above floor, and no lockout; null `resetAt` is healthy.
 - `fix-selection-correctness` — archived 2026-06-22. Production role scoring now
   uses AA metrics, latency source priority, health/stability telemetry, and
   missing-AA uncertainty instead of constant placeholders. Allocation now uses
