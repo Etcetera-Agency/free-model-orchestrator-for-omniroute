@@ -26,13 +26,36 @@ def probe_suites(capabilities: dict[str, bool]) -> tuple[str, ...]:
 
 
 def probe_endpoint(client, *, provider: str, model: str, capabilities: dict[str, bool]) -> ProbeResult:
+    del provider
     suites = probe_suites(capabilities)
     response = client.post(
-        f"/v1/providers/{provider}/chat/completions",
-        {"model": model, "messages": [{"role": "user", "content": "Return ok"}]},
+        "/v1/chat/completions",
+        {
+            "model": model,
+            "messages": [{"role": "user", "content": "Return exactly ok"}],
+            "max_tokens": 2,
+            "temperature": 0,
+        },
         headers={"X-OmniRoute-No-Cache": "true"},
     )
-    return ProbeResult(passed=response["status_code"] == 200 and bool(response.get("content")), suites=suites)
+    return ProbeResult(
+        passed=response["status_code"] == 200 and _probe_content_usable(response.get("content")),
+        suites=suites,
+    )
+
+
+def _probe_content_usable(content: object) -> bool:
+    if not content:
+        return False
+    text = str(content).lower()
+    return not any(
+        phrase in text
+        for phrase in (
+            "prevent abuse of free resources",
+            "accounts that have not been recharged",
+            "increase the free quota after recharging",
+        )
+    )
 
 
 def handle_probe_error(status_code: int) -> tuple[str, str]:

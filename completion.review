@@ -1,5 +1,16 @@
 # Completion Review
 
+- Deploy fix: provider probes now use the shared `/v1/chat/completions` route
+  with a tiny completion budget and no-cache header, and the shared OmniRoute
+  client returns text/SSE bodies as probe content when a successful response is
+  not JSON. Probe content that is actually a free-resource denial now fails
+  closed even with HTTP 200. Quota research also honors `--endpoint` so live
+  seed endpoints can be researched one at a time instead of scanning all 698
+  free models. Code Simplifier review kept the client fallback, probe route, and
+  endpoint filter as separate simple changes. Focused verification:
+  probe/client/quota-filter tests on Python 3.12 venv (DB-backed filter test
+  skipped locally due PostgreSQL `/dev/shm` exhaustion), ruff on touched files,
+  and OpenSpec strict validation.
 - Deploy fix: probing now persists shared-client HTTP errors as failed endpoint
   probes instead of crashing the stage. Live `probe-models` hit HTTP 400 from a
   provider completion route; the stage now records status/reason details, marks

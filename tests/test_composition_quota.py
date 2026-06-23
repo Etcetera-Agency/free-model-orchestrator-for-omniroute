@@ -16,6 +16,7 @@ from tests._composition_support import (
     datetime,
     run_composed_stage,
     run_composed_stage_with_dependencies,
+    run_runtime_command,
     seed_endpoint,
     seed_free_registry_snapshot,
     timedelta,
@@ -209,6 +210,35 @@ def test_new_reachable_free_model_triggers_full_recalc_and_uses_quota_total_hint
     assert result.exit_code == 0
     assert [call[0] for call in client.calls if call[0] == "/v1/search"] == ["/v1/search", "/v1/search"]
     assert [row["limits"]["requests"] for row in rule_rows] == [50.0, 50.0]
+
+
+@pytest.mark.spec("quota-research::Endpoint filter researches one endpoint")
+def test_quota_research_endpoint_filter_limits_research_to_one_endpoint(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    seed_endpoint(repository, model_id="selected-free")
+    seed_endpoint(repository, model_id="skipped-free")
+    run_composed_stage(repository, "model-matching")
+    now = datetime.now(UTC)
+    seed_free_registry_snapshot(
+        repository, models=[("provider-a", "selected-free")], created_at=now - timedelta(days=1)
+    )
+    seed_free_registry_snapshot(
+        repository,
+        models=[("provider-a", "selected-free"), ("provider-a", "skipped-free")],
+        created_at=now,
+    )
+    client = PipelineOpsClient()
+
+    result = run_runtime_command(repository, client, "research-quotas", endpoint="selected-free")
+
+    with repository.database.transaction() as transaction:
+        rules = transaction.execute("SELECT model_pattern FROM quota_rules ORDER BY model_pattern").fetchall()
+    assert result.exit_code == 0
+    assert len([call for call in client.calls if call[0] == "/v1/search"]) == 1
+    assert "selected-free" in client.calls[0][1]["query"]
+    assert "skipped-free" not in client.calls[0][1]["query"]
+    assert [row["model_pattern"] for row in rules] == ["selected-free"]
 
 
 @pytest.mark.spec("quota-research::One endpoint error does not stop research for the rest")

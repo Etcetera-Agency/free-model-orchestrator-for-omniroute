@@ -110,7 +110,14 @@ class OmniRouteClient:
                 self.sleep(_transient_backoff_seconds(attempt))
                 continue
             if 200 <= response.status_code < 300:
-                return response.json()
+                try:
+                    return response.json()
+                except ValueError:
+                    return {
+                        "status_code": response.status_code,
+                        "content": response.text,
+                        "headers": dict(response.headers),
+                    }
             break
         raise OmniRouteRequestError(method, path, last_response.status_code if last_response is not None else 0)
 

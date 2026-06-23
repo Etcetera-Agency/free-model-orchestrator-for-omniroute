@@ -48,6 +48,12 @@ establish hard-stop behaviour for each endpoint.
 - AND an OmniRoute-known `quotaTotal` is used as the limit while search sets
   hard-stop behaviour
 
+#### Scenario: Endpoint filter researches one endpoint
+- GIVEN multiple endpoints need quota research during a triggered recalc
+- WHEN quota research is run with a specific endpoint id or provider model id
+- THEN only that endpoint is searched and persisted
+- AND other endpoints are left unchanged for later research
+
 #### Scenario: New model outside our connections does not trigger
 - GIVEN a new `free`/`0-cost` model whose provider has no OmniRoute connection
 - WHEN new-free-model detection runs

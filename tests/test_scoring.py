@@ -37,8 +37,9 @@ def test_probe_uses_dedicated_route_no_cache_and_capability_suites():
     client = ProbeClient()
     result = probe_endpoint(client, provider="p", model="m", capabilities={"tools": False, "vision": True})
 
-    assert client.calls[0][0] == "/v1/providers/p/chat/completions"
+    assert client.calls[0][0] == "/v1/chat/completions"
     assert client.calls[0][1]["model"] == "m"
+    assert client.calls[0][1]["max_tokens"] == 2
     assert client.calls[0][2]["X-OmniRoute-No-Cache"] == "true"
     assert result.suites == ("basic_text", "vision")
 
@@ -68,8 +69,25 @@ def test_probe_error_table(status_code, expected):
 
 
 @pytest.mark.spec("probe-runner::Non-200 or empty content")
-@pytest.mark.parametrize("client", [ProbeClient(status_code=500), ProbeClient(content="")])
+@pytest.mark.parametrize(
+    "client",
+    [
+        ProbeClient(status_code=500),
+        ProbeClient(content=""),
+    ],
+)
 def test_probe_endpoint_fails_on_non_200_or_empty_content(client):
+    result = probe_endpoint(client, provider="p", model="m", capabilities={})
+
+    assert result.passed is False
+
+
+@pytest.mark.spec("probe-runner::Free-resource denial content fails probe")
+def test_probe_endpoint_fails_on_free_resource_denial_content():
+    client = ProbeClient(
+        content="Sorry, to prevent abuse of free resources, accounts that have not been recharged can only try 10 times."
+    )
+
     result = probe_endpoint(client, provider="p", model="m", capabilities={})
 
     assert result.passed is False

@@ -46,9 +46,15 @@ class FakeResponse:
         self.status_code = status_code
         self._payload = payload or {}
         self.headers = headers or {}
+        self.text = "data: ok"
 
     def json(self):
         return self._payload
+
+
+class TextResponse(FakeResponse):
+    def json(self):
+        raise ValueError("not json")
 
 
 @pytest.mark.spec("data-model::Fresh install")
@@ -214,6 +220,18 @@ def test_omniroute_client_post_preserves_call_site_headers_with_management_heade
     assert headers["Authorization"] == "Bearer manage-key"
     assert headers["Idempotency-Key"] == "probe:model-a"
     assert headers["X-Request-Id"]
+
+
+@pytest.mark.spec("omniroute-client::POST returns text content for non-JSON success")
+def test_omniroute_client_post_returns_text_content_for_non_json_success():
+    transport = FakeTransport([TextResponse(200, headers={"content-type": "text/event-stream"})])
+    client = OmniRouteClient(base_url="https://omniroute.test/api", transport=transport)
+
+    response = client.post("/v1/chat/completions", {"model": "model-a"})
+
+    assert response["status_code"] == 200
+    assert response["content"] == "data: ok"
+    assert response["headers"]["content-type"] == "text/event-stream"
 
 
 @pytest.mark.spec("combo-applier::Apply writes existing combos through management API bridge")

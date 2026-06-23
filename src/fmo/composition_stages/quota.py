@@ -19,6 +19,7 @@ from .discovery import _detect_free_model_changes
 def _quota_research_stage(dependencies: StageDependencies, context: PipelineContext) -> StageResult:
     if dependencies.omniroute_client is None:
         return StageResult(status="external_dependency_failed", reason="omniroute_client_required")
+    endpoint_filter = context.config.get("endpoint")
     with context.repository.database.transaction() as transaction:
         changes = _detect_free_model_changes(transaction, dependencies.omniroute_client)
         if not changes.triggered:
@@ -31,8 +32,14 @@ def _quota_research_stage(dependencies: StageDependencies, context: PipelineCont
             JOIN provider_accounts pa ON pa.id = pe.provider_account_id
             JOIN providers p ON p.id = pa.provider_id
             WHERE pe.canonical_model_id IS NOT NULL
+              AND (
+                %(endpoint_filter)s IS NULL
+                OR pe.id::text = %(endpoint_filter)s
+                OR pe.provider_model_id = %(endpoint_filter)s
+              )
             ORDER BY pe.provider_model_id
-            """
+            """,
+            {"endpoint_filter": endpoint_filter},
         ).fetchall()
     quota_limit_hints = _quota_limit_hints(dependencies.omniroute_client)
     written = 0

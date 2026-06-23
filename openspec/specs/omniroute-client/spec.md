@@ -41,7 +41,9 @@ caller supplies an idempotency key the client SHALL send it as an
 `Idempotency-Key` header on the POST while keeping a per-attempt `X-Request-Id`;
 POST SHALL remain non-retriable. POST/PUT callers MAY supply extra request
 headers; the client SHALL preserve those headers while still adding management
-auth, idempotency, and request-id headers.
+auth, idempotency, and request-id headers. A successful non-JSON response SHALL
+be returned as text content with its HTTP status and response headers so
+streaming-compatible endpoints can still be probed.
 
 #### Scenario: 429 with Retry-After
 - GIVEN a GET returns `429` with a valid positive `Retry-After` header
@@ -87,6 +89,11 @@ auth, idempotency, and request-id headers.
 - THEN the call-site header is sent
 - AND the management auth, `Idempotency-Key`, and `X-Request-Id` headers are
   still sent
+
+#### Scenario: POST returns text content for non-JSON success
+- GIVEN a POST succeeds with a non-JSON streaming/text response
+- WHEN the shared client handles the response
+- THEN it returns the HTTP status, response text content, and response headers
 
 ### Requirement: Safe URL construction
 
