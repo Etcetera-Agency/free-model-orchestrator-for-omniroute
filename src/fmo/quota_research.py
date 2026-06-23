@@ -2,6 +2,7 @@ import hashlib
 import re
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -15,6 +16,7 @@ VALID_WINDOWS = {"minute", "hour", "day", "month"}
 # capacity; missing sibling evidence must stay inactive.
 NOAUTH_QUOTA_ALIASES = {"opencode": "opencode-zen"}
 NOAUTH_CALIBRATION_ACTION = "place_first_in_combo_and_observe_omniroute_token_usage"
+QUOTA_INSPECTOR_PROMPT = Path(__file__).resolve().parents[2] / "reference" / "prompts" / "quota-research.md"
 
 
 @dataclass(frozen=True)
@@ -92,7 +94,15 @@ class QuotaClaimResponse(BaseModel):
 
 
 def build_quota_query(provider: str, model_id: str, *, today: datetime) -> str:
-    return f"{provider} free tier quota for {model_id} today {today:%Y-%m-%d}"
+    return (
+        f"What is the free-tier usage quota for {provider} model {model_id}, current as of {today:%Y-%m-%d}? "
+        "Give the cumulative daily and monthly limits, both in requests and in tokens: requests per day, "
+        "requests per month, tokens per day, tokens per month. Ignore per-minute/per-second rate limits "
+        "(RPM/TPM). State whether hitting the quota is a hard stop (requests blocked) or a soft throttle. "
+        "Search broadly: official documentation plus community sources such as developer forums, Reddit, "
+        "GitHub issues, Discord, and Stack Overflow. Prefer the official documentation URL as evidence, "
+        "but include community source URLs when they report current real-world limits."
+    )
 
 
 def run_quota_search(client, *, provider: str, model_id: str, query: str) -> SearchSnapshot:  # noqa: ARG001 - provider/model_id kept for call-site symmetry
@@ -125,7 +135,7 @@ def research_quota_rule(
     query = build_quota_query(provider, model_id, today=today)
     try:
         snapshot = run_quota_search(client, provider=provider, model_id=model_id, query=query)
-        claims = _extract_claims(snapshot, instructor_call=instructor_call)
+        claims = _extract_claims(snapshot, instructor_call=instructor_call, previous_limit=previous_limit)
         rule = activate_summary_rule(
             claims[0],
             summary_confidence_cap=summary_confidence_cap,
@@ -256,10 +266,20 @@ def _complete_calibration(evidence: NoAuthCalibrationEvidence) -> bool:
     )
 
 
-def _extract_claims(snapshot: SearchSnapshot, *, instructor_call) -> tuple[QuotaClaim, ...]:
+def _extract_claims(
+    snapshot: SearchSnapshot, *, instructor_call, previous_limit: float | None = None
+) -> tuple[QuotaClaim, ...]:
     if instructor_call is not None:
         try:
-            return (_capacity_claim(run_quota_inspector(instructor_call, _quota_inspector_prompt(snapshot))),)
+            return (
+                _capacity_claim(
+                    run_quota_inspector(
+                        instructor_call,
+                        _quota_inspector_prompt(snapshot),
+                        previous_limit=previous_limit,
+                    )
+                ),
+            )
         except QuotaResearchError:
             raise
         except Exception:
@@ -275,6 +295,14 @@ def _quota_inspector_prompt(snapshot: SearchSnapshot) -> str:
             *snapshot.evidence_urls,
         ]
     )
+
+
+def resolve_quota_range(low: float, high: float, *, previous_limit: float | None) -> float:
+    if low > high:
+        raise ValueError("quota range low must be <= high")
+    if previous_limit is None:
+        return low
+    return min(max(previous_limit, low), high)
 
 
 def extract_summary_claim(snapshot: SearchSnapshot) -> QuotaClaim:
@@ -300,13 +328,24 @@ def extract_summary_claims(snapshot: SearchSnapshot) -> tuple[QuotaClaim, ...]:
     return claims
 
 
-def run_quota_inspector(call_instructor, prompt: str) -> QuotaClaim:
+def run_quota_inspector(call_instructor, prompt: str, *, previous_limit: float | None = None) -> QuotaClaim:
     site = LlmSiteConfig(
         name="quota-research-inspector",
-        model="omniroute/free-quota-inspector",
+        prompt_path=QUOTA_INSPECTOR_PROMPT,
         max_prompt_chars=7000,
     )
-    response = _complete_quota_claim(call_instructor, site=site, prompt=prompt)
+    response = _complete_quota_claim(
+        call_instructor,
+        site=site,
+        context={
+            "provider": "unknown",
+            "provider_model_id": "unknown",
+            "source_type": "search_summary",
+            "source_url": "",
+            "text": prompt,
+            "previous_limit": "unknown" if previous_limit is None else str(previous_limit),
+        },
+    )
     return validate_claim(
         QuotaClaim(
             metric=response.metric,
@@ -318,13 +357,13 @@ def run_quota_inspector(call_instructor, prompt: str) -> QuotaClaim:
     )
 
 
-def _complete_quota_claim(call_instructor, *, site: LlmSiteConfig, prompt: str) -> QuotaClaimResponse:
+def _complete_quota_claim(call_instructor, *, site: LlmSiteConfig, context: dict[str, object]) -> QuotaClaimResponse:
     if hasattr(call_instructor, "complete"):
-        return call_instructor.complete(site=site, context={"prompt": prompt}, response_model=QuotaClaimResponse)
+        return call_instructor.complete(site=site, context=context, response_model=QuotaClaimResponse)
     return complete_with_adapter(
         call_instructor,
         site=site,
-        context={"prompt": prompt},
+        context=context,
         response_model=QuotaClaimResponse,
     )
 

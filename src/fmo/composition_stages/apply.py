@@ -12,7 +12,7 @@ from fmo.idempotency import hash_parts, utcnow
 from fmo.omniroute import OmniRouteRequestError
 from fmo.pipeline import PipelineContext, StageResult
 from fmo.quota_normalize import remaining_amount
-from fmo.smart_review import ComboReviewResult, run_combo_review
+from fmo.smart_review import ComboReviewResult, build_combo_review_context, run_combo_review
 
 from ._base import StageDependencies
 from ._helpers import _effect_result
@@ -25,7 +25,7 @@ def _diff_stage(dependencies: StageDependencies, context: PipelineContext) -> St
     with context.repository.database.transaction() as transaction:
         plans = transaction.execute(
             """
-            SELECT DISTINCT ON (role_id) role_id, targets
+            SELECT DISTINCT ON (role_id) role_id, targets, constraint_report
             FROM allocation_plans
             ORDER BY role_id, created_at DESC
             """
@@ -33,16 +33,25 @@ def _diff_stage(dependencies: StageDependencies, context: PipelineContext) -> St
         written = 0
         for plan in plans:
             combo_id = f"fmo-{plan['role_id']}"
-            desired = [target["endpoint_id"] for target in plan["targets"]]
+            desired = [_target_combo_step(target) for target in plan["targets"]]
+            desired_endpoint_ids = [_target_endpoint_id(target) for target in plan["targets"]]
             before = current.get(combo_id, [])
+            before_endpoint_ids = [member for member in before if isinstance(member, str)]
+            before_keys = {_combo_member_key(member) for member in before}
             diff = {
                 "combo_id": combo_id,
                 "before": before,
                 "after": desired,
-                "add": [endpoint_id for endpoint_id in desired if endpoint_id not in before],
-                "remove": [endpoint_id for endpoint_id in before if endpoint_id not in desired],
+                "before_endpoint_ids": before_endpoint_ids,
+                "after_endpoint_ids": desired_endpoint_ids,
+                "add": [
+                    endpoint_id
+                    for endpoint_id, step in zip(desired_endpoint_ids, desired, strict=True)
+                    if _combo_member_key(step) not in before_keys
+                ],
+                "remove": [member for member in before_endpoint_ids if member not in desired_endpoint_ids],
             }
-            review = _review_diff(dependencies, diff)
+            review = _review_diff(dependencies, diff, plan=plan, transaction=transaction, run_id=context.run_id)
             context.repository.combo_snapshots.upsert(
                 transaction,
                 role_id=plan["role_id"],
@@ -56,13 +65,30 @@ def _diff_stage(dependencies: StageDependencies, context: PipelineContext) -> St
     return _effect_result("diff", changed=written > 0)
 
 
-def _review_diff(dependencies: StageDependencies, diff: dict[str, Any]) -> ComboReviewResult:
+def _review_diff(
+    dependencies: StageDependencies,
+    diff: dict[str, Any],
+    *,
+    plan: Any | None = None,
+    transaction: Any = None,
+    run_id: Any = None,
+) -> ComboReviewResult:
     if dependencies.config is not None and dependencies.config.llm_smart_review_call_limit == 0:
-        return run_combo_review(lambda _payload: {}, deterministic_combo={}, trigger=False)
+        return run_combo_review(lambda _payload: {}, review_context={}, trigger=False)
     if dependencies.llm_runtime is None:
         return ComboReviewResult(status="failed", valid_diffs=[], rejected=[])
-    deterministic_combo = {str(diff["combo_id"]): list(diff.get("after", []))}
-    return run_combo_review(dependencies.llm_runtime, deterministic_combo=deterministic_combo, trigger=True)
+    targets = list(plan["targets"]) if plan is not None else []
+    review_context = build_combo_review_context(
+        role_id=str(plan["role_id"]) if plan is not None else str(diff["combo_id"]).removeprefix("fmo-"),
+        current_combo=list(diff.get("before", [])),
+        target_combo=list(diff.get("after", [])),
+        deterministic_diff=diff,
+        targets=targets,
+        constraint_report=dict(plan["constraint_report"] or {}) if plan is not None else {},
+        run_id=run_id,
+        transaction=transaction,
+    )
+    return run_combo_review(dependencies.llm_runtime, review_context=review_context, trigger=True)
 
 
 def _review_payload(review: ComboReviewResult) -> dict[str, Any]:
@@ -142,6 +168,8 @@ def _apply_stage(dependencies: StageDependencies, context: PipelineContext) -> S
         if dry_run:
             continue
         expected_hash = applier.state_hash(combo_id)
+        # AICODE-NOTE: desired is already structured OmniRoute model steps;
+        # after_endpoint_ids carries the stable FMO audit/safety keys.
         dependencies.omniroute_client.put(
             f"/api/combos/{combo_id}",
             {"models": desired},
@@ -181,7 +209,7 @@ def _apply_stage(dependencies: StageDependencies, context: PipelineContext) -> S
     )
 
 
-def _persist_applied_snapshot(context: PipelineContext, diff: Any, before: list[str], desired: list[str]) -> None:
+def _persist_applied_snapshot(context: PipelineContext, diff: Any, before: list[Any], desired: list[Any]) -> None:
     with context.repository.database.transaction() as transaction:
         context.repository.combo_snapshots.upsert(
             transaction,
@@ -196,9 +224,9 @@ def _persist_applied_snapshot(context: PipelineContext, diff: Any, before: list[
 
 def _rollback_apply_mutations(
     client: Any,
-    applied: Sequence[tuple[Any, list[str], list[str]]],
+    applied: Sequence[tuple[Any, list[Any], list[Any]]],
     *,
-    failed: tuple[str, list[str]],
+    failed: tuple[str, list[Any]],
 ) -> bool:
     rollback_targets = [(failed[0], failed[1])]
     rollback_targets.extend((diff["omniroute_combo_id"], before) for diff, before, _desired in reversed(applied))
@@ -217,7 +245,7 @@ def _rollback_apply_mutations(
 
 def _delete_applied_snapshots_for_run(
     context: PipelineContext,
-    applied: Sequence[tuple[Any, list[str], list[str]]],
+    applied: Sequence[tuple[Any, list[Any], list[Any]]],
 ) -> None:
     if not applied:
         return
@@ -256,7 +284,7 @@ def _derive_apply_stage_safety(
 def _desired_apply_endpoint_ids(diffs: Sequence[Any]) -> list[str]:
     endpoint_ids = set()
     for diff in diffs:
-        desired = diff["state_json"].get("after")
+        desired = diff["state_json"].get("after_endpoint_ids")
         if not isinstance(desired, list):
             continue
         endpoint_ids.update(str(endpoint_id) for endpoint_id in desired)
@@ -354,13 +382,45 @@ def _smoke_combo(client: Any, combo_id: str) -> bool:
     return bool(str(message.get("content") or "").strip())
 
 
-def _read_current_combos(client: Any | None) -> dict[str, list[str]]:
+def _read_current_combos(client: Any | None) -> dict[str, list[Any]]:
     if client is None or not hasattr(client, "get"):
         return {}
     payload = client.get("/api/combos")
     combos = payload.get("combos", []) if isinstance(payload, dict) else []
     return {
-        str(combo["id"]): [str(model) for model in combo.get("models", [])]
+        str(combo["id"]): [_normalize_combo_member(model) for model in combo.get("models", [])]
         for combo in combos
         if isinstance(combo, dict) and str(combo.get("id", "")).startswith("fmo-")
     }
+
+
+def _target_combo_step(target: dict[str, Any]) -> dict[str, Any]:
+    step = target["combo_step"]
+    if not isinstance(step, dict):
+        raise ValueError("allocation target missing structured combo_step")
+    return {key: value for key, value in step.items() if value is not None}
+
+
+def _target_endpoint_id(target: dict[str, Any]) -> str:
+    endpoint_id = target["endpoint_id"]
+    if not endpoint_id:
+        raise ValueError("allocation target missing endpoint_id")
+    return str(endpoint_id)
+
+
+def _normalize_combo_member(member: Any) -> Any:
+    if not isinstance(member, dict):
+        return str(member)
+    normalized = {str(key): value for key, value in member.items() if value is not None}
+    if normalized.get("kind") == "model" and "weight" not in normalized:
+        normalized["weight"] = 0
+    return normalized
+
+
+def _combo_member_key(member: Any) -> str:
+    if not isinstance(member, dict):
+        return str(member)
+    provider = member.get("providerId", "")
+    connection = member.get("connectionId", "")
+    model = member.get("model", "")
+    return f"{provider}:{connection}:{model}"

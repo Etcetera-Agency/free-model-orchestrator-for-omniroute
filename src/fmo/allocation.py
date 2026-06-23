@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 HEAVY_ROLES = {"research_scout", "health_reasoning", "cross_domain_orchestrator"}
 
@@ -21,6 +21,7 @@ class Combo:
     role_id: str
     endpoints: list[str]
     strategy: str
+    diagnostics: dict = field(default_factory=dict)
     weights: None = None
 
 
@@ -67,15 +68,39 @@ def build_priority_combo(
 ) -> Combo:
     ordered = []
     used_pools = set()
+    used_canonical_models = set()
     scored_endpoints = [endpoint for endpoint in endpoints if not endpoint.get("is_router")]
-    for endpoint in sorted(scored_endpoints, key=lambda item: item["score"]):
+    ordered_scored = sorted(scored_endpoints, key=lambda item: item["score"])
+    duplicate_skips = []
+    blocked_by_quota = []
+    for index, endpoint in enumerate(ordered_scored):
         pool = endpoint.get("pool")
         if role_id in HEAVY_ROLES and pool is not None and pool in used_pools:
             continue
         already_reserved = endpoint["id"] == reserved_endpoint_id
         if pool is not None and not already_reserved and pool_usage.get(pool, 0) + demand > endpoint["capacity"]:
+            blocked_by_quota.append(_endpoint_identity(endpoint, reason="quota_pool_capacity"))
             continue
+        canonical_model_id = endpoint.get("canonical_model_id")
+        if canonical_model_id and canonical_model_id in used_canonical_models:
+            alternatives = ordered_scored[index + 1 :]
+            if any(
+                _candidate_is_available(
+                    candidate,
+                    role_id=role_id,
+                    demand=demand,
+                    pool_usage=pool_usage,
+                    reserved_endpoint_id=reserved_endpoint_id,
+                    used_pools=used_pools,
+                    used_canonical_models=used_canonical_models,
+                )
+                for candidate in alternatives
+            ):
+                duplicate_skips.append(_endpoint_identity(endpoint, reason="duplicate_canonical_model"))
+                continue
         ordered.append(endpoint["id"])
+        if canonical_model_id:
+            used_canonical_models.add(canonical_model_id)
         if pool is not None:
             used_pools.add(pool)
             if not already_reserved:
@@ -89,7 +114,67 @@ def build_priority_combo(
     for endpoint in routers:
         if _router_tail_eligible(endpoint, required_capabilities=required, minimum_context=minimum_context):
             ordered.append(endpoint["id"])
-    return Combo(role_id=role_id, endpoints=ordered, strategy="priority")
+    accepted = [endpoint for endpoint in endpoints if endpoint["id"] in ordered]
+    return Combo(
+        role_id=role_id,
+        endpoints=ordered,
+        strategy="priority",
+        diagnostics={
+            "duplicate_canonical_model_skips": duplicate_skips,
+            "quota_pool_rejections": blocked_by_quota,
+            "canonical_family_concentration": _family_concentration(accepted),
+        },
+    )
+
+
+def _candidate_is_available(
+    endpoint: dict,
+    *,
+    role_id: str,
+    demand: float,
+    pool_usage: dict[str, float],
+    reserved_endpoint_id: str | None,
+    used_pools: set,
+    used_canonical_models: set,
+) -> bool:
+    if endpoint.get("is_router"):
+        return False
+    pool = endpoint.get("pool")
+    if role_id in HEAVY_ROLES and pool is not None and pool in used_pools:
+        return False
+    if endpoint.get("canonical_model_id") in used_canonical_models:
+        return False
+    if pool is None or endpoint["id"] == reserved_endpoint_id:
+        return True
+    return pool_usage.get(pool, 0) + demand <= endpoint["capacity"]
+
+
+def _endpoint_identity(endpoint: dict, *, reason: str) -> dict:
+    return {
+        "endpoint_id": endpoint["id"],
+        "canonical_model_id": endpoint.get("canonical_model_id"),
+        "canonical_family": endpoint.get("canonical_family"),
+        "quota_pool_id": endpoint.get("pool"),
+        "reason": reason,
+    }
+
+
+def _family_concentration(endpoints: list[dict]) -> dict:
+    counts: dict[str, int] = {}
+    for endpoint in endpoints:
+        family = endpoint.get("canonical_family")
+        if family:
+            counts[str(family)] = counts.get(str(family), 0) + 1
+    total = sum(counts.values())
+    if not total:
+        return {"total": 0, "families": {}, "dominant_family": None, "dominant_share": 0.0}
+    dominant_family, dominant_count = max(counts.items(), key=lambda item: item[1])
+    return {
+        "total": total,
+        "families": counts,
+        "dominant_family": dominant_family,
+        "dominant_share": dominant_count / total,
+    }
 
 
 def _router_tail_eligible(endpoint: dict, *, required_capabilities: set[str], minimum_context: int) -> bool:

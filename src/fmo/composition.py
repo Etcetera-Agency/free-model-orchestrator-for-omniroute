@@ -126,7 +126,7 @@ def compose_runtime(
     selected_adapters = adapters or StageAdapters()
     repository = Repository(Database(config.database_url))
     client = OmniRouteClient(base_url=config.omniroute_url, api_key=config.omniroute_api_key)
-    llm_runtime = build_production_llm_runtime(config, repository, adapters=selected_adapters)
+    llm_runtime = build_production_llm_runtime(config, repository, live_quota_client=client, adapters=selected_adapters)
     dependencies = StageDependencies(
         repository=repository,
         omniroute_client=client,
@@ -150,6 +150,7 @@ def build_production_llm_runtime(
     config: StartupConfig,
     repository: Repository,
     *,
+    live_quota_client=None,
     adapters: StageAdapters | None = None,
 ) -> SharedInstructorRuntime:
     selected_adapters = adapters or StageAdapters()
@@ -159,7 +160,7 @@ def build_production_llm_runtime(
     )
     return build_instructor_runtime(
         provider=provider,
-        model_resolver=lambda: select_llm_model(repository, config),
+        model_resolver=lambda: select_llm_model(repository, config, live_quota_client),
         instructor_from_openai=selected_adapters.instructor_from_openai,
         openai_client_factory=selected_adapters.openai_client_factory,
     )

@@ -47,11 +47,17 @@ matched to the role's cognitive load instead of an arbitrary seed.
 - Extend `inventory_diff` with a **per-unit content-hash store**: only units whose
   hash changed are re-assessed; a role's anchor is re-aggregated only when one of
   its units' verdicts changed, not on every consumer-set diff.
-- Bootstrap a **default grid of reusable combos** spanning the registered text/chat
-  AA range (`axis × tier`, plus a cheap auxiliary cell). **Every combo is filled from
-  the grid** — main roles snap by Inspector anchor; the 13 existing `fmo-*` combos
-  reconcile in; auxiliary combos snap to the cheap cell with no Inspector call. A
-  unique combo is minted only for a role that fits no cell.
+- Bootstrap a **default grid of reusable combos** over the registered text/chat pool,
+  keyed by the full profile `(axis, tier, required_capabilities, context_class)` —
+  capability (vision/tool_calling/structured) and context window are **dimensions of
+  the cell**, gated as hard filters before the tier orders members (reusing
+  `scoring.py` capabilities + `_context_window_eligibility`). The grid is
+  **demand-driven** (one combo per profile tuple real roles exhibit, not the cartesian
+  product). **Every role is filled from the grid** — main roles snap by Inspector
+  anchor; the 13 existing `fmo-*` combos reconcile in; auxiliary roles snap to the
+  cheapest combo for their profile with no Inspector call. A unique combo is minted
+  only for a tuple seen once. `minimum_context_window` = `max(`static requirement,
+  demand-forecast `input_tokens × headroom)`.
 - Fill `InspectorForecast.model_choice` with the resolved `(axis, tier, anchor)`.
 - Advisory failure path: if the intelligence Inspector is unavailable, fall back
   to the current anchor-from-seed behaviour without blocking the demand forecast.

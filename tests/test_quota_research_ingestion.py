@@ -43,6 +43,18 @@ class _SearchTransport:
         raise AssertionError(f"unexpected search request: {path}")
 
 
+class _QuotaInspector:
+    def __init__(self, payload):
+        self.payload = payload
+        self.sites = []
+
+    def complete(self, *, site, context, response_model):
+        del context
+        self.sites.append(site)
+        assert site.model is None
+        return response_model(**self.payload)
+
+
 def _snapshot(answer_text: str) -> SearchSnapshot:
     return SearchSnapshot(
         query="quota query",
@@ -139,6 +151,15 @@ def test_summary_request_rate_only_does_not_activate_capacity_rule():
 def test_inspector_token_claim_is_carried_through_to_active_rule():
     transport = _SearchTransport()
     client = OmniRouteClient(base_url="https://omniroute.test", api_key="search-key", transport=transport)
+    inspector = _QuotaInspector(
+        {
+            "metric": "tokens",
+            "amount": 1_000_000,
+            "window": "month",
+            "evidence": ["inspector fixture"],
+            "hard_stop": True,
+        }
+    )
 
     result = research_quota_rule(
         client,
@@ -146,13 +167,7 @@ def test_inspector_token_claim_is_carried_through_to_active_rule():
         model_id="kilo/free-model",
         today=datetime(2026, 6, 18, tzinfo=UTC),
         summary_confidence_cap=0.7,
-        instructor_call=lambda _payload: {
-            "metric": "tokens",
-            "amount": 1_000_000,
-            "window": "month",
-            "evidence": ["inspector fixture"],
-            "hard_stop": True,
-        },
+        instructor_call=inspector,
     )
 
     assert result.rule is not None
@@ -167,6 +182,15 @@ def test_inspector_token_claim_is_carried_through_to_active_rule():
 def test_inspector_request_rate_claim_does_not_activate_capacity_rule():
     transport = _SearchTransport()
     client = OmniRouteClient(base_url="https://omniroute.test", api_key="search-key", transport=transport)
+    inspector = _QuotaInspector(
+        {
+            "metric": "requests",
+            "amount": 10,
+            "window": "minute",
+            "evidence": ["inspector fixture"],
+            "hard_stop": True,
+        }
+    )
 
     result = research_quota_rule(
         client,
@@ -174,13 +198,7 @@ def test_inspector_request_rate_claim_does_not_activate_capacity_rule():
         model_id="kilo/free-model",
         today=datetime(2026, 6, 18, tzinfo=UTC),
         summary_confidence_cap=0.7,
-        instructor_call=lambda _payload: {
-            "metric": "requests",
-            "amount": 10,
-            "window": "minute",
-            "evidence": ["inspector fixture"],
-            "hard_stop": True,
-        },
+        instructor_call=inspector,
     )
 
     assert result.rule is None

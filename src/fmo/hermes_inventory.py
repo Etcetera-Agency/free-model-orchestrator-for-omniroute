@@ -9,7 +9,13 @@ import httpx
 import yaml
 from pydantic import BaseModel
 
+from fmo.forecast import quality_band_for_demand
+from fmo.idempotency import hash_parts
 from fmo.llm_runtime import LlmSiteConfig, complete_with_adapter
+
+PROMPTS_DIR = Path(__file__).resolve().parents[2] / "reference" / "prompts"
+HERMES_INSPECTOR_PROMPT = PROMPTS_DIR / "hermes-inspector.md"
+HERMES_INTELLIGENCE_INSPECTOR_PROMPT = PROMPTS_DIR / "hermes-intelligence-inspector.md"
 
 
 @dataclass(frozen=True)
@@ -19,6 +25,9 @@ class Consumer:
     consumer: str
     cadence: str
     calls_per_run: float
+    describing_text: str = ""
+    required_capabilities: tuple[str, ...] = ()
+    minimum_context_window: int = 0
 
 
 @dataclass(frozen=True)
@@ -46,6 +55,7 @@ class HermesInventoryError(Exception):
 class InventoryDiff:
     forecast_stale: bool
     run_inspector: bool
+    intelligence_stale_units: tuple[str, ...] = ()
 
     def rebuild_combo(self, *, material_allocation_changed: bool) -> bool:
         return material_allocation_changed
@@ -58,7 +68,7 @@ class InspectorForecast:
     average_input_tokens: float
     average_output_tokens: float
     confidence: str
-    model_choice: None = None
+    model_choice: dict[str, Any] | None = None
     quota_change: None = None
 
 
@@ -68,6 +78,61 @@ class InspectorForecastResponse(BaseModel):
     average_input_tokens: float
     average_output_tokens: float
     confidence: str
+
+
+@dataclass(frozen=True)
+class DescribingUnit:
+    role_id: str
+    consumer_type: str
+    consumer: str
+    unit_key: str
+    text: str
+    content_hash: str
+    required_capabilities: tuple[str, ...] = ()
+    minimum_context_window: int = 0
+
+
+@dataclass(frozen=True)
+class IntelligenceVerdict:
+    capability_axis: str
+    tier: str
+    confidence: str
+    anchor: float
+    content_hash: str
+
+
+@dataclass(frozen=True)
+class RoleQualityAnchor:
+    role_id: str
+    capability_axis: str
+    tier: str
+    anchor: float
+    confidence: str
+    source: str
+    content_hashes: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class ComboGridCell:
+    combo_id: str
+    capability_axis: str
+    tier: str
+    anchor: float
+    required_capabilities: tuple[str, ...] = ()
+    minimum_context_window: int = 0
+    auxiliary: bool = False
+    reusable: bool = True
+
+
+class IntelligenceForecastResponse(BaseModel):
+    capability_axis: str
+    tier: str
+    confidence: str
+
+
+QUALITY_AXES = {"intelligence_index", "coding_index", "agentic_index"}
+QUALITY_TIERS = {"low": 20.0, "medium": 50.0, "high": 80.0}
+ADEQUACY_FLOOR = 20.0
 
 
 def normalize_filesystem_inventory(payload: dict, *, env: dict[str, str]) -> Inventory:
@@ -97,8 +162,17 @@ def inventory_diff(old: Inventory, new: Inventory) -> InventoryDiff:
         (consumer.role_id, consumer.consumer_type, consumer.consumer, consumer.cadence, consumer.calls_per_run)
         for consumer in new.consumers
     }
+    old_intelligence = {describing_unit_key(consumer): describing_unit_hash(consumer) for consumer in old.consumers}
+    new_intelligence = {describing_unit_key(consumer): describing_unit_hash(consumer) for consumer in new.consumers}
+    intelligence_changed = tuple(
+        sorted(key for key, value in new_intelligence.items() if old_intelligence.get(key) != value)
+    )
     changed = old_set != new_set
-    return InventoryDiff(forecast_stale=changed, run_inspector=changed)
+    return InventoryDiff(
+        forecast_stale=changed,
+        run_inspector=changed,
+        intelligence_stale_units=intelligence_changed,
+    )
 
 
 def assemble_inspector_prompt(inventory: Inventory, *, changes: list[str], secrets: dict[str, str]) -> str:
@@ -116,7 +190,7 @@ def assemble_inspector_prompt(inventory: Inventory, *, changes: list[str], secre
 def run_inspector(call_instructor, prompt: str) -> InspectorForecast:
     site = LlmSiteConfig(
         name="hermes-inspector",
-        model="omniroute/free-inspector",
+        prompt_path=HERMES_INSPECTOR_PROMPT,
         max_prompt_chars=6000,
     )
     if hasattr(call_instructor, "complete"):
@@ -137,6 +211,247 @@ def run_inspector(call_instructor, prompt: str) -> InspectorForecast:
         average_output_tokens=payload.average_output_tokens,
         confidence=payload.confidence,
     )
+
+
+def describing_unit_key(consumer: Consumer) -> str:
+    return f"{consumer.role_id}:{consumer.consumer_type}:{consumer.consumer}"
+
+
+def describing_unit_hash(consumer: Consumer) -> str:
+    return hash_parts(consumer.consumer_type, consumer.consumer, consumer.describing_text)
+
+
+def describing_units(inventory: Inventory) -> list[DescribingUnit]:
+    units = []
+    for consumer in inventory.consumers:
+        text = consumer.describing_text.strip()
+        if not text:
+            continue
+        units.append(
+            DescribingUnit(
+                role_id=consumer.role_id,
+                consumer_type=consumer.consumer_type,
+                consumer=consumer.consumer,
+                unit_key=describing_unit_key(consumer),
+                text=text,
+                content_hash=describing_unit_hash(consumer),
+                required_capabilities=tuple(sorted(consumer.required_capabilities)),
+                minimum_context_window=consumer.minimum_context_window,
+            )
+        )
+    return units
+
+
+def assemble_intelligence_prompt(
+    unit: DescribingUnit, *, secrets: dict[str, str], max_prompt_chars: int = 12000
+) -> str:
+    prompt = "\n".join(
+        [
+            "Hermes intelligence anchor request",
+            f"Role: {unit.role_id}",
+            f"Consumer type: {unit.consumer_type}",
+            f"Consumer: {unit.consumer}",
+            f"Required capabilities: {', '.join(unit.required_capabilities) or 'none'}",
+            f"Minimum context window: {unit.minimum_context_window}",
+            "Task description:",
+            unit.text,
+        ]
+    )
+    for secret in secrets.values():
+        prompt = prompt.replace(secret, "[REDACTED]")
+    return prompt[:max_prompt_chars]
+
+
+def run_intelligence_inspector(call_instructor, prompt: str) -> IntelligenceForecastResponse:
+    site = LlmSiteConfig(
+        name="hermes-intelligence-inspector",
+        prompt_path=HERMES_INTELLIGENCE_INSPECTOR_PROMPT,
+        max_prompt_chars=12000,
+        advisory=True,
+    )
+    if hasattr(call_instructor, "complete"):
+        return call_instructor.complete(
+            site=site, context={"prompt": prompt}, response_model=IntelligenceForecastResponse
+        )
+    return complete_with_adapter(
+        call_instructor,
+        site=site,
+        context={"prompt": prompt},
+        response_model=IntelligenceForecastResponse,
+    )
+
+
+def tier_to_anchor(tier: str) -> float:
+    return QUALITY_TIERS.get(tier.lower(), QUALITY_TIERS["medium"])
+
+
+# AICODE-NOTE: Intelligence refresh is content-hash driven; schedule/demand
+# changes may refresh demand forecasts without re-sending unchanged descriptions.
+def role_quality_anchors(
+    inventory: Inventory,
+    call_instructor,
+    *,
+    cache: dict[str, IntelligenceVerdict] | None = None,
+    seed_anchors: dict[str, RoleQualityAnchor] | None = None,
+    adequacy_floor: float = ADEQUACY_FLOOR,
+    secrets: dict[str, str] | None = None,
+) -> dict[str, RoleQualityAnchor]:
+    cache = cache if cache is not None else {}
+    seed_anchors = seed_anchors or {}
+    secrets = secrets or {}
+    units_by_role: dict[str, list[DescribingUnit]] = {}
+    for unit in describing_units(inventory):
+        units_by_role.setdefault(unit.role_id, []).append(unit)
+
+    anchors: dict[str, RoleQualityAnchor] = {}
+    for consumer in inventory.consumers:
+        anchors.setdefault(
+            consumer.role_id,
+            RoleQualityAnchor(
+                role_id=consumer.role_id,
+                capability_axis="intelligence_index",
+                tier="low",
+                anchor=adequacy_floor,
+                confidence="floor",
+                source="adequacy_floor",
+            ),
+        )
+
+    for role_id, units in units_by_role.items():
+        verdicts = []
+        try:
+            for unit in units:
+                cached = cache.get(unit.unit_key)
+                if cached is not None and cached.content_hash == unit.content_hash:
+                    verdicts.append(cached)
+                    continue
+                payload = run_intelligence_inspector(
+                    call_instructor,
+                    assemble_intelligence_prompt(unit, secrets=secrets),
+                )
+                axis = payload.capability_axis if payload.capability_axis in QUALITY_AXES else "intelligence_index"
+                tier = payload.tier.lower() if payload.tier.lower() in QUALITY_TIERS else "medium"
+                verdict = IntelligenceVerdict(
+                    capability_axis=axis,
+                    tier=tier,
+                    confidence=payload.confidence,
+                    anchor=tier_to_anchor(tier),
+                    content_hash=unit.content_hash,
+                )
+                cache[unit.unit_key] = verdict
+                verdicts.append(verdict)
+        except Exception:
+            anchors[role_id] = seed_anchors.get(role_id) or anchors[role_id]
+            continue
+        winner = max(verdicts, key=lambda verdict: verdict.anchor)
+        anchors[role_id] = RoleQualityAnchor(
+            role_id=role_id,
+            capability_axis=winner.capability_axis,
+            tier=winner.tier,
+            anchor=winner.anchor,
+            confidence=winner.confidence,
+            source="intelligence_inspector",
+            content_hashes=tuple(unit.content_hash for unit in units),
+        )
+    return anchors
+
+
+def forecast_with_quality_choice(forecast: InspectorForecast, anchor: RoleQualityAnchor) -> InspectorForecast:
+    return InspectorForecast(
+        role=forecast.role,
+        expected_calls=forecast.expected_calls,
+        average_input_tokens=forecast.average_input_tokens,
+        average_output_tokens=forecast.average_output_tokens,
+        confidence=forecast.confidence,
+        model_choice={
+            "axis": anchor.capability_axis,
+            "tier": anchor.tier,
+            "anchor": anchor.anchor,
+        },
+    )
+
+
+def quality_band_for_anchor(
+    anchor: RoleQualityAnchor,
+    *,
+    candidates: list[dict[str, Any]],
+    protected_requests: float,
+    adequacy_floor: float = ADEQUACY_FLOOR,
+):
+    return quality_band_for_demand(
+        anchor=anchor.anchor,
+        candidates=candidates,
+        protected_requests=protected_requests,
+        adequacy_floor=adequacy_floor,
+    )
+
+
+def select_combo_grid_cell(
+    *,
+    role_id: str,
+    capability_axis: str,
+    tier: str,
+    required_capabilities: set[str],
+    minimum_context_window: int,
+    grid: list[ComboGridCell],
+    auxiliary: bool = False,
+) -> ComboGridCell:
+    candidates = [
+        cell
+        for cell in grid
+        if cell.auxiliary == auxiliary
+        and cell.capability_axis == capability_axis
+        and cell.tier == tier
+        and required_capabilities.issubset(set(cell.required_capabilities))
+        and cell.minimum_context_window >= minimum_context_window
+        and cell.reusable
+    ]
+    if candidates:
+        return sorted(candidates, key=lambda cell: (cell.anchor, cell.combo_id))[0]
+    prefix = "aux" if auxiliary else "role"
+    return ComboGridCell(
+        combo_id=f"fmo-unique-{prefix}-{role_id}",
+        capability_axis=capability_axis,
+        tier=tier,
+        anchor=tier_to_anchor(tier),
+        required_capabilities=tuple(sorted(required_capabilities)),
+        minimum_context_window=minimum_context_window,
+        auxiliary=auxiliary,
+        reusable=False,
+    )
+
+
+def demand_driven_combo_profiles(
+    inventory: Inventory,
+    anchors: dict[str, RoleQualityAnchor],
+) -> set[tuple[str, str, tuple[str, ...], int, bool]]:
+    profiles: set[tuple[str, str, tuple[str, ...], int, bool]] = set()
+    for consumer in inventory.consumers:
+        anchor = anchors.get(consumer.role_id)
+        axis = anchor.capability_axis if anchor is not None else "intelligence_index"
+        tier = anchor.tier if anchor is not None else "low"
+        profiles.add(
+            (
+                axis,
+                tier,
+                tuple(sorted(consumer.required_capabilities)),
+                int(consumer.minimum_context_window),
+                consumer.consumer_type == "auxiliary",
+            )
+        )
+    return profiles
+
+
+def bootstrap_combo_payload(cell: ComboGridCell, *, seed_model: str, provider_id: str) -> dict[str, Any]:
+    return {
+        "name": cell.combo_id,
+        "models": [{"kind": "model", "model": seed_model, "providerId": provider_id, "weight": 0}],
+        "strategy": "priority",
+    }
+
+
+def anchor_after_rebalance_event(anchor: RoleQualityAnchor, *, persona_hash_changed: bool) -> RoleQualityAnchor | None:
+    return None if persona_hash_changed else anchor
 
 
 def _normalize(payload: dict) -> Inventory:
@@ -213,6 +528,7 @@ def parse_cron_jobs(payload: Any, *, demand_by_role: dict[str, float] | None = N
                 consumer=job["id"],
                 cadence=_cron_cadence(job.get("schedule") or {}),
                 calls_per_run=demand_by_role.get(role, BOOTSTRAP_CALLS_PER_RUN),
+                describing_text=str(job.get("prompt") or job.get("description") or ""),
             )
         )
     return consumers
@@ -274,6 +590,7 @@ def parse_profiles(payload: Any, *, demand_by_role: dict[str, float] | None = No
                     consumer=profile["name"],
                     cadence="continuous" if is_service else "manual",
                     calls_per_run=demand_by_role.get(role, BOOTSTRAP_CALLS_PER_RUN),
+                    describing_text=_profile_describing_text(slots.path, slots.auxiliary),
                 )
             )
         consumers.extend(
@@ -313,6 +630,7 @@ def parse_gateway_services(payload: Any, *, demand_by_role: dict[str, float] | N
                 consumer=f"gateway:{name}",
                 cadence="continuous",
                 calls_per_run=demand_by_role.get(role, BOOTSTRAP_CALLS_PER_RUN),
+                describing_text=str(platform.get("description") or platform.get("prompt") or ""),
             )
         )
         auxiliary = {**gateway_auxiliary, **_auxiliary_mapping(platform.get("auxiliary"))}
@@ -347,6 +665,8 @@ def _auxiliary_consumers(
                 consumer=f"{owner}:{slot}",
                 cadence="auxiliary",
                 calls_per_run=demand_by_role.get(role, BOOTSTRAP_CALLS_PER_RUN),
+                describing_text=_auxiliary_purpose(slot, config),
+                required_capabilities=_auxiliary_capabilities(slot, config),
             )
         )
     return consumers
@@ -365,6 +685,47 @@ def _resolved_aux_combo(config: Any, main_combo: str | None) -> str | None:
 
 def _auxiliary_mapping(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
+
+
+def _profile_describing_text(path: str, auxiliary: dict[str, Any]) -> str:
+    profile_dir = Path(path)
+    parts = []
+    for filename in ("SOUL.md", "AGENTS.md"):
+        file = profile_dir / filename
+        if file.is_file():
+            parts.append(f"{filename}:\n{file.read_text(encoding='utf-8')}")
+    allowed_tools = auxiliary.get("allowed_tools") if isinstance(auxiliary, dict) else None
+    if allowed_tools:
+        parts.append(f"allowed_tools: {json.dumps(allowed_tools, sort_keys=True)}")
+    return "\n\n".join(parts)
+
+
+def _auxiliary_purpose(slot: str, config: Any) -> str:
+    if not isinstance(config, dict):
+        return ""
+    purpose = config.get("purpose") or config.get("description") or config.get("capability") or slot
+    return str(purpose)
+
+
+def _auxiliary_capabilities(slot: str, config: Any) -> tuple[str, ...]:
+    if not isinstance(config, dict):
+        return ()
+    raw = config.get("required_capabilities") or config.get("capabilities") or config.get("capability")
+    if isinstance(raw, str):
+        values = [raw]
+    elif isinstance(raw, list | tuple | set):
+        values = [str(item) for item in raw]
+    else:
+        values = []
+    lowered = {value.lower() for value in values}
+    slot_name = slot.lower()
+    if "vision" in lowered or "vision" in slot_name or "image" in slot_name:
+        lowered.add("vision")
+    if "tool_calling" in lowered or "tools" in slot_name or "mcp" in slot_name or "skills" in slot_name:
+        lowered.add("tool_calling")
+    if "structured_output" in lowered or "approval" in slot_name or "structured" in slot_name:
+        lowered.add("structured_output")
+    return tuple(sorted(lowered))
 
 
 def build_hermes_inventory(

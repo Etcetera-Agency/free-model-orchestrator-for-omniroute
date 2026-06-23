@@ -162,6 +162,14 @@ def _seed_quality_bands(transaction: Any, client: Any) -> None:
         # AICODE-NOTE: A live one-member combo is the operator seed signal; a
         # multi-member combo keeps its persisted band to avoid drift per run.
         role_id = combo_id.removeprefix("fmo-")
+        role = transaction.execute(
+            """
+            SELECT minimum_quality_metric, minimum_quality_value
+            FROM roles
+            WHERE id = %(role_id)s
+            """,
+            {"role_id": role_id},
+        ).fetchone()
         seed = transaction.execute(
             """
             SELECT id, canonical_model_id
@@ -172,11 +180,15 @@ def _seed_quality_bands(transaction: Any, client: Any) -> None:
         ).fetchone()
         if seed is None:
             continue
-        metric = "intelligence_index"
+        metric = role["minimum_quality_metric"] if role and role["minimum_quality_metric"] else "intelligence_index"
         metrics = latest_metrics.get(seed["canonical_model_id"])
         if not metrics or metric not in metrics["metrics"]:
             continue
-        anchor = float(metrics["metrics"][metric])
+        anchor = (
+            float(role["minimum_quality_value"])
+            if role and role["minimum_quality_value"] is not None
+            else float(metrics["metrics"][metric])
+        )
         candidates = _quality_band_candidates(transaction, metric)
         protected = _latest_protected_requests(transaction, role_id)
         band = quality_band_for_demand(

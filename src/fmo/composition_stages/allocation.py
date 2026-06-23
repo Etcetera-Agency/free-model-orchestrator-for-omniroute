@@ -91,10 +91,15 @@ def _allocation_stage(_dependencies: StageDependencies, context: PipelineContext
                    rs.role_id, rs.endpoint_id, rs.total_score,
                    COALESCE(pa.quota_pool_id, pe.provider_account_id) AS quota_pool_id,
                    eas.effective_remaining, pe.provider_model_id, pe.capabilities,
-                   pe.effective_context_window, pe.access_status, pe.probe_status
+                   pe.effective_context_window, pe.access_status, pe.probe_status,
+                   p.omniroute_provider_id, pa.id AS provider_account_id,
+                   pa.omniroute_connection_id, cm.id AS canonical_model_id,
+                   cm.canonical_slug, cm.family AS canonical_family
             FROM role_scores rs
             JOIN provider_endpoints pe ON pe.id = rs.endpoint_id
             JOIN provider_accounts pa ON pa.id = pe.provider_account_id
+            JOIN providers p ON p.id = pa.provider_id
+            LEFT JOIN canonical_models cm ON cm.id = pe.canonical_model_id
             JOIN endpoint_access_states eas ON eas.endpoint_id = pe.id
             WHERE rs.eligibility = true
             ORDER BY rs.role_id, rs.endpoint_id, rs.calculated_at DESC
@@ -131,9 +136,18 @@ def _allocation_stage(_dependencies: StageDependencies, context: PipelineContext
                 "basic_probe": row["probe_status"] == "passed",
                 "quota": pool_remaining.get(str(row["quota_pool_id"]), remaining_amount(row["effective_remaining"])),
                 "breaker": "closed",
+                "provider_model_id": str(row["provider_model_id"]),
+                "provider_id": str(row["omniroute_provider_id"]),
+                "connection_id": str(row["omniroute_connection_id"]) if row["omniroute_connection_id"] else None,
+                "provider_account_id": str(row["provider_account_id"]),
+                "quota_pool_id": str(row["quota_pool_id"]),
+                "canonical_model_id": str(row["canonical_model_id"]) if row["canonical_model_id"] else None,
+                "canonical_slug": str(row["canonical_slug"]) if row["canonical_slug"] else None,
+                "canonical_family": str(row["canonical_family"]) if row["canonical_family"] else None,
             }
             for row in score_rows
         ]
+        endpoint_by_id = {endpoint["id"]: endpoint for endpoint in endpoints}
         plan = allocate_globally([role["id"] for role in roles], endpoints, demand)
         written = 0
         for role in roles:
@@ -157,9 +171,12 @@ def _allocation_stage(_dependencies: StageDependencies, context: PipelineContext
                     minimum_context=int(requirements.get("minimum_context_window") or 0),
                 )
                 targets = [
-                    {"endpoint_id": endpoint_id, "priority": index + 1}
+                    _allocation_target(endpoint_by_id[endpoint_id], priority=index + 1)
                     for index, endpoint_id in enumerate(combo.endpoints)
                 ]
+                combo_diagnostics = combo.diagnostics
+            else:
+                combo_diagnostics = {}
             pool_reports = {
                 pool: {
                     "usage": usage,
@@ -182,6 +199,7 @@ def _allocation_stage(_dependencies: StageDependencies, context: PipelineContext
                     "reason": validation.reason,
                     "role_status": validation.role_status,
                     "pool_reports": pool_reports,
+                    "diversity": combo_diagnostics,
                 },
                 input_state_hash=hash_parts(role["id"], str(targets), str(pool_reports)),
             )
@@ -192,6 +210,33 @@ def _allocation_stage(_dependencies: StageDependencies, context: PipelineContext
 def _configured_router_input(model_id: str) -> tuple[str, ...]:
     entry = configured_router_entry(model_id)
     return entry.input if entry is not None else ()
+
+
+def _allocation_target(endpoint: dict, *, priority: int) -> dict:
+    # AICODE-NOTE: Structured member identity is the handoff from allocation to
+    # diff/apply; endpoint_id remains audit key, combo_step is OmniRoute payload.
+    combo_step = {
+        "kind": "model",
+        "model": endpoint["provider_model_id"],
+        "providerId": endpoint["provider_id"],
+        "weight": 0,
+    }
+    if endpoint.get("connection_id"):
+        combo_step["connectionId"] = endpoint["connection_id"]
+    return {
+        "endpoint_id": endpoint["id"],
+        "priority": priority,
+        "combo_step": combo_step,
+        "groups": {
+            "provider_id": endpoint["provider_id"],
+            "provider_account_id": endpoint["provider_account_id"],
+            "quota_pool_id": endpoint["quota_pool_id"],
+            "canonical_model_id": endpoint.get("canonical_model_id"),
+            "canonical_slug": endpoint.get("canonical_slug"),
+            "canonical_family": endpoint.get("canonical_family"),
+        },
+        "score": endpoint["score"],
+    }
 
 
 def _capacity_weight(status: str) -> float:

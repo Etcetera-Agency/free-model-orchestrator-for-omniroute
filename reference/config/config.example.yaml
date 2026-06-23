@@ -67,6 +67,9 @@ llm:
     hermes_inspector:
       prompt_file: prompts/hermes-inspector.md
       model_selection: highest_available_intelligence_index
+    hermes_intelligence_inspector:
+      prompt_file: prompts/hermes-intelligence-inspector.md
+      model_selection: highest_available_intelligence_index
     smart_combo_review:
       prompt_file: prompts/smart-combo-reviewer.md
       model_selection: highest_available_intelligence_index

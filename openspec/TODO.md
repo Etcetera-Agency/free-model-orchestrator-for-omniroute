@@ -2,18 +2,47 @@
 
 ## Deferred follow-up
 
-- (none open)
-
-## Active proposal slices (awaiting TDD implementation)
-
-- `add-intelligence-inspector` — proposed 2026-06-23. Adds a second prompt-only
-  Hermes Inspector that assesses per-unit role intelligence needs, caches
-  content-hash verdicts, maps tier/axis to role quality anchors, and snaps roles
-  to reusable default combo grid cells. Its scenarios are temporarily listed in
-  `tests/spec_coverage_pending.txt` until the slice lands next.
-
+- Server-side default combo grid bootstrap — separate deploy task. Regenerate
+  seed models with the live FMO matcher, back up `GET /api/combos`, then create
+  the default one-seed combos from `docs/combo-grid-bootstrap.md` on OmniRoute.
 ## Resolved
 
+- `update-aa-index-migration-inspector` — archived 2026-06-23. AA migration
+  now renders the external prompt file with deterministic migration context,
+  leaves model selection to the shared resolver, normalizes proposals to typed
+  `threshold_value`, validates operational errors with bounded repair attempts,
+  persists baseline/attempt reports, and revalidates rollout against current
+  repository state before threshold mutation. Full pytest deferred to final
+  all-slice verification by request.
+- `update-smart-combo-review-context` — archived 2026-06-23. Reviewer calls
+  now receive deterministic current/target/diff context plus role, demand,
+  allocation, candidate, quota, diversity, validation, and apply-precondition
+  facts through the external prompt file. Candidate details are bounded and
+  secret-like values are redacted. Reviewer output remains advisory only and
+  does not alter the applied deterministic diff. Full pytest deferred to final
+  all-slice verification by request.
+- `update-combo-member-identity` — archived 2026-06-23. Allocation targets
+  now carry structured OmniRoute model steps, account/quota-pool/canonical
+  identity, and diversity diagnostics; diff/apply persist structured members
+  with endpoint-id audit fields; apply sends structured `PUT /api/combos/{id}`
+  payloads while preserving drift, safety, smoke, and rollback gates. Full
+  pytest deferred to final all-slice verification by request.
+- `update-quota-research-range-resolution` — archived 2026-06-23. Quota
+  research now threads `previous_limit` into the
+  Instructor inspector prompt, documents deterministic range clamping in the
+  prompt template, asks search for cumulative request/token budgets across
+  official and community sources, and keeps worsened-quota safe mode under the
+  deterministic activation gate. Shared Inspector model resolution is finished:
+  every Inspector leaves `LlmSiteConfig.model` unset, uses configured prompt
+  files, requires resolver-selected concrete provider models, fails closed as
+  `llm_model_unavailable` without one, skips stale/exhausted/locked live quota,
+  and no repo text retains fabricated Inspector route ids.
+- `add-intelligence-inspector` — archived 2026-06-23. Hermes now runs a second
+  advisory intelligence Inspector per describing unit, caches verdicts by content
+  hash, maps axis/tier to quality anchors, fills forecast model-choice metadata,
+  persists role quality anchors, and resolves reusable/default combo grid cells
+  deterministically. The concrete live server combo bootstrap remains a deferred
+  deploy task above.
 - `refactor-collapse-stage-helper-aliases` — archived 2026-06-23. Removed the
   slug/hash/quota-math re-export aliases from `composition_stages/_helpers.py`,
   repointed drained stage modules to canonical `idempotency`/`quota_normalize`

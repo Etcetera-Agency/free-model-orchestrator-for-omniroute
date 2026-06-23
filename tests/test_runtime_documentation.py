@@ -11,19 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 # Active proposal slices awaiting TDD implementation. Each entry is dropped from
 # tests/spec_coverage_pending.txt (and here) when its test lands. Slices are
 # listed in openspec/TODO.md and openspec/changes/<id>/.
-EXPECTED_ACTIVE_PENDING = {
-    "hermes-inventory::Each describing unit is assessed individually",
-    "hermes-inventory::Axis and anchor set the band centre, not its edges",
-    "hermes-inventory::Shared combo takes the most demanding unit",
-    "hermes-inventory::Bare webhook role floors without an LLM call",
-    "hermes-inventory::Unchanged unit reuses its cached verdict",
-    "hermes-inventory::Cadence change does not re-run the intelligence Inspector",
-    "hermes-inventory::Changed persona re-assesses only its unit",
-    "hermes-inventory::Main role snaps to a reusable grid combo",
-    "hermes-inventory::Auxiliary combo snaps to the cheap cell without assessment",
-    "hermes-inventory::Special role mints a unique combo",
-    "hermes-inventory::Inspector failure falls back to seed anchor",
-}
+EXPECTED_ACTIVE_PENDING = set()
 
 
 @pytest.mark.spec("runtime-documentation::Active docs state")

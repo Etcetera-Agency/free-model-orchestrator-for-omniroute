@@ -7,9 +7,11 @@ from fmo.hermes_inventory import (
     Inventory,
     assemble_inspector_prompt,
     build_hermes_inventory,
+    forecast_with_quality_choice,
     read_hermes_command_sources,
     read_hermes_home,
     read_hermes_http_sources,
+    role_quality_anchors,
     run_inspector,
 )
 from fmo.idempotency import hash_parts
@@ -40,10 +42,23 @@ def _hermes_inventory_stage(dependencies: StageDependencies, context: PipelineCo
         ],
     )
     forecast = _run_hermes_inspector(dependencies, inventory)
+    quality_anchors = role_quality_anchors(inventory, dependencies.llm_runtime)
     by_role: dict[str, float] = {}
+    requirements_by_role: dict[str, dict] = {}
     for consumer in inventory.consumers:
         by_role[consumer.role_id] = by_role.get(consumer.role_id, 0.0) + float(consumer.calls_per_run)
+        requirements = requirements_by_role.setdefault(
+            consumer.role_id,
+            {"capabilities": [], "minimum_context_window": 0},
+        )
+        requirements["capabilities"] = sorted(set(requirements["capabilities"]) | set(consumer.required_capabilities))
+        requirements["minimum_context_window"] = max(
+            int(requirements["minimum_context_window"]),
+            int(consumer.minimum_context_window),
+        )
     if forecast is not None:
+        if forecast.role in quality_anchors:
+            forecast = forecast_with_quality_choice(forecast, quality_anchors[forecast.role])
         by_role[forecast.role] = max(by_role.get(forecast.role, 0.0), float(forecast.expected_calls))
     with context.repository.database.transaction() as transaction:
         inventory_run = context.repository.role_consumers.start_inventory_run(
@@ -53,6 +68,20 @@ def _hermes_inventory_stage(dependencies: StageDependencies, context: PipelineCo
             source_hash=source_hash,
         )
         for role_id, calls in by_role.items():
+            quality_anchor = quality_anchors.get(role_id)
+            requirements = requirements_by_role.get(role_id, {"capabilities": [], "minimum_context_window": 0})
+            if quality_anchor is not None:
+                requirements = {
+                    **requirements,
+                    "quality_anchor": {
+                        "axis": quality_anchor.capability_axis,
+                        "tier": quality_anchor.tier,
+                        "anchor": quality_anchor.anchor,
+                        "confidence": quality_anchor.confidence,
+                        "source": quality_anchor.source,
+                        "content_hashes": list(quality_anchor.content_hashes),
+                    },
+                }
             existing_role = transaction.execute(
                 "SELECT 1 FROM roles WHERE id = %(role_id)s",
                 {"role_id": role_id},
@@ -60,9 +89,14 @@ def _hermes_inventory_stage(dependencies: StageDependencies, context: PipelineCo
             context.repository.roles.upsert(
                 transaction,
                 role_id=role_id,
-                requirements={"capabilities": []},
+                requirements=requirements,
                 expected_load={"requests": calls},
                 criticality=1,
+                minimum_quality_metric=quality_anchor.capability_axis if quality_anchor is not None else None,
+                minimum_quality_value=quality_anchor.anchor if quality_anchor is not None else None,
+                maximum_quality_metric=quality_anchor.capability_axis if quality_anchor is not None else None,
+                maximum_quality_value=quality_anchor.anchor if quality_anchor is not None else None,
+                quality_gate_index_version="intelligence-inspector-v1" if quality_anchor is not None else None,
             )
             if existing_role is None:
                 transaction.execute(

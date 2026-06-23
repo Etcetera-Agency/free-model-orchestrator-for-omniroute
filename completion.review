@@ -1,5 +1,65 @@
 # Completion Review
 
+- `update-aa-index-migration-inspector` is archived: the migration agent
+  now uses `reference/prompts/aa-index-migration.md` through
+  `LlmSiteConfig.prompt_path`, receives deterministic old/new index context,
+  role/capacity/distribution/percentile facts, and no longer gets selected-model
+  JSON as its prompt. `aa-index analyze` lets the shared runtime resolver own
+  model selection, proposals use typed `threshold_value` fields, validation
+  emits explicit operational error codes, invalid advice enters a bounded repair
+  loop, and rollout revalidates current repository state before inserting
+  threshold versions. Focused verification: AA migration/advisory/runtime/spec
+  coverage tests, ruff, and OpenSpec strict for the change. Code Simplifier
+  prep added explicit validator/context/rollout anchors and kept the
+  machine-used proposal schema to `threshold_value`. Archive merged
+  aa-index-migration and llm-runtime deltas into living specs.
+- `update-smart-combo-review-context` is archived: the diff stage now
+  builds a deterministic reviewer context containing role id, current combo,
+  target combo, minimal diff, role requirements, demand forecast, allocation
+  constraints, bounded candidate registry, quota summary, diversity summary,
+  validation report, and apply-precondition summary. `run_combo_review` renders
+  `reference/prompts/smart-combo-reviewer.md` through `LlmSiteConfig.prompt_path`,
+  redacts secret-like values, and keeps `ComboReviewResponse`/persisted advisory
+  payload stable. Focused verification: advisory/runtime/diff/e2e/spec coverage
+  tests, ruff, and OpenSpec strict for the change. Archive merged the
+  smart-combo-reviewer delta into the living spec.
+- `update-combo-member-identity` is archived: allocation targets now
+  include endpoint id, structured OmniRoute `combo_step`, provider account, quota
+  pool, canonical model, canonical slug/family, and score metadata. Combo
+  construction avoids duplicate canonical models when a safe alternative exists,
+  reports canonical-family concentration, and keeps quota-pool capacity as the
+  hard gate. Diff/apply snapshots now store structured members plus endpoint-id
+  audit fields, and apply sends structured model steps while keeping drift,
+  idempotency, smoke, rollback, and dry-run behavior. Focused verification:
+  allocation/apply/profile/advisory/spec coverage tests, ruff, and OpenSpec
+  strict for the change. Archive merged allocator, combo-applier, and
+  audit-rollback deltas into living specs.
+- `update-quota-research-range-resolution` is ready to archive: quota research
+  now renders the quota inspector prompt from `reference/prompts/quota-research.md`,
+  threads `previous_limit` into that prompt, exposes deterministic range-clamp
+  policy tests, and expands the search query to ask for cumulative request/token
+  budget axes plus hard-stop evidence from official and community sources.
+  Shared Inspector resolution is complete: quota, Hermes forecast, and Hermes
+  intelligence Inspectors leave `LlmSiteConfig.model` unset, render configured
+  prompt files, require a resolver-selected concrete provider model, and fail
+  closed as `llm_model_unavailable` without one. Code Simplifier review kept the
+  deterministic fallback and safe-mode activation unchanged while removing the
+  fabricated Inspector combo fallback from code and specs.
+- `update-quota-research-range-resolution` archived on 2026-06-23 via
+  `npx --yes @fission-ai/openspec@latest archive ... --skip-specs --yes` after
+  manually confirming/merging living spec deltas. Post-archive checks passed:
+  full pytest, OpenSpec `--all --strict`, spec coverage/doc gates, and
+  `git diff --check`. The OpenSpec CLI invocation is now documented as the
+  always-used npx form.
+- `add-intelligence-inspector` is ready to archive: Hermes inventory now carries
+  profile/cron/auxiliary describing text, runs the advisory intelligence
+  Inspector per describing unit, caches verdicts by content hash, maps tier/axis
+  to role quality anchors, persists anchor metadata for role scoring, and exposes
+  deterministic grid profile/snap/bootstrap helpers. Code Simplifier review
+  tightened the cache-hit test setup and added an anchor on the content-hash
+  refresh boundary. Static gates also surfaced a stale quota-summary
+  `previous_limit` signature and a missing `timedelta` test import; the minimal
+  fixes restored safe-mode derivation and static lint.
 - `refactor-unify-shared-helpers` is archived: row helpers remain single-home in
   `persistence/_base.py`, timestamp/slug/hash/idempotency-key helpers now live
   in `idempotency.py`, quota payload math lives in `quota_normalize.py`, and the

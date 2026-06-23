@@ -21,6 +21,8 @@ from fmo.quota_research import (
     QuotaClaim,
     activate_summary_rule,
     build_quota_query,
+    research_quota_rule,
+    resolve_quota_range,
     run_quota_search,
     validate_claim,
 )
@@ -38,6 +40,15 @@ class SearchClient:
         }
 
 
+class InspectorSearchClient(SearchClient):
+    def post(self, path, payload):
+        self.calls.append((path, payload))
+        return {
+            "answer": {"text": "Provider gives between 200 and 1000 requests per day with hard stop."},
+            "results": [{"title": "Docs", "url": "https://provider.example/range"}],
+        }
+
+
 @pytest.mark.spec("quota-research::Quota query")
 def test_research_search_uses_date_aware_query_and_persists_summary():
     client = SearchClient()
@@ -47,8 +58,64 @@ def test_research_search_uses_date_aware_query_and_persists_summary():
     assert "/v1/search" == client.calls[0][0]
     assert client.calls[0][1]["provider"] == "gemini-grounded-search"
     assert "2026" in client.calls[0][1]["query"]
+    assert "requests per day" in client.calls[0][1]["query"]
+    assert "tokens per month" in client.calls[0][1]["query"]
+    assert "community source" in client.calls[0][1]["query"]
     assert snapshot.answer_text == "Provider gives 100 requests per day with hard stop."
     assert snapshot.content_hash
+
+
+@pytest.mark.spec("quota-research::Prior limit inside the range is kept")
+def test_quota_range_keeps_prior_limit_inside_range():
+    assert resolve_quota_range(200, 1000, previous_limit=600) == 600
+
+
+@pytest.mark.spec("quota-research::Range below the prior limit resolves to its upper bound")
+def test_quota_range_below_prior_uses_upper_bound():
+    assert resolve_quota_range(200, 1000, previous_limit=1200) == 1000
+
+
+@pytest.mark.spec("quota-research::Range above the prior limit resolves to its lower bound")
+def test_quota_range_above_prior_uses_lower_bound():
+    assert resolve_quota_range(200, 1000, previous_limit=100) == 200
+
+
+@pytest.mark.spec("quota-research::No prior limit resolves conservatively")
+def test_quota_range_without_prior_uses_lower_bound():
+    assert resolve_quota_range(200, 1000, previous_limit=None) == 200
+
+
+@pytest.mark.spec("quota-research::Prior limit reaches the inspector prompt")
+def test_previous_limit_reaches_quota_inspector_prompt():
+    prompts = []
+
+    class Inspector:
+        def complete(self, *, site, context, response_model):
+            assert site.model is None
+            prompt_template = site.prompt_path.read_text(encoding="utf-8")
+            prompts.append(prompt_template.replace("{{previous_limit}}", context["previous_limit"]))
+            return response_model(
+                metric="requests",
+                amount=200,
+                window="day",
+                evidence=["https://provider.example/range"],
+                hard_stop=True,
+            )
+
+    result = research_quota_rule(
+        InspectorSearchClient(),
+        provider="kilo",
+        model_id="kilo/free-model",
+        today=datetime(2026, 6, 16, tzinfo=UTC),
+        summary_confidence_cap=0.70,
+        instructor_call=Inspector(),
+        previous_limit=600,
+    )
+
+    assert result.rule is not None
+    assert result.rule.safe_mode is True
+    assert "600" in prompts[0]
+    assert "closest to" in prompts[0]
 
 
 @pytest.mark.spec("quota-research::Invalid extracted claim")
