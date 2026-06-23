@@ -1,5 +1,10 @@
 # Completion Review
 
+- `refactor-split-stages-runtime` is archived: probing, telemetry, Hermes
+  inventory, role lifecycle, role scoring, and the role-scoring helper cluster
+  now resolve through dedicated `composition_stages` modules behind the package
+  shim. Code Simplifier review kept wrappers behavior-preserving and left shared
+  helper extraction for the apply/helper slice.
 - `refactor-split-stages-discovery` is archived: `fmo.composition_stages` now
   starts as a package, with discovery/quota/access cluster modules and a shim
   preserving existing composition imports and production adapter wiring. Code

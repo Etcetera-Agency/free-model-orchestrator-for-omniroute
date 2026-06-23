@@ -16,8 +16,6 @@ behavior-preservation oracle for every slice. All add structural requirements to
 the `system-architecture` capability. Implement in order — each depends on the
 package/shim the previous one establishes.
 
-- `refactor-split-stages-runtime` — extract the probing / telemetry / Hermes
-  inventory / role-lifecycle+scoring clusters (carries the largest helper set).
 - `refactor-split-stages-apply` — extract allocation / diff+apply / rollback /
   audit, drain the remaining shared helpers into `_helpers.py`, and delete the
   monolithic `composition_stages.py`.
@@ -34,6 +32,10 @@ slices that own the affected modules rather than tracked as separate scenarios.
 
 ## Resolved
 
+- `refactor-split-stages-runtime` — archived 2026-06-23. Probing, telemetry,
+  Hermes inventory, role lifecycle, role scoring, and the role-scoring helper
+  cluster now resolve through dedicated `composition_stages` modules. Focused
+  role/telemetry/inventory/composition tests and `make check` are green.
 - `refactor-split-stages-discovery` — archived 2026-06-23.
   `fmo.composition_stages` is now a package with discovery, quota, and access
   cluster modules plus a shim preserving existing composition imports and

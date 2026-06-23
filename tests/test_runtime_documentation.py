@@ -10,9 +10,6 @@ ROOT = Path(__file__).resolve().parents[1]
 # tests/spec_coverage_pending.txt (and here) when its test lands. Slices are
 # listed in openspec/TODO.md and openspec/changes/<id>/.
 EXPECTED_ACTIVE_PENDING = {
-    # refactor-split-stages-runtime
-    "system-architecture::Probing, telemetry, inventory, and role stages live in dedicated modules",
-    "system-architecture::Role scoring helpers move with the role stage",
     # refactor-split-stages-apply
     "system-architecture::Allocation, apply, rollback, and audit stages live in dedicated modules",
     "system-architecture::Shared stage helpers live in one helpers module",
@@ -107,3 +104,44 @@ def test_front_composition_stages_live_in_dedicated_modules():
     assert inspect.getmodule(quota._quota_research_stage).__name__.endswith(".quota")
     assert inspect.getmodule(quota._quota_sync_stage).__name__.endswith(".quota")
     assert inspect.getmodule(access._access_classification_stage).__name__.endswith(".access")
+
+
+@pytest.mark.spec("system-architecture::Probing, telemetry, inventory, and role stages live in dedicated modules")
+def test_runtime_composition_stages_live_in_dedicated_modules():
+    stages = importlib.import_module("fmo.composition_stages")
+    adapters = stages._production_stage_adapters()
+    for name in ("probing", "telemetry-sync", "hermes-inventory", "role-lifecycle", "role-scoring"):
+        assert name in adapters
+        assert callable(adapters[name])
+
+    probing = importlib.import_module("fmo.composition_stages.probing")
+    telemetry = importlib.import_module("fmo.composition_stages.telemetry")
+    inventory = importlib.import_module("fmo.composition_stages.inventory")
+    roles = importlib.import_module("fmo.composition_stages.roles")
+
+    assert inspect.getmodule(probing._probing_stage).__name__.endswith(".probing")
+    assert inspect.getmodule(telemetry._telemetry_sync_stage).__name__.endswith(".telemetry")
+    assert inspect.getmodule(inventory._hermes_inventory_stage).__name__.endswith(".inventory")
+    assert inspect.getmodule(roles._role_lifecycle_stage).__name__.endswith(".roles")
+    assert inspect.getmodule(roles._role_scoring_stage).__name__.endswith(".roles")
+
+
+@pytest.mark.spec("system-architecture::Role scoring helpers move with the role stage")
+def test_role_scoring_helpers_live_with_role_stage_module():
+    roles = importlib.import_module("fmo.composition_stages.roles")
+
+    for helper in (
+        "_seed_quality_bands",
+        "_quality_band_candidates",
+        "_latest_aa_metrics_by_model",
+        "_latest_health_by_endpoint",
+        "_latest_remaining_by_pool",
+        "_health_component",
+        "_stability_component",
+        "_latency_component",
+        "_context_window_eligibility",
+        "_quality_gate_eligibility",
+        "_roles_needing_quality_recalibration",
+        "_insert_health_observation",
+    ):
+        assert inspect.getmodule(getattr(roles, helper)).__name__.endswith(".roles")
