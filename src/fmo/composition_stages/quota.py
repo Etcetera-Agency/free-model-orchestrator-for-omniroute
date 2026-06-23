@@ -11,8 +11,8 @@ from fmo.pipeline import PipelineContext, StageResult
 from fmo.quota_manager import QuotaFetchError, fetch_live_quota_snapshot
 from fmo.quota_research import research_quota_rule
 
+from ._base import StageDependencies
 from ._helpers import _effect_result
-from ._legacy import StageDependencies
 from .access import _deactivate_lost_free_models
 from .discovery import _detect_free_model_changes
 

@@ -10,8 +10,9 @@ from fmo.idempotency import utcnow
 from fmo.pipeline import PipelineContext, StageResult
 from fmo.quota_normalize import quota_metric as _quota_metric
 
+from ._base import StageDependencies
 from ._helpers import _effect_result
-from ._legacy import StageDependencies, _capacity_weight
+from .allocation import _capacity_weight
 
 
 def _access_classification_stage(_dependencies: StageDependencies, context: PipelineContext) -> StageResult:

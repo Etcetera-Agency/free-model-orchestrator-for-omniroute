@@ -6,8 +6,8 @@ from fmo.pipeline import PipelineContext, StageResult
 from fmo.probes import probe_endpoint
 from fmo.quota_normalize import remaining_amount
 
+from ._base import StageDependencies
 from ._helpers import _effect_result
-from ._legacy import StageDependencies
 
 _remaining_requests = remaining_amount
 

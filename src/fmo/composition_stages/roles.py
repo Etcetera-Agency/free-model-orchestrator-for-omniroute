@@ -11,8 +11,9 @@ from fmo.quality import evaluate_quality_gate
 from fmo.quota_normalize import remaining_amount as _remaining_amount
 from fmo.scoring import EligibilityDecision, aa_subscore, eligible_for_scoring, latency_score_source, score_endpoint
 
+from ._base import StageDependencies
 from ._helpers import _effect_result
-from ._legacy import StageDependencies, _read_current_combos
+from .apply import _read_current_combos
 
 AA_SCORE_WEIGHTS = {"intelligence_index": 1.0, "coding_index": 0.5, "agentic_index": 0.5}
 AA_SCORE_PERCENTILES = {

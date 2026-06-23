@@ -15,8 +15,8 @@ from fmo.hermes_inventory import (
 from fmo.idempotency import hash_parts as _hash_parts
 from fmo.pipeline import PipelineContext, StageResult
 
+from ._base import StageDependencies
 from ._helpers import _effect_result
-from ._legacy import StageDependencies
 
 
 def _hermes_inventory_stage(dependencies: StageDependencies, context: PipelineContext) -> StageResult:

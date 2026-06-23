@@ -6,17 +6,6 @@
 
 ## Active proposal slices (awaiting TDD implementation)
 
-- Stage-body drain (3 slices) — proposed 2026-06-23. The `refactor-split-stages-*`
-  slices created the per-domain module layout but the stage bodies never moved:
-  every domain module delegates one-liner-style to `composition_stages/_legacy.py`,
-  which still holds ~82% of the package (2255 lines, 75 top-level symbols, all
-  stage bodies). The drain mirrors the original split sequence and tightens the
-  spec from "a module exists" to "the module defines the stage"; behavior-preserving
-  (pytest as oracle), public re-export surface stays identical.
-  - `refactor-drain-stages-apply` — terminal: drains the back-of-pipeline bodies
-    (allocation/apply/rollback/audit), relocates the shared spine (`Stage*`
-    dataclasses + base `_production_stage_adapters`) into `_base.py`, and **deletes
-    `_legacy.py`**. Depends on the other two; runs the full suite as oracle.
 - `refactor-collapse-stage-helper-aliases` — proposed 2026-06-23. Removes the five
   slug/hash/quota-math re-export aliases (`_canonical_slug = canonical_slug`, …)
   left in `composition_stages/_helpers.py` by `refactor-unify-shared-helpers`, and
@@ -26,6 +15,12 @@
 
 ## Resolved
 
+- `refactor-drain-stages-apply` — archived 2026-06-23. Back-of-pipeline stage
+  bodies now live in `allocation.py`, `apply.py`, `rollback.py`, and `audit.py`;
+  shared stage dataclasses/adapter builder live in `_base.py`, cross-cluster
+  helpers live in `_helpers.py`, and `_legacy.py` is deleted. Focused stage/spec
+  docs checks, `make check`, and OpenSpec validation are green; full pytest is
+  deferred to the final all-slice verification pass.
 - `refactor-drain-stages-runtime` — archived 2026-06-23. Middle-of-pipeline
   stage bodies and role-scoring helpers now live in `probing.py`, `telemetry.py`,
   `inventory.py`, and `roles.py`. Focused runtime/spec docs checks,

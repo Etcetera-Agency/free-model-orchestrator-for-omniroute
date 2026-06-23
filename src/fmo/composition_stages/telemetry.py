@@ -4,8 +4,8 @@ from fmo.idempotency import utcnow
 from fmo.pipeline import PipelineContext, StageResult
 from fmo.telemetry import sync_live_telemetry
 
+from ._base import StageDependencies
 from ._helpers import _effect_result
-from ._legacy import StageDependencies
 from .roles import _insert_health_observation
 
 

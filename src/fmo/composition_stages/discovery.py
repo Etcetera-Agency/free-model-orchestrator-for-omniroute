@@ -15,10 +15,16 @@ from fmo.pipeline import PipelineContext, StageResult
 from fmo.registry import RegistryFetchError, persist_free_registry_outcome
 from fmo.scanner import CatalogFetchError, CatalogScanner, scan_live_omniroute_catalogs
 
+from ._base import FreeModelChanges, StageAdapters, StageDependencies
 from ._helpers import _effect_result, _omniroute_instance_id
-from ._legacy import FreeModelChanges, StageAdapters, StageDependencies, _ensure_named_quota_pool
 
 MetadataSync = Callable[..., MetadataSyncResult]
+
+
+def _ensure_named_quota_pool(transaction: Any, provider_id: str, pool_key: str) -> Any:
+    from .quota import _ensure_named_quota_pool as ensure_named_quota_pool
+
+    return ensure_named_quota_pool(transaction, provider_id, pool_key)
 
 
 def _metadata_stage(sync: MetadataSync) -> Callable[[PipelineContext], StageResult]:

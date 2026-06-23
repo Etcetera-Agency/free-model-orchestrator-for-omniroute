@@ -41,19 +41,25 @@ def test_runtime_docs_record_executable_scenario_policy_and_pending_allowlist():
 
 @pytest.mark.spec("system-architecture::Stage domains live in separate modules")
 @pytest.mark.spec("system-architecture::Refactor preserves behavior")
+@pytest.mark.spec("system-architecture::No legacy delegation module remains")
 def test_composition_root_is_thin_and_stage_domains_are_split():
     root = (ROOT / "src" / "fmo" / "composition.py").read_text(encoding="utf-8")
-    stages = (ROOT / "src" / "fmo" / "composition_stages" / "_legacy.py").read_text(encoding="utf-8")
+    stages_dir = ROOT / "src" / "fmo" / "composition_stages"
+    stage_sources = {
+        path.name: path.read_text(encoding="utf-8") for path in stages_dir.glob("*.py") if path.name != "__init__.py"
+    }
     aa_index = (ROOT / "src" / "fmo" / "aa_index_runtime.py").read_text(encoding="utf-8")
     contracts = (ROOT / "src" / "fmo" / "composition_contracts.py").read_text(encoding="utf-8")
 
+    assert "_legacy.py" not in stage_sources
+    assert all("_legacy" not in source for source in stage_sources.values())
     assert root.count("\ndef ") <= 8
     assert "def _apply_stage" not in root
     assert "def _quota_research_stage" not in root
     assert "def _run_aa_index_command" not in root
     assert "class RuntimeCliResult" not in root
-    assert "def _apply_stage" in stages
-    assert "def _quota_research_stage" in stages
+    assert "def _apply_stage" in stage_sources["apply.py"]
+    assert "def _quota_research_stage" in stage_sources["quota.py"]
     assert "def _run_aa_index_command" in aa_index
     assert "class RuntimeCliResult" in contracts
 
@@ -141,7 +147,9 @@ def test_role_scoring_helpers_live_with_role_stage_module():
 @pytest.mark.spec("system-architecture::Allocation, apply, rollback, and audit stages live in dedicated modules")
 def test_back_pipeline_stages_live_in_dedicated_modules():
     root_module = ROOT / "src" / "fmo" / "composition_stages.py"
+    legacy_module = ROOT / "src" / "fmo" / "composition_stages" / "_legacy.py"
     assert not root_module.exists()
+    assert not legacy_module.exists()
 
     stages = importlib.import_module("fmo.composition_stages")
     adapters = stages._production_stage_adapters()
@@ -194,7 +202,11 @@ def test_timestamp_hash_and_quota_helpers_are_centralized():
     idempotency = importlib.import_module("fmo.idempotency")
     quota_normalize = importlib.import_module("fmo.quota_normalize")
     stage_helpers = importlib.import_module("fmo.composition_stages._helpers")
-    legacy_source = (ROOT / "src" / "fmo" / "composition_stages" / "_legacy.py").read_text(encoding="utf-8")
+    stage_source = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in (ROOT / "src" / "fmo" / "composition_stages").glob("*.py")
+        if path.name != "__init__.py"
+    )
     model_registration_source = (ROOT / "src" / "fmo" / "model_registration.py").read_text(encoding="utf-8")
 
     for helper in (
@@ -218,8 +230,8 @@ def test_timestamp_hash_and_quota_helpers_are_centralized():
         r"def _quota_limit\(",
         r"def _remaining_amount\(",
     ):
-        assert re.search(old_definition, legacy_source) is None
-    assert "datetime.now(UTC)" not in legacy_source
+        assert re.search(old_definition, stage_source) is None
+    assert "datetime.now(UTC)" not in stage_source
     assert "def _idempotency_key" not in model_registration_source
 
 
