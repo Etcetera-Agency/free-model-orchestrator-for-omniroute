@@ -1,5 +1,11 @@
 # Completion Review
 
+- `refactor-extract-test-fakes` is archived: the shared composition fake
+  clients/runtimes now live in `tests/_clients.py`, common test helpers live in
+  `tests/_composition_support.py`, composition tests are split by stage domain,
+  and `tests` is importable under both pytest entry points. Code Simplifier
+  review kept the generated split as explicit imports plus a support-module
+  `__all__` instead of star imports.
 - `refactor-split-stages-apply` is archived: demand forecast, allocation,
   diff/apply, rollback, audit, and cross-cluster helper wrappers now resolve
   through dedicated `composition_stages` modules behind the package shim. Code

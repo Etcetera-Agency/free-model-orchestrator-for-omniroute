@@ -168,6 +168,7 @@ Exit codes:
 Run full suite:
 
 ```bash
+.venv/bin/pytest -q
 .venv/bin/python -m pytest -q
 ```
 

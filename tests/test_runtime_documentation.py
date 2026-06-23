@@ -10,10 +10,6 @@ ROOT = Path(__file__).resolve().parents[1]
 # tests/spec_coverage_pending.txt (and here) when its test lands. Slices are
 # listed in openspec/TODO.md and openspec/changes/<id>/.
 EXPECTED_ACTIVE_PENDING = {
-    # refactor-extract-test-fakes
-    "system-architecture::Test fakes live in a shared test-support module",
-    "system-architecture::Composition tests mirror the stage packages",
-    "system-architecture::Test suite runs from both pytest entry points",
     # refactor-unify-shared-helpers
     "system-architecture::Row access helpers are defined once in the persistence base",
     "system-architecture::Timestamp and hashing helpers are centralized",
@@ -184,3 +180,49 @@ def test_shared_stage_helpers_live_in_helpers_module():
         "_omniroute_instance_id",
     ):
         assert inspect.getmodule(getattr(helpers, helper)).__name__.endswith("._helpers")
+
+
+@pytest.mark.spec("system-architecture::Test fakes live in a shared test-support module")
+def test_composition_fakes_live_in_shared_test_support_module():
+    clients = importlib.import_module("tests._clients")
+    old_monolith = ROOT / "tests" / "test_composition.py"
+
+    assert not old_monolith.exists()
+    for fake in (
+        "QuotaSearchClient",
+        "PipelineOpsClient",
+        "PartiallyFailingQuotaSearchClient",
+        "MultiComboOpsClient",
+        "AccountDiscoveryOpsClient",
+        "RecordingLlmRuntime",
+        "FakeOpenAIClient",
+        "FakeInstructorCompletions",
+        "FakeInstructorClient",
+    ):
+        assert inspect.getmodule(getattr(clients, fake)).__name__ == "tests._clients"
+
+
+@pytest.mark.spec("system-architecture::Composition tests mirror the stage packages")
+def test_composition_tests_mirror_stage_package_domains():
+    expected = {
+        "test_composition_discovery.py",
+        "test_composition_quota.py",
+        "test_composition_access.py",
+        "test_composition_runtime.py",
+        "test_composition_apply.py",
+    }
+    test_files = {path.name for path in (ROOT / "tests").glob("test_composition*.py")}
+
+    assert expected.issubset(test_files)
+    assert "test_composition.py" not in test_files
+
+
+@pytest.mark.spec("system-architecture::Test suite runs from both pytest entry points")
+def test_pytest_entry_points_have_shared_import_path():
+    pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+    tests_package = ROOT / "tests" / "__init__.py"
+
+    assert tests_package.exists()
+    assert 'pythonpath = ["src", "."]' in pyproject
+    assert "$(VENV)/pytest -q" in makefile

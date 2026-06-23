@@ -6,11 +6,6 @@
 # Active proposal slices awaiting TDD implementation (see openspec/TODO.md and
 # openspec/changes/<id>/). Each line is dropped when its test lands.
 #
-# refactor-extract-test-fakes
-system-architecture::Test fakes live in a shared test-support module
-system-architecture::Composition tests mirror the stage packages
-system-architecture::Test suite runs from both pytest entry points
-#
 # refactor-unify-shared-helpers
 system-architecture::Row access helpers are defined once in the persistence base
 system-architecture::Timestamp and hashing helpers are centralized

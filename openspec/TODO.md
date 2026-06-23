@@ -16,19 +16,24 @@ behavior-preservation oracle for every slice. All add structural requirements to
 the `system-architecture` capability. Implement in order — each depends on the
 package/shim the previous one establishes.
 
-- `refactor-extract-test-fakes` — move the nine shared fakes into
-  `tests/_clients.py`, split `test_composition.py` (3142 lines) into per-domain
-  files mirroring the stage packages, and fix the `tests` import path so the
-  suite runs under both `pytest` and `python -m pytest`.
 - `refactor-unify-shared-helpers` — deduplicate row helpers, `utcnow`, slug/hash/
   idempotency-key builders, and quota-math helpers into one canonical home each,
   now that the target modules exist.
+
+Final verification after the last active slice: run the full suite once through
+both `.venv/bin/pytest` and `.venv/bin/python -m pytest`.
 
 Type-error triage (66 pyright errors) and the import-path fix are folded into the
 slices that own the affected modules rather than tracked as separate scenarios.
 
 ## Resolved
 
+- `refactor-extract-test-fakes` — archived 2026-06-23. Shared composition fakes
+  now live in `tests/_clients.py`, shared helpers live in
+  `tests/_composition_support.py`, composition coverage is split across
+  per-domain test files, and `tests` is importable from both pytest entry
+  points. Focused split composition/spec docs checks are green under both entry
+  points.
 - `refactor-split-stages-apply` — archived 2026-06-23. Demand forecast,
   allocation, diff/apply, rollback, audit, and cross-cluster stage helpers now
   resolve through dedicated `composition_stages` modules. Focused
