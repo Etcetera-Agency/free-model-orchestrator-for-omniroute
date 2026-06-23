@@ -815,9 +815,10 @@ CREATE TABLE role_consumers (
   role_id text NOT NULL REFERENCES roles(id),
   -- Real Hermes consumer surfaces (the marketing umbrella "routine" = cron +
   -- webhook + api triggers): an interactive agent profile, a cron job, a webhook
-  -- subscription (GitHub event or API trigger), or a long-running service.
+  -- subscription (GitHub event or API trigger), an auxiliary model slot, or a
+  -- long-running service.
   consumer_type text NOT NULL CHECK (
-    consumer_type IN ('agent_profile', 'cron_job', 'webhook', 'service')
+    consumer_type IN ('agent_profile', 'cron_job', 'webhook', 'service', 'auxiliary')
   ),
   consumer_key text NOT NULL,
   consumer_name text,
