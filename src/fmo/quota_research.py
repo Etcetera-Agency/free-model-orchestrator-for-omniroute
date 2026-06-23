@@ -94,6 +94,14 @@ class QuotaClaimResponse(BaseModel):
 
 
 def build_quota_query(provider: str, model_id: str, *, today: datetime) -> str:
+    if model_id == "*":
+        return (
+            f"Free-tier quota topology and limits for provider {provider}, "
+            f"current as of {today:%Y-%m-%d}. "
+            "Say if quota is provider/account-wide, model-group/per-model, or "
+            "RPM-only. Include cumulative requests/day or month, tokens/day or "
+            "month, requests/minute if no cumulative quota, hard stop, URLs."
+        )
     provider_hint = _quota_provider_hint(provider)
     return (
         f"Free-tier quota for model {model_id}"
@@ -139,6 +147,8 @@ def research_quota_rule(
     query = build_quota_query(provider, model_id, today=today)
     try:
         snapshot = run_quota_search(client, provider=provider, model_id=model_id, query=query)
+        if model_id == "*":
+            _ensure_provider_wide_topology(snapshot)
         claims = _extract_claims(snapshot, instructor_call=instructor_call, previous_limit=previous_limit)
         rule = activate_summary_rule(
             claims[0],
@@ -373,10 +383,36 @@ def _complete_quota_claim(call_instructor, *, site: LlmSiteConfig, context: dict
 
 
 def _capacity_claim(claim: QuotaClaim) -> QuotaClaim:
-    claim = validate_claim(claim)
-    if claim.metric == "requests" and claim.window in {"minute", "hour"}:
-        raise QuotaResearchError("quota_research", "reactive_rate_gate")
-    return claim
+    return validate_claim(claim)
+
+
+def _ensure_provider_wide_topology(snapshot: SearchSnapshot) -> None:
+    lowered = snapshot.answer_text.lower()
+    # AICODE-NOTE: Provider/account wildcard rules are only safe after topology
+    # search proves the quota is not model/group-specific.
+    group_markers = (
+        "model group",
+        "model tier",
+        "per model",
+        "model-specific",
+        "different models",
+        "specific models",
+    )
+    provider_markers = (
+        "provider-wide",
+        "account-wide",
+        "shared across all models",
+        "all models",
+        "rpm-only",
+        "requests per minute",
+        "request per minute",
+    )
+    if _has_marker(lowered, group_markers) and not _has_marker(lowered, provider_markers):
+        raise QuotaResearchError("quota_research", "quota_scope_model_group_required")
+
+
+def _has_marker(value: str, markers: tuple[str, ...]) -> bool:
+    return any(marker in value for marker in markers)
 
 
 def validate_claim(claim: QuotaClaim) -> QuotaClaim:
@@ -417,10 +453,6 @@ def _extract_axes(text: str) -> tuple[tuple[str, float, str], ...]:
     for match in pattern.finditer(text):
         metric = "tokens" if match.group("metric").lower().startswith("token") else "requests"
         window = match.group("window").lower()
-        # AICODE-NOTE: sub-day request limits are reactive OmniRoute rate gates;
-        # only cumulative budgets become planning capacity axes.
-        if metric == "requests" and window in {"minute", "hour"}:
-            continue
         axes.append((metric, _parse_amount(match.group("amount")), window))
     if not axes:
         _extract_amount(text)

@@ -15,6 +15,11 @@
   by 716-character quota queries exceeding OmniRoute's 500-character schema
   limit; after deploy, confirm quota rules are written, then clear downstream
   `classify-access` / probe blockers until endpoints become eligible.
+- Add group-pattern quota topology support for providers whose free tier varies
+  by model family/group (for example Antigravity-style pools). Current live fix
+  fails such provider/account answers closed instead of widening them to
+  `model_pattern='*'`; next work should extract stable model patterns, store
+  narrower quota rules, and teach access classification to match those patterns.
 ## Resolved
 
 - `update-aa-index-migration-inspector` — archived 2026-06-23. AA migration

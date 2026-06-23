@@ -6,9 +6,9 @@ demand is natively in requests (calls), so everything is reduced to
 **request-equivalents per day**.
 
 Token budgets are converted with a flat ``tokens_per_request`` factor (default
-2000, configurable). Sub-day windows (minute/hour) are rate gates policed
-reactively by OmniRoute (429 + Retry-After), not planning budgets, so they are
-excluded here.
+2000, configurable). Request rate windows (minute/hour) are converted to a
+conservative request-equivalent daily ceiling; sub-day token windows are not
+used for planning.
 """
 
 from dataclasses import dataclass
@@ -16,8 +16,8 @@ from typing import Any
 
 DEFAULT_TOKENS_PER_REQUEST = 2000
 
-# Only cumulative budgets are planned here; minute/hour are reactive rate gates.
-_BUDGET_WINDOW_DAYS = {"day": 1, "month": 30}
+_REQUEST_WINDOW_MULTIPLIERS = {"minute": 1440, "hour": 24, "day": 1, "month": 1 / 30}
+_TOKEN_WINDOW_DAYS = {"day": 1, "month": 30}
 _VALID_METRICS = {"requests", "tokens"}
 _QUOTA_METRICS = ("requests", "tokens")
 
@@ -70,13 +70,18 @@ def to_requests_per_day(
 ) -> float | None:
     """Convert one quota axis to request-equivalents per day.
 
-    Returns ``None`` for sub-day windows (reactive rate gates, not budgets).
+    Returns ``None`` for sub-day token windows.
     """
     if metric not in _VALID_METRICS:
         raise ValueError(f"invalid quota metric: {metric!r}")
     if tokens_per_request <= 0:
         raise ValueError("tokens_per_request must be positive")
-    window_days = _BUDGET_WINDOW_DAYS.get(window)
+    if metric == "requests":
+        multiplier = _REQUEST_WINDOW_MULTIPLIERS.get(window)
+        if multiplier is None:
+            return None
+        return amount * multiplier
+    window_days = _TOKEN_WINDOW_DAYS.get(window)
     if window_days is None:
         return None
     per_day = amount / window_days
@@ -92,8 +97,8 @@ def binding_capacity(
 ) -> float | None:
     """Capacity in request-equivalents per day, bound by the tightest axis.
 
-    ``axes`` is a list of ``(metric, window, amount)``. Sub-day windows are
-    ignored. Returns ``None`` when no budget axis is known.
+    ``axes`` is a list of ``(metric, window, amount)``. Returns ``None`` when no
+    usable capacity axis is known.
     """
     values = [
         value

@@ -79,6 +79,18 @@ def test_research_search_query_omits_internal_provider_ids_to_stay_under_live_li
     assert len(query) <= 500
 
 
+@pytest.mark.spec("quota-research::Quota query")
+def test_provider_account_quota_query_uses_topology_scope_without_representative_model():
+    query = build_quota_query("antigravity", "*", today=datetime(2026, 6, 16, tzinfo=UTC))
+
+    assert "quota topology" in query
+    assert "provider antigravity" in query
+    assert "model-group/per-model" in query
+    assert "requests/minute" in query
+    assert "model antigravity/" not in query
+    assert len(query) <= 500
+
+
 @pytest.mark.spec("quota-research::Prior limit inside the range is kept")
 def test_quota_range_keeps_prior_limit_inside_range():
     assert resolve_quota_range(200, 1000, previous_limit=600) == 600

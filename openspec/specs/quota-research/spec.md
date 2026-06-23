@@ -24,7 +24,10 @@ that other provider policies may also have changed. OmniRoute `quotaTotal`
 search SHALL still establish hard-stop behaviour for each provider/account
 quota pool. Provider/account recalc SHALL persist provider-wide rules with
 `model_pattern = '*'`; exact endpoint/model rules are reserved for explicit
-endpoint-filtered research.
+endpoint-filtered research. Provider/account search SHALL first establish quota
+topology: provider/account-wide, model-group/per-model, RPM-only, or unknown.
+The system SHALL NOT widen a model-group/per-model quota into a provider/account
+wildcard rule.
 
 #### Scenario: Endpoint absent from OmniRoute registry
 - GIVEN an endpoint with no confirmed quota from any official API or OmniRoute
@@ -50,9 +53,18 @@ endpoint-filtered research.
 - WHEN quota research runs
 - THEN each provider/account quota pool is searched once (the not-stale daily
   skip is overridden)
+- AND the search query asks for quota topology before numeric quota extraction
 - AND the resulting quota rule is provider-wide for that account
 - AND an OmniRoute-known `quotaTotal` is used as the limit while search sets
   hard-stop behaviour
+
+#### Scenario: Model-group topology is not widened to provider wildcard
+- GIVEN provider/account research finds that quota differs by model group or
+  concrete model
+- WHEN quota research evaluates the provider/account result
+- THEN no provider/account wildcard rule is written
+- AND the provider remains fail-closed until group-specific or endpoint-specific
+  research records the narrower rule
 
 #### Scenario: Endpoint filter researches one endpoint
 - GIVEN multiple endpoints need quota research during a triggered recalc
@@ -247,30 +259,30 @@ axis.
 - WHEN the summary claim is extracted
 - THEN both a `requests/day` axis and a `tokens/month` axis are captured
 
-### Requirement: Sub-day request rates are reactive, not budget rules
+### Requirement: Sub-day request rates are quota capacity rules
 
 The system SHALL treat a sub-day request rate (`requests` with window `minute` or
-`hour`) as a reactive rate gate policed by OmniRoute and SHALL NOT activate it as a
-capacity rule. When a sub-day request rate is the only signal, the endpoint SHALL
-remain without a confirmed budget rule. This routing SHALL apply identically to
+`hour`) as usable request capacity, because routing demand is request-count
+based even when token volume is unrestricted. Such a rule SHALL remain marked
+with its original sub-day window; normalization may convert it to a conservative
+daily request ceiling for ranking. This routing SHALL apply identically to
 deterministic-summary claims and to Instructor-inspector claims; otherwise an
 inspector-returned `metric` SHALL be carried through unchanged.
 
-#### Scenario: Requests-per-minute only does not activate
+#### Scenario: Requests-per-minute only activates
 - GIVEN a summary expressing only N requests per minute
 - WHEN extraction runs
-- THEN no capacity rule is activated and the endpoint stays without a confirmed
-  budget rule
+- THEN a `requests/minute` capacity rule is activated
 
 #### Scenario: Inspector token claim carried through
 - GIVEN the Instructor inspector returns a claim with metric `tokens`
 - WHEN the claim is activated
 - THEN the metric is carried through unchanged and capped by `summary_confidence_cap`
 
-#### Scenario: Inspector sub-day request claim routed out
+#### Scenario: Inspector sub-day request claim carried through
 - GIVEN the Instructor inspector returns a `requests` claim with a `minute` window
 - WHEN the claim is processed
-- THEN it is not activated as a capacity rule
+- THEN the `requests/minute` capacity rule is activated
 
 ### Requirement: Per-endpoint research failures degrade, not abort
 

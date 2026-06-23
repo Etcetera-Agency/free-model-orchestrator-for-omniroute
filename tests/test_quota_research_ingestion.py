@@ -124,8 +124,8 @@ def test_summary_extracts_request_and_token_axes_when_both_present():
     ]
 
 
-@pytest.mark.spec("quota-research::Requests-per-minute only does not activate")
-def test_summary_request_rate_only_does_not_activate_capacity_rule():
+@pytest.mark.spec("quota-research::Requests-per-minute only activates rate capacity")
+def test_summary_request_rate_only_activates_rate_capacity_rule():
     transport = _SearchTransport(
         body={
             "answer": {"text": "Free tier allows 10 requests per minute with hard stop."},
@@ -142,9 +142,10 @@ def test_summary_request_rate_only_does_not_activate_capacity_rule():
         summary_confidence_cap=0.7,
     )
 
-    assert result.rule is None
-    assert result.error is not None
-    assert result.error.reason == "missing_capacity_axis"
+    assert result.rule is not None
+    assert result.rule.claim.metric == "requests"
+    assert result.rule.claim.amount == 10
+    assert result.rule.claim.window == "minute"
 
 
 @pytest.mark.spec("quota-research::Inspector token claim carried through")
@@ -178,8 +179,8 @@ def test_inspector_token_claim_is_carried_through_to_active_rule():
     assert _axis_tuples(result.rule.axes) == [("tokens", 1_000_000, "month")]
 
 
-@pytest.mark.spec("quota-research::Inspector sub-day request claim routed out")
-def test_inspector_request_rate_claim_does_not_activate_capacity_rule():
+@pytest.mark.spec("quota-research::Inspector sub-day request claim carried through")
+def test_inspector_request_rate_claim_activates_capacity_rule():
     transport = _SearchTransport()
     client = OmniRouteClient(base_url="https://omniroute.test", api_key="search-key", transport=transport)
     inspector = _QuotaInspector(
@@ -201,9 +202,10 @@ def test_inspector_request_rate_claim_does_not_activate_capacity_rule():
         instructor_call=inspector,
     )
 
-    assert result.rule is None
-    assert result.error is not None
-    assert result.error.reason == "reactive_rate_gate"
+    assert result.rule is not None
+    assert result.rule.claim.metric == "requests"
+    assert result.rule.claim.amount == 10
+    assert result.rule.claim.window == "minute"
 
 
 @pytest.mark.spec("quota-research::Search unavailable")

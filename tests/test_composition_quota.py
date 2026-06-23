@@ -206,10 +206,38 @@ def test_new_reachable_free_model_triggers_provider_account_recalc_and_uses_quot
     result = run_composed_stage_with_dependencies(repository, "quota-research", dependencies)
 
     with repository.database.transaction() as transaction:
-        rule_rows = transaction.execute("SELECT limits FROM quota_rules ORDER BY model_pattern").fetchall()
+        rule_rows = transaction.execute("SELECT model_pattern, limits FROM quota_rules ORDER BY model_pattern").fetchall()
     assert result.exit_code == 0
     assert [call[0] for call in client.calls if call[0] == "/v1/search"] == ["/v1/search"]
+    assert "quota topology" in client.calls[0][1]["query"]
+    assert "provider provider-a" in client.calls[0][1]["query"]
+    assert "free-chat" not in client.calls[0][1]["query"]
+    assert "new-free" not in client.calls[0][1]["query"]
+    assert [row["model_pattern"] for row in rule_rows] == ["*"]
     assert [row["limits"]["requests"] for row in rule_rows] == [50.0]
+
+
+@pytest.mark.spec("quota-research::Model-group topology is not widened to provider wildcard")
+def test_provider_recalc_rejects_model_group_topology_instead_of_widening_to_wildcard(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    seed_endpoint(repository, model_id="new-free")
+    run_composed_stage(repository, "model-matching")
+    now = datetime.now(UTC)
+    seed_free_registry_snapshot(repository, models=[], created_at=now - timedelta(days=1))
+    seed_free_registry_snapshot(repository, models=[("provider-a", "new-free")], created_at=now)
+    client = PipelineOpsClient()
+    client.answer = "Free quota is model-group specific with different limits for specific models."
+    dependencies = StageDependencies(repository=repository, omniroute_client=client)
+
+    result = run_composed_stage_with_dependencies(repository, "quota-research", dependencies)
+
+    with repository.database.transaction() as transaction:
+        rule_count = transaction.execute("SELECT count(*) AS total FROM quota_rules").fetchone()["total"]
+    assert result.exit_code == 4
+    assert result.status == "external_dependency_failed"
+    assert result.stage_results[0]["reason"] == "quota_scope_model_group_required"
+    assert rule_count == 0
 
 
 @pytest.mark.spec("quota-research::Endpoint filter researches one endpoint")

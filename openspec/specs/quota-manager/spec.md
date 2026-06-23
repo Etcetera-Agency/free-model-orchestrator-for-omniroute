@@ -131,10 +131,15 @@ The system SHALL normalize heterogeneous quota axes into request-equivalents per
 - **WHEN** capacity is normalized
 - **THEN** request axes are converted to daily requests and token axes are divided by the configured tokens-per-request factor
 
-#### Scenario: Reactive rate gates excluded from budget capacity
-- **GIVEN** quota axes expressed with minute or hour windows
+#### Scenario: Request rate gates normalize to daily request ceilings
+- **GIVEN** quota axes expressed as requests with minute or hour windows
 - **WHEN** capacity is normalized for planning
-- **THEN** those axes are excluded from the daily budget capacity
+- **THEN** they are converted to conservative request-equivalent daily ceilings
+
+#### Scenario: Sub-day token windows excluded from capacity
+- **GIVEN** quota axes expressed as tokens with minute or hour windows
+- **WHEN** capacity is normalized for planning
+- **THEN** those axes are excluded from capacity
 
 #### Scenario: Binding capacity uses tightest budget axis
 - **GIVEN** multiple daily or monthly quota axes for one endpoint
@@ -179,10 +184,10 @@ not only research.
 - WHEN its capacity is computed
 - THEN the calibration axis is included and converted
 
-#### Scenario: Sub-day request axis excluded
-- GIVEN an endpoint that also carries a `requests/minute` axis
+#### Scenario: Sub-day request axis contributes capacity
+- GIVEN an endpoint that carries only a `requests/minute` axis
 - WHEN its binding capacity is computed
-- THEN the sub-day request axis is excluded
+- THEN the sub-day request axis is converted to request-equivalent daily capacity
 
 ### Requirement: Weekly recalibration of the global tokens-per-request factor
 

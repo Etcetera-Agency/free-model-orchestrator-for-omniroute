@@ -1,5 +1,13 @@
 # Completion Review
 
+- Deploy fix: quota research now treats provider/account search as a topology
+  discovery step before quota activation. Provider-wide or RPM-only answers can
+  still write wildcard rules, but model-group/per-model answers fail closed
+  instead of being widened to `model_pattern='*'`. Requests-per-minute/hour are
+  now usable request capacity and normalize to conservative daily request
+  ceilings, matching providers such as Nvidia that publish RPM without daily or
+  monthly token caps. Code Simplifier review added an anchor at the topology
+  guard and kept group-pattern extraction deferred in OpenSpec TODO.
 - Deploy fix: provider/account quota research filters now cast optional CLI
   filters to text before `IS NULL` checks, matching live Postgres parameter
   typing. Live `research-quotas --provider antigravity` previously failed before

@@ -89,7 +89,7 @@ def _quota_research_stage(dependencies: StageDependencies, context: PipelineCont
         result = research_quota_rule(
             dependencies.omniroute_client,
             provider=endpoint["omniroute_provider_id"],
-            model_id=endpoint["provider_model_id"],
+            model_id=endpoint["rule_model_pattern"],
             today=today,
             summary_confidence_cap=0.70,
             instructor_call=dependencies.llm_runtime,

@@ -36,10 +36,15 @@ def test_custom_tokens_per_request_factor():
     assert to_requests_per_day("tokens", "day", 1000, tokens_per_request=100) == 10
 
 
+@pytest.mark.spec("quota-manager::Request rate gates normalize to daily request ceilings")
+def test_sub_day_request_windows_normalize_to_daily_ceiling():
+    assert to_requests_per_day("requests", "minute", 15) == 21_600
+    assert to_requests_per_day("requests", "hour", 15) == 360
+
+
 @pytest.mark.parametrize("window", ["minute", "hour"])
-@pytest.mark.spec("quota-manager::Reactive rate gates excluded from budget capacity")
-def test_sub_day_windows_are_reactive_not_budget(window):
-    assert to_requests_per_day("requests", window, 15) is None
+@pytest.mark.spec("quota-manager::Sub-day token windows excluded from capacity")
+def test_sub_day_token_windows_are_excluded(window):
     assert to_requests_per_day("tokens", window, 250_000) is None
 
 
@@ -68,15 +73,15 @@ def test_binding_capacity_takes_tightest_axis():
     assert binding_capacity(axes) == 500
 
 
-@pytest.mark.spec("quota-manager::Reactive rate gates excluded from budget capacity")
-def test_binding_capacity_ignores_rate_gates():
+@pytest.mark.spec("quota-manager::Binding capacity uses tightest budget axis")
+def test_binding_capacity_includes_request_rate_gates():
     axes = [("requests", "minute", 15), ("requests", "day", 800)]
     assert binding_capacity(axes) == 800
 
 
-@pytest.mark.spec("quota-manager::Reactive rate gates excluded from budget capacity")
-def test_binding_capacity_none_when_no_budget_axis():
-    assert binding_capacity([("requests", "minute", 15)]) is None
+@pytest.mark.spec("quota-manager::Request rate gates normalize to daily request ceilings")
+def test_binding_capacity_uses_rate_gate_when_no_daily_budget_axis():
+    assert binding_capacity([("requests", "minute", 15)]) == 21_600
     assert binding_capacity([]) is None
 
 
