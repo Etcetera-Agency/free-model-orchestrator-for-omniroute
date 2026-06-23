@@ -1,5 +1,10 @@
 # Completion Review
 
+- `refactor-split-stages-apply` is archived: demand forecast, allocation,
+  diff/apply, rollback, audit, and cross-cluster helper wrappers now resolve
+  through dedicated `composition_stages` modules behind the package shim. Code
+  Simplifier review kept this slice behavior-preserving and left deeper helper
+  deduplication to the existing `refactor-unify-shared-helpers` slice.
 - `refactor-split-stages-runtime` is archived: probing, telemetry, Hermes
   inventory, role lifecycle, role scoring, and the role-scoring helper cluster
   now resolve through dedicated `composition_stages` modules behind the package

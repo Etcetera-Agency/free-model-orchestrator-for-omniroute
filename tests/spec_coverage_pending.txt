@@ -6,10 +6,6 @@
 # Active proposal slices awaiting TDD implementation (see openspec/TODO.md and
 # openspec/changes/<id>/). Each line is dropped when its test lands.
 #
-# refactor-split-stages-apply
-system-architecture::Allocation, apply, rollback, and audit stages live in dedicated modules
-system-architecture::Shared stage helpers live in one helpers module
-#
 # refactor-extract-test-fakes
 system-architecture::Test fakes live in a shared test-support module
 system-architecture::Composition tests mirror the stage packages

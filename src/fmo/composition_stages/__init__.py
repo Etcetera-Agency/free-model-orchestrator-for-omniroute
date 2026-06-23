@@ -1,21 +1,18 @@
 from __future__ import annotations
 
 from . import _legacy
+from ._helpers import _adapter_stage as _adapter_stage
+from ._helpers import _canonical_slug as _canonical_slug
+from ._helpers import _effect_result as _effect_result
+from ._helpers import _hash_parts as _hash_parts
+from ._helpers import _not_implemented_stage as _not_implemented_stage
+from ._helpers import _omniroute_instance_id as _omniroute_instance_id
+from ._helpers import _quota_limit as _quota_limit
+from ._helpers import _quota_metric as _quota_metric
+from ._helpers import _remaining_amount as _remaining_amount
 from ._legacy import *  # noqa: F403
 from ._legacy import (
-    _adapter_stage as _adapter_stage,
-)
-from ._legacy import (
     _latest_role_diagnostic as _latest_role_diagnostic,
-)
-from ._legacy import (
-    _read_current_combos as _read_current_combos,
-)
-from ._legacy import (
-    _rollback_stage as _rollback_stage,
-)
-from ._legacy import (
-    _smoke_combo as _smoke_combo,
 )
 from .access import (
     _access_classification_stage as _access_classification_stage,
@@ -26,6 +23,25 @@ from .access import (
 from .access import (
     _record_lost_free_access_state as _record_lost_free_access_state,
 )
+from .allocation import _allocation_stage as _allocation_stage
+from .allocation import _configured_router_input as _configured_router_input
+from .allocation import _demand_forecast_stage as _demand_forecast_stage
+from .apply import _apply_stage as _apply_stage
+from .apply import _combo_models_idempotency_key as _combo_models_idempotency_key
+from .apply import _delete_applied_snapshots_for_run as _delete_applied_snapshots_for_run
+from .apply import _derive_apply_stage_safety as _derive_apply_stage_safety
+from .apply import _desired_apply_endpoint_ids as _desired_apply_endpoint_ids
+from .apply import _desired_endpoints_have_current_probe_success as _desired_endpoints_have_current_probe_success
+from .apply import _desired_endpoints_have_current_quota_safety as _desired_endpoints_have_current_quota_safety
+from .apply import _diff_stage as _diff_stage
+from .apply import _endpoint_quota_row_is_safe as _endpoint_quota_row_is_safe
+from .apply import _persist_applied_snapshot as _persist_applied_snapshot
+from .apply import _read_current_combos as _read_current_combos
+from .apply import _review_diff as _review_diff
+from .apply import _review_payload as _review_payload
+from .apply import _rollback_apply_mutations as _rollback_apply_mutations
+from .apply import _smoke_combo as _smoke_combo
+from .audit import _audit_stage as _audit_stage
 from .discovery import (
     _account_discovery_stage as _account_discovery_stage,
 )
@@ -72,6 +88,9 @@ from .roles import _role_scoring_stage as _role_scoring_stage
 from .roles import _roles_needing_quality_recalibration as _roles_needing_quality_recalibration
 from .roles import _seed_quality_bands as _seed_quality_bands
 from .roles import _stability_component as _stability_component
+from .rollback import _rollback_combo_id as _rollback_combo_id
+from .rollback import _rollback_stage as _rollback_stage
+from .rollback import _rollback_targets as _rollback_targets
 from .telemetry import _telemetry_sync_stage as _telemetry_sync_stage
 
 _legacy_production_stage_adapters = _legacy._production_stage_adapters
@@ -88,6 +107,11 @@ def _production_stage_adapters() -> dict[str, _legacy.StageAdapter]:
     adapters["hermes-inventory"] = _hermes_inventory_stage
     adapters["role-lifecycle"] = _role_lifecycle_stage
     adapters["role-scoring"] = _role_scoring_stage
+    adapters["demand-forecast"] = _demand_forecast_stage
+    adapters["allocation"] = _allocation_stage
+    adapters["diff"] = _diff_stage
+    adapters["apply"] = _apply_stage
+    adapters["audit"] = _audit_stage
     return adapters
 
 

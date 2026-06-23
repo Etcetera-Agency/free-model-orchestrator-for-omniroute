@@ -10,9 +10,6 @@ ROOT = Path(__file__).resolve().parents[1]
 # tests/spec_coverage_pending.txt (and here) when its test lands. Slices are
 # listed in openspec/TODO.md and openspec/changes/<id>/.
 EXPECTED_ACTIVE_PENDING = {
-    # refactor-split-stages-apply
-    "system-architecture::Allocation, apply, rollback, and audit stages live in dedicated modules",
-    "system-architecture::Shared stage helpers live in one helpers module",
     # refactor-extract-test-fakes
     "system-architecture::Test fakes live in a shared test-support module",
     "system-architecture::Composition tests mirror the stage packages",
@@ -145,3 +142,45 @@ def test_role_scoring_helpers_live_with_role_stage_module():
         "_insert_health_observation",
     ):
         assert inspect.getmodule(getattr(roles, helper)).__name__.endswith(".roles")
+
+
+@pytest.mark.spec("system-architecture::Allocation, apply, rollback, and audit stages live in dedicated modules")
+def test_back_pipeline_stages_live_in_dedicated_modules():
+    root_module = ROOT / "src" / "fmo" / "composition_stages.py"
+    assert not root_module.exists()
+
+    stages = importlib.import_module("fmo.composition_stages")
+    adapters = stages._production_stage_adapters()
+    for name in ("demand-forecast", "allocation", "diff", "apply", "audit"):
+        assert name in adapters
+        assert callable(adapters[name])
+    assert callable(stages._rollback_stage)
+
+    allocation = importlib.import_module("fmo.composition_stages.allocation")
+    apply = importlib.import_module("fmo.composition_stages.apply")
+    rollback = importlib.import_module("fmo.composition_stages.rollback")
+    audit = importlib.import_module("fmo.composition_stages.audit")
+
+    assert inspect.getmodule(allocation._allocation_stage).__name__.endswith(".allocation")
+    assert inspect.getmodule(allocation._demand_forecast_stage).__name__.endswith(".allocation")
+    assert inspect.getmodule(apply._apply_stage).__name__.endswith(".apply")
+    assert inspect.getmodule(apply._diff_stage).__name__.endswith(".apply")
+    assert inspect.getmodule(rollback._rollback_stage).__name__.endswith(".rollback")
+    assert inspect.getmodule(audit._audit_stage).__name__.endswith(".audit")
+
+
+@pytest.mark.spec("system-architecture::Shared stage helpers live in one helpers module")
+def test_shared_stage_helpers_live_in_helpers_module():
+    helpers = importlib.import_module("fmo.composition_stages._helpers")
+
+    for helper in (
+        "_effect_result",
+        "_canonical_slug",
+        "_hash_parts",
+        "_quota_metric",
+        "_quota_limit",
+        "_remaining_amount",
+        "_adapter_stage",
+        "_omniroute_instance_id",
+    ):
+        assert inspect.getmodule(getattr(helpers, helper)).__name__.endswith("._helpers")

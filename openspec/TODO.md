@@ -16,9 +16,6 @@ behavior-preservation oracle for every slice. All add structural requirements to
 the `system-architecture` capability. Implement in order — each depends on the
 package/shim the previous one establishes.
 
-- `refactor-split-stages-apply` — extract allocation / diff+apply / rollback /
-  audit, drain the remaining shared helpers into `_helpers.py`, and delete the
-  monolithic `composition_stages.py`.
 - `refactor-extract-test-fakes` — move the nine shared fakes into
   `tests/_clients.py`, split `test_composition.py` (3142 lines) into per-domain
   files mirroring the stage packages, and fix the `tests` import path so the
@@ -32,6 +29,10 @@ slices that own the affected modules rather than tracked as separate scenarios.
 
 ## Resolved
 
+- `refactor-split-stages-apply` — archived 2026-06-23. Demand forecast,
+  allocation, diff/apply, rollback, audit, and cross-cluster stage helpers now
+  resolve through dedicated `composition_stages` modules. Focused
+  allocation/advisory/composition docs tests and `make check` are green.
 - `refactor-split-stages-runtime` — archived 2026-06-23. Probing, telemetry,
   Hermes inventory, role lifecycle, role scoring, and the role-scoring helper
   cluster now resolve through dedicated `composition_stages` modules. Focused
