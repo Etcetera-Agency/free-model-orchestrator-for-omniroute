@@ -29,7 +29,6 @@ from tests._composition_support import (
     build_startup_config,
     compose_runtime,
     datetime,
-    timedelta,
     effectful_success,
     empty_adapters_with_stage_effects,
     empty_stage_adapters,
@@ -40,6 +39,7 @@ from tests._composition_support import (
     run_composed_stage_with_dependencies,
     seed_confirmed_llm_candidate,
     select_llm_model,
+    timedelta,
     valid_env,
 )
 
