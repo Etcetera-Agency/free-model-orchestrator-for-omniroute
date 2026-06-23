@@ -5,6 +5,16 @@
 - Server-side default combo grid bootstrap — separate deploy task. Regenerate
   seed models with the live FMO matcher, back up `GET /api/combos`, then create
   the default one-seed combos from `docs/combo-grid-bootstrap.md` on OmniRoute.
+- Deploy the combo rebalance identity fix to production FMO, then rerun the
+  server dry-run: live OmniRoute returns UUID `id` plus managed `name`, so FMO
+  must key by `name`, avoid `fmo-fmo-*`, resolve structured seed members, and
+  confirm `role-scoring → allocation → diff → apply --dry-run` sees non-empty
+  desired combos.
+- Investigate the server `research-quotas --dry-run` `http_error` and
+  downstream `classify-access` `quota_rule_missing` after the combo identity fix
+  is deployed; current server check showed rebalance stages can run, but apply
+  preconditions remain false without valid planned targets, snapshots, quota
+  safety, and probes.
 ## Resolved
 
 - `update-aa-index-migration-inspector` — archived 2026-06-23. AA migration

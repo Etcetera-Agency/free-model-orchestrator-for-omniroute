@@ -32,7 +32,7 @@ def _diff_stage(dependencies: StageDependencies, context: PipelineContext) -> St
         ).fetchall()
         written = 0
         for plan in plans:
-            combo_id = f"fmo-{plan['role_id']}"
+            combo_id = _managed_combo_id(str(plan["role_id"]))
             desired = [_target_combo_step(target) for target in plan["targets"]]
             desired_endpoint_ids = [_target_endpoint_id(target) for target in plan["targets"]]
             before = current.get(combo_id, [])
@@ -387,11 +387,29 @@ def _read_current_combos(client: Any | None) -> dict[str, list[Any]]:
         return {}
     payload = client.get("/api/combos")
     combos = payload.get("combos", []) if isinstance(payload, dict) else []
-    return {
-        str(combo["id"]): [_normalize_combo_member(model) for model in combo.get("models", [])]
-        for combo in combos
-        if isinstance(combo, dict) and str(combo.get("id", "")).startswith("fmo-")
-    }
+    current: dict[str, list[Any]] = {}
+    for combo in combos:
+        if not isinstance(combo, dict):
+            continue
+        combo_key = _live_combo_key(combo)
+        if combo_key is None:
+            continue
+        current[combo_key] = [_normalize_combo_member(model) for model in combo.get("models", [])]
+    return current
+
+
+def _live_combo_key(combo: dict[str, Any]) -> str | None:
+    # AICODE-NOTE: Live OmniRoute uses UUID `id` plus human `name`; the bridge
+    # accepts managed writes by name, so FMO must key existence by `name`.
+    for field in ("name", "id"):
+        value = str(combo.get(field) or "")
+        if value.startswith("fmo-"):
+            return value
+    return None
+
+
+def _managed_combo_id(role_id: str) -> str:
+    return role_id if role_id.startswith("fmo-") else f"fmo-{role_id}"
 
 
 def _target_combo_step(target: dict[str, Any]) -> dict[str, Any]:

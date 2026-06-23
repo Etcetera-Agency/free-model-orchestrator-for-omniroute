@@ -598,6 +598,37 @@ def test_role_scoring_stage_sets_quality_band_from_single_seed_and_keeps_existin
     assert float(role["maximum_quality_value"]) == 65
 
 
+@pytest.mark.spec("quality-gate::Band bounds are set once from the seed anchor")
+@pytest.mark.spec("quality-gate::Structured seed step anchors the band")
+def test_role_scoring_stage_sets_quality_band_from_live_structured_seed(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    seed_confirmed_llm_candidate(
+        repository,
+        model_id="provider/live-seed",
+        provider_id="provider-a",
+        intelligence_index=60,
+    )
+    with repository.database.transaction() as transaction:
+        repository.roles.upsert(
+            transaction,
+            role_id="grid-int-med",
+            requirements={"capabilities": []},
+            expected_load={"requests": 1},
+            criticality=1,
+        )
+    client = PipelineOpsClient()
+    client.combos = {"fmo-grid-int-med": [{"kind": "model", "model": "provider/live-seed", "providerId": "provider-a"}]}
+
+    run_composed_stage(repository, "role-scoring", client=client)
+
+    with repository.database.transaction() as transaction:
+        role = transaction.execute(
+            "SELECT minimum_quality_value, maximum_quality_value FROM roles WHERE id = 'grid-int-med'"
+        ).fetchone()
+    assert float(role["minimum_quality_value"]) <= 60 <= float(role["maximum_quality_value"])
+
+
 @pytest.mark.spec("quality-gate::Re-seeding re-anchors the band")
 def test_role_scoring_stage_reanchors_when_combo_is_stripped_to_single_member(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))

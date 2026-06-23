@@ -30,11 +30,14 @@ passed the band.
 
 The system SHALL derive a role's quality band from the combo's seed anchor and
 SHALL set it once. When the combo holds exactly one model, that model's canonical
-AA metric is the anchor and the band is computed and persisted. When the combo
-already holds more than one model and a band is persisted, the system SHALL keep
-the persisted band rather than re-deriving it, so repeated rebalances do not
-drift. Stripping the combo back to a single model SHALL re-anchor the band on the
-next run. A seed that is not confirmed-free SHALL contribute its AA metric as the
+AA metric is the anchor and the band is computed and persisted. The seed may be
+represented either by a persisted provider endpoint id or by OmniRoute's
+structured model step (`providerId` + `model`); both shapes SHALL resolve to the
+matching canonical endpoint before deriving the anchor. When the combo already
+holds more than one model and a band is persisted, the system SHALL keep the
+persisted band rather than re-deriving it, so repeated rebalances do not drift.
+Stripping the combo back to a single model SHALL re-anchor the band on the next
+run. A seed that is not confirmed-free SHALL contribute its AA metric as the
 anchor only and SHALL NOT be added as a routable member.
 
 #### Scenario: Band bounds are set once from the seed anchor
@@ -43,6 +46,12 @@ anchor only and SHALL NOT be added as a routable member.
 - THEN the role's band is derived from that model's canonical AA metric and
   persisted to `minimum_quality_value` / `maximum_quality_value`
 - AND a later rebalance with several members in the combo keeps the persisted band
+
+#### Scenario: Structured seed step anchors the band
+- GIVEN a combo seeded with one structured OmniRoute model step
+- WHEN the combo is rebalanced
+- THEN the seed is resolved through `providerId` and `model`
+- AND the role's band is derived from the matching canonical AA metric
 
 #### Scenario: Re-seeding re-anchors the band
 - GIVEN a combo whose members are reduced back to a single model

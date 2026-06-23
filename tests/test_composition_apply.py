@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from fmo.composition_stages.apply import _managed_combo_id, _read_current_combos
 from tests._composition_support import (
     OPENAI_CHAT_COMPLETION_BODY,
     ComboApplier,
@@ -24,6 +25,32 @@ from tests._composition_support import (
     structured_combo_step,
     valid_env,
 )
+
+
+@pytest.mark.spec("combo-applier::Live UUID combo id with managed name")
+def test_read_current_combos_uses_live_name_when_id_is_uuid():
+    class LiveShapeClient:
+        def get(self, path):
+            assert path == "/api/combos"
+            return {
+                "combos": [
+                    {
+                        "id": "15f4a7b8-c658-4a7e-82d6-cbf52a61d64d",
+                        "name": "fmo-grid-int-med",
+                        "models": [{"kind": "model", "model": "provider/model", "providerId": "provider"}],
+                    }
+                ]
+            }
+
+    assert _read_current_combos(LiveShapeClient()) == {
+        "fmo-grid-int-med": [{"kind": "model", "model": "provider/model", "providerId": "provider", "weight": 0}]
+    }
+
+
+@pytest.mark.spec("combo-applier::Live UUID combo id with managed name")
+def test_managed_combo_id_does_not_double_prefix_live_combo_roles():
+    assert _managed_combo_id("routing_fast") == "fmo-routing_fast"
+    assert _managed_combo_id("fmo-grid-int-med") == "fmo-grid-int-med"
 
 
 @pytest.mark.spec("demand-forecast::Demand comes from the forecast")

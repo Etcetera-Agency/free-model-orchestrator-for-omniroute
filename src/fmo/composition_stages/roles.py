@@ -170,14 +170,7 @@ def _seed_quality_bands(transaction: Any, client: Any) -> None:
             """,
             {"role_id": role_id},
         ).fetchone()
-        seed = transaction.execute(
-            """
-            SELECT id, canonical_model_id
-            FROM provider_endpoints
-            WHERE id::text = %(endpoint_id)s
-            """,
-            {"endpoint_id": str(members[0])},
-        ).fetchone()
+        seed = _seed_endpoint_for_member(transaction, members[0])
         if seed is None:
             continue
         metric = role["minimum_quality_metric"] if role and role["minimum_quality_metric"] else "intelligence_index"
@@ -215,6 +208,35 @@ def _seed_quality_bands(transaction: Any, client: Any) -> None:
                 "index_version": str(metrics["index_version"]),
             },
         )
+
+
+def _seed_endpoint_for_member(transaction: Any, member: Any) -> Any | None:
+    if not isinstance(member, dict):
+        return transaction.execute(
+            """
+            SELECT id, canonical_model_id
+            FROM provider_endpoints
+            WHERE id::text = %(endpoint_id)s
+            """,
+            {"endpoint_id": str(member)},
+        ).fetchone()
+    provider_id = str(member.get("providerId") or "")
+    model_id = str(member.get("model") or "")
+    if not provider_id or not model_id:
+        return None
+    return transaction.execute(
+        """
+        SELECT pe.id, pe.canonical_model_id
+        FROM provider_endpoints pe
+        JOIN provider_accounts pa ON pa.id = pe.provider_account_id
+        JOIN providers p ON p.id = pa.provider_id
+        WHERE p.omniroute_provider_id = %(provider_id)s
+          AND pe.provider_model_id = %(model_id)s
+        ORDER BY pe.last_seen_at DESC, pe.id
+        LIMIT 1
+        """,
+        {"provider_id": provider_id, "model_id": model_id},
+    ).fetchone()
 
 
 def _quality_band_candidates(transaction: Any, metric: str) -> list[dict[str, Any]]:
