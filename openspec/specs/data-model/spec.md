@@ -73,3 +73,22 @@ no upper bound (min-only behavior).
 - WHEN a role is written with a band
 - THEN `maximum_quality_metric` / `maximum_quality_value` persist and round-trip
 - AND a role written without an upper bound stores NULL for the maximum
+
+### Requirement: Role consumers include auxiliary Hermes slots
+
+The `role_consumers.consumer_type` constraint SHALL accept every Hermes consumer
+surface persisted by inventory: `agent_profile`, `cron_job`, `webhook`,
+`service`, and `auxiliary`. Fresh installs SHALL include that vocabulary in
+`reference/db/schema.sql`; existing databases SHALL get the same vocabulary
+through an ordered migration.
+
+#### Scenario: Auxiliary consumer type persists
+- GIVEN Hermes inventory emits an auxiliary slot consumer
+- WHEN the consumer is persisted to `role_consumers`
+- THEN `consumer_type = 'auxiliary'` is accepted by the database constraint
+
+#### Scenario: Migration keeps existing databases compatible
+- GIVEN an existing database created before auxiliary consumers were added
+- WHEN the ordered migrations are applied
+- THEN the `role_consumers_consumer_type_check` constraint accepts `auxiliary`
+- AND the previous consumer types remain valid
