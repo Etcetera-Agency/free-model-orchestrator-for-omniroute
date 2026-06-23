@@ -6,10 +6,33 @@
 
 ## Active proposal slices (awaiting TDD implementation)
 
-- (none open)
+- Stage-body drain (3 slices) — proposed 2026-06-23. The `refactor-split-stages-*`
+  slices created the per-domain module layout but the stage bodies never moved:
+  every domain module delegates one-liner-style to `composition_stages/_legacy.py`,
+  which still holds ~82% of the package (2255 lines, 75 top-level symbols, all
+  stage bodies). The drain mirrors the original split sequence and tightens the
+  spec from "a module exists" to "the module defines the stage"; behavior-preserving
+  (pytest as oracle), public re-export surface stays identical.
+  - `refactor-drain-stages-runtime` — drains the middle-of-pipeline bodies
+    (probing/telemetry/inventory/roles + role-scoring helper cluster). Independent
+    of the discovery drain; either order.
+  - `refactor-drain-stages-apply` — terminal: drains the back-of-pipeline bodies
+    (allocation/apply/rollback/audit), relocates the shared spine (`Stage*`
+    dataclasses + base `_production_stage_adapters`) into `_base.py`, and **deletes
+    `_legacy.py`**. Depends on the other two; runs the full suite as oracle.
+- `refactor-collapse-stage-helper-aliases` — proposed 2026-06-23. Removes the five
+  slug/hash/quota-math re-export aliases (`_canonical_slug = canonical_slug`, …)
+  left in `composition_stages/_helpers.py` by `refactor-unify-shared-helpers`, and
+  repoints the (now drained) cluster call sites to import the canonical
+  `idempotency`/`quota_normalize` names directly. No external consumers; full
+  pytest as oracle. Depends on `refactor-drain-stages-apply`.
 
 ## Resolved
 
+- `refactor-drain-stages-discovery` — archived 2026-06-23. Front-of-pipeline
+  stage bodies now live in `discovery.py`, `quota.py`, and `access.py`; adapter
+  re-exports remain stable. Focused discovery/quota/access/spec docs checks,
+  `make check`, and OpenSpec validation are green.
 - `refactor-unify-shared-helpers` — archived 2026-06-23. Row helpers remain
   canonical in `persistence/_base.py`; `utcnow`, slug/hash, and idempotency-key
   helpers now live in `idempotency.py`; quota payload math lives in
