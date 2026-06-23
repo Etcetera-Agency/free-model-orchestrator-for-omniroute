@@ -1,5 +1,10 @@
 # Completion Review
 
+- Deploy fix: production Postgres and the baseline schema now allow
+  `role_consumers.consumer_type='auxiliary'`, matching Hermes inventory output
+  for auxiliary model slots. The live shlinker FMO dry-run no longer fails on
+  Hermes auxiliary slots after the constraint migration. Code Simplifier review
+  kept the change to schema/migration docs only.
 - Deploy fix: Hermes inventory now treats a present but empty Hermes
   `state.db` with no `sessions` table as no observed demand instead of
   crashing. This matches the live shlinker Hermes state shape and keeps
