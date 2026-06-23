@@ -39,6 +39,7 @@ from tests._composition_support import (
     run_composed_stage,
     run_composed_stage_with_dependencies,
     seed_confirmed_llm_candidate,
+    seed_endpoint,
     select_llm_model,
     timedelta,
     valid_env,
@@ -73,6 +74,31 @@ def test_probe_stage_gates_on_confirmed_capacity_and_persists_results(postgres_u
     assert probe["passed"] is True
     assert probe["details"]["reserved_capacity"] is True
     assert endpoint["probe_status"] == "passed"
+
+
+@pytest.mark.spec("probe-runner::Current combo seeds are probed before wider provider pool")
+def test_probe_stage_limits_provider_wildcard_pool_to_current_combo_seed_when_available(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    client = PipelineOpsClient()
+    client.combos = {"fmo-routing_fast": ["free-chat"]}
+    seed_endpoint(repository, model_id="free-chat")
+    seed_endpoint(repository, model_id="second-free")
+    run_composed_stage(repository, "model-matching", client=client)
+    run_composed_stage(repository, "quota-research", client=client)
+    run_composed_stage(repository, "access-classification", client=client)
+
+    result = run_composed_stage(repository, "probing", client=client)
+
+    with repository.database.transaction() as transaction:
+        rows = transaction.execute(
+            "SELECT provider_model_id, probe_status FROM provider_endpoints ORDER BY provider_model_id"
+        ).fetchall()
+    assert result.exit_code == 0
+    assert [(row["provider_model_id"], row["probe_status"]) for row in rows] == [
+        ("free-chat", "passed"),
+        ("second-free", "not_run"),
+    ]
 
 
 @pytest.mark.spec("probe-runner::Probe HTTP errors are persisted fail-closed")

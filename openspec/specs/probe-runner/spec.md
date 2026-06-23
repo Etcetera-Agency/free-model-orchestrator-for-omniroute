@@ -6,11 +6,22 @@ TBD - created by archiving change add-scoring. Update Purpose after archive.
 ### Requirement: Probe only after free confirmation
 
 The system SHALL probe only confirmed-free endpoints with reserved capacity.
+When a provider/account wildcard quota rule confirms many endpoints and live
+one-member FMO combos exist, the probing stage SHALL probe those current combo
+seed models first instead of probing the entire provider pool in one run.
 
 #### Scenario: No reserved capacity
 - GIVEN an endpoint does not have reserved capacity
 - WHEN probe eligibility is checked
 - THEN it is not probed
+
+#### Scenario: Current combo seeds are probed before wider provider pool
+- GIVEN a provider/account wildcard quota rule confirms multiple endpoints
+- AND a live one-member FMO combo uses one of those endpoints as seed
+- WHEN probing runs
+- THEN the seed endpoint is probed
+- AND sibling endpoints from the same provider pool are left unprobed for later
+  candidate expansion
 ### Requirement: Isolated probe request
 
 The system SHALL pass a probe only when the response status is `200` and content

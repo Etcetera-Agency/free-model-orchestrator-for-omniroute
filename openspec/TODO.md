@@ -25,6 +25,12 @@
   `provider='gemini-grounded-search'` returns HTTP 429 even for `hello world`;
   FMO now has a fallback, but the intended grounded-search provider still needs
   platform-side setup/repair.
+- Sweep Nvidia provider models with bounded probing and record which catalog
+  entries actually work. Live Nvidia wildcard quota confirms many endpoints, but
+  most probed catalog entries return 404; the main rebalance run now probes
+  current combo seeds first, while a separate sweep should test Nvidia models in
+  batches, persist working endpoints, and exclude unavailable ones from future
+  candidate pools.
 ## Resolved
 
 - `update-aa-index-migration-inspector` — archived 2026-06-23. AA migration

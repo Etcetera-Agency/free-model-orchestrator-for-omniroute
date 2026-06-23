@@ -8,6 +8,7 @@ from fmo.quota_normalize import remaining_amount
 
 from ._base import StageDependencies
 from ._helpers import _effect_result
+from .apply import _read_current_combos
 
 
 def _probing_stage(dependencies: StageDependencies, context: PipelineContext) -> StageResult:
@@ -26,6 +27,14 @@ def _probing_stage(dependencies: StageDependencies, context: PipelineContext) ->
             ORDER BY pe.provider_model_id
             """
         ).fetchall()
+    seed_models = _current_combo_seed_models(dependencies.omniroute_client)
+    if seed_models:
+        seed_rows = [row for row in rows if row["provider_model_id"] in seed_models]
+        if seed_rows:
+            # AICODE-NOTE: Provider-wide quota rules can confirm hundreds of
+            # endpoints; probe live one-member combo seeds first to avoid
+            # blasting providers with unavailable catalog entries.
+            rows = seed_rows
     written = 0
     for row in rows:
         if remaining_amount(row["effective_remaining"]) <= 0:
@@ -71,3 +80,17 @@ def _probing_stage(dependencies: StageDependencies, context: PipelineContext) ->
             )
         written += 1
     return _effect_result("probing", changed=written > 0)
+
+
+def _current_combo_seed_models(client) -> set[str]:
+    current = _read_current_combos(client)
+    models: set[str] = set()
+    for combo_id, members in current.items():
+        if not combo_id.startswith("fmo-") or len(members) != 1:
+            continue
+        member = members[0]
+        if isinstance(member, dict) and member.get("model"):
+            models.add(str(member["model"]))
+        elif isinstance(member, str):
+            models.add(member)
+    return models

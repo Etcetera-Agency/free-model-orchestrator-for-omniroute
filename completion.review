@@ -7,7 +7,10 @@
   requests now set `stream=true`, fixing Nvidia-style providers that reject
   OmniRoute-injected `stream_options` unless streaming is enabled. Code
   Simplifier review added the probe stream anchor and split fallback test
-  responsibilities.
+  responsibilities. Follow-up fix narrows provider-wide probing to current
+  one-member combo seeds when wildcard quota rules confirm many endpoints, so
+  live Nvidia probing no longer blasts unavailable catalog entries before
+  scoring can start.
 - Deploy fix: quota research now treats provider/account search as a topology
   discovery step before quota activation. Provider-wide or RPM-only answers can
   still write wildcard rules, but model-group/per-model answers fail closed
