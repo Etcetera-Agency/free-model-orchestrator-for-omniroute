@@ -94,15 +94,19 @@ class QuotaClaimResponse(BaseModel):
 
 
 def build_quota_query(provider: str, model_id: str, *, today: datetime) -> str:
+    provider_hint = _quota_provider_hint(provider)
     return (
-        f"What is the free-tier usage quota for {provider} model {model_id}, current as of {today:%Y-%m-%d}? "
-        "Give the cumulative daily and monthly limits, both in requests and in tokens: requests per day, "
-        "requests per month, tokens per day, tokens per month. Ignore per-minute/per-second rate limits "
-        "(RPM/TPM). State whether hitting the quota is a hard stop (requests blocked) or a soft throttle. "
-        "Search broadly: official documentation plus community sources such as developer forums, Reddit, "
-        "GitHub issues, Discord, and Stack Overflow. Prefer the official documentation URL as evidence, "
-        "but include community source URLs when they report current real-world limits."
+        f"Free-tier quota for model {model_id}"
+        f"{provider_hint}, current as of {today:%Y-%m-%d}. "
+        "Find cumulative requests/day, requests/month, tokens/day, tokens/month, "
+        "whether quota is hard stop or throttle, and source URLs. Ignore RPM/TPM."
     )
+
+
+def _quota_provider_hint(provider: str) -> str:
+    if provider.startswith("openai-compatible-") or len(provider) > 48:
+        return ""
+    return f" on provider {provider}"
 
 
 def run_quota_search(client, *, provider: str, model_id: str, query: str) -> SearchSnapshot:  # noqa: ARG001 - provider/model_id kept for call-site symmetry

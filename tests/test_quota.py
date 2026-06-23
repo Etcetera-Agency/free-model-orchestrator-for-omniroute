@@ -58,11 +58,25 @@ def test_research_search_uses_date_aware_query_and_persists_summary():
     assert "/v1/search" == client.calls[0][0]
     assert client.calls[0][1]["provider"] == "gemini-grounded-search"
     assert "2026" in client.calls[0][1]["query"]
-    assert "requests per day" in client.calls[0][1]["query"]
-    assert "tokens per month" in client.calls[0][1]["query"]
-    assert "community source" in client.calls[0][1]["query"]
+    assert "requests/day" in client.calls[0][1]["query"]
+    assert "tokens/month" in client.calls[0][1]["query"]
+    assert "source URLs" in client.calls[0][1]["query"]
+    assert len(client.calls[0][1]["query"]) <= 500
     assert snapshot.answer_text == "Provider gives 100 requests per day with hard stop."
     assert snapshot.content_hash
+
+
+@pytest.mark.spec("quota-research::Quota query")
+def test_research_search_query_omits_internal_provider_ids_to_stay_under_live_limit():
+    query = build_quota_query(
+        "openai-compatible-chat-95c7538c-1c44-4196-baa0-d06888eefe19",
+        "aihubmix/coding-glm-4.6-free",
+        today=datetime(2026, 6, 16, tzinfo=UTC),
+    )
+
+    assert "openai-compatible-chat-95c7538c-1c44-4196-baa0-d06888eefe19" not in query
+    assert "aihubmix/coding-glm-4.6-free" in query
+    assert len(query) <= 500
 
 
 @pytest.mark.spec("quota-research::Prior limit inside the range is kept")

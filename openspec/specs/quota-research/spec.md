@@ -58,13 +58,16 @@ establish hard-stop behaviour for each endpoint.
 The system SHALL obtain quota information through OmniRoute `POST /v1/search`
 with provider `gemini-grounded-search`, using natural-language date-aware
 queries, and SHALL treat the returned `answer.text` as the source. No separate
-page fetch is performed.
+page fetch is performed. The query SHALL fit the live OmniRoute search request
+schema, including the 500-character query limit, and SHALL omit internal provider
+UUIDs when the model id is sufficient for a useful external search.
 
 #### Scenario: Quota query
 - GIVEN a provider needing a quota rule
 - WHEN research runs
 - THEN `/v1/search` is called with `gemini-grounded-search` and the `answer.text`
   summary is captured as an immutable snapshot
+- AND the query is accepted by the live `/v1/search` schema
 
 ### Requirement: Instructor extraction
 

@@ -10,9 +10,11 @@
   current production state still has zero confirmed endpoints, zero probes, and
   empty allocation targets, so `apply --dry-run` remains blocked by apply
   preconditions.
-- Investigate the server `research-quotas --dry-run` `http_error` and downstream
-  `classify-access` `quota_rule_missing`; rebalance cannot produce non-empty
-  target combos until quota/access/probe evidence marks endpoints eligible.
+- Continue post-deploy quota/access verification after the `/v1/search` query
+  length fix. The previous `research-quotas --dry-run` `http_error` was caused
+  by 716-character quota queries exceeding OmniRoute's 500-character schema
+  limit; after deploy, confirm quota rules are written, then clear downstream
+  `classify-access` / probe blockers until endpoints become eligible.
 ## Resolved
 
 - `update-aa-index-migration-inspector` — archived 2026-06-23. AA migration
