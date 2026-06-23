@@ -17,9 +17,11 @@ The system SHALL pass a probe only when the response status is `200` and content
 is non-empty. Production probes SHALL use the shared OpenAI-compatible
 `/v1/chat/completions` route with a tiny completion budget and no-cache header,
 because provider-specific provider ids may be management identifiers that are
-not valid chat route slugs. Provider denial text that indicates unusable free
-quota (for example "prevent abuse of free resources" or "accounts that have not
-been recharged") SHALL fail the probe even when the upstream returns HTTP 200.
+not valid chat route slugs. Production probes SHALL request streaming mode so
+providers that reject OmniRoute-injected `stream_options` on non-stream requests
+can still be validated. Provider denial text that indicates unusable free quota
+(for example "prevent abuse of free resources" or "accounts that have not been
+recharged") SHALL fail the probe even when the upstream returns HTTP 200.
 
 #### Scenario: Non-200 or empty content
 - GIVEN a probe response has non-200 status or empty content

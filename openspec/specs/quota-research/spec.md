@@ -84,7 +84,10 @@ with provider `gemini-grounded-search`, using natural-language date-aware
 queries, and SHALL treat the returned `answer.text` as the source. No separate
 page fetch is performed. The query SHALL fit the live OmniRoute search request
 schema, including the 500-character query limit, and SHALL omit internal provider
-UUIDs when the model id is sufficient for a useful external search.
+UUIDs when the model id is sufficient for a useful external search. If the
+primary search provider is rate-limited, the system SHALL retry once through the
+default OmniRoute search route without a pinned provider and use returned result
+titles/snippets as the immutable source text when `answer.text` is absent.
 
 #### Scenario: Quota query
 - GIVEN a provider needing a quota rule
@@ -92,6 +95,13 @@ UUIDs when the model id is sufficient for a useful external search.
 - THEN `/v1/search` is called with `gemini-grounded-search` and the `answer.text`
   summary is captured as an immutable snapshot
 - AND the query is accepted by the live `/v1/search` schema
+
+#### Scenario: Search fallback when primary provider is rate-limited
+- GIVEN `gemini-grounded-search` returns HTTP 429
+- WHEN quota research runs
+- THEN research retries `/v1/search` without a pinned provider
+- AND quota extraction uses `answer.text` when present, otherwise result
+  titles/snippets
 
 ### Requirement: Instructor extraction
 

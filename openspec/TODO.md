@@ -20,6 +20,11 @@
   fails such provider/account answers closed instead of widening them to
   `model_pattern='*'`; next work should extract stable model patterns, store
   narrower quota rules, and teach access classification to match those patterns.
+- Fix OmniRoute `gemini-grounded-search` provider configuration. Live
+  `/v1/search` succeeds through default routing (`exa-search`) but pinned
+  `provider='gemini-grounded-search'` returns HTTP 429 even for `hello world`;
+  FMO now has a fallback, but the intended grounded-search provider still needs
+  platform-side setup/repair.
 ## Resolved
 
 - `update-aa-index-migration-inspector` — archived 2026-06-23. AA migration

@@ -3,6 +3,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from fmo.access import classify_access
+from fmo.omniroute import OmniRouteRequestError
 from fmo.quota_attribution import (
     AttributionGroup,
     apply_group_evidence,
@@ -49,6 +50,26 @@ class InspectorSearchClient(SearchClient):
         }
 
 
+class FallbackSearchClient:
+    def __init__(self):
+        self.calls = []
+
+    def post(self, path, payload):
+        self.calls.append((path, payload))
+        if payload.get("provider") == "gemini-grounded-search":
+            raise OmniRouteRequestError("POST", path, 429)
+        return {
+            "answer": None,
+            "results": [
+                {
+                    "title": "Request for NVIDIA NIM API Rate Limit Increase (40 RPM)",
+                    "url": "https://forums.developer.nvidia.com/t/rate-limit",
+                    "snippet": "",
+                }
+            ],
+        }
+
+
 @pytest.mark.spec("quota-research::Quota query")
 def test_research_search_uses_date_aware_query_and_persists_summary():
     client = SearchClient()
@@ -64,6 +85,30 @@ def test_research_search_uses_date_aware_query_and_persists_summary():
     assert len(client.calls[0][1]["query"]) <= 500
     assert snapshot.answer_text == "Provider gives 100 requests per day with hard stop."
     assert snapshot.content_hash
+
+
+@pytest.mark.spec("quota-research::Search fallback when primary provider is rate-limited")
+def test_research_search_falls_back_to_default_provider_and_uses_result_text():
+    search_client = FallbackSearchClient()
+    query = build_quota_query("nvidia", "*", today=datetime(2026, 6, 16, tzinfo=UTC))
+    snapshot = run_quota_search(search_client, provider="nvidia", model_id="*", query=query)
+
+    assert search_client.calls[0][1]["provider"] == "gemini-grounded-search"
+    assert "provider" not in search_client.calls[1][1]
+    assert "40 RPM" in snapshot.answer_text
+
+    result = research_quota_rule(
+        FallbackSearchClient(),
+        provider="nvidia",
+        model_id="*",
+        today=datetime(2026, 6, 16, tzinfo=UTC),
+        summary_confidence_cap=0.7,
+    )
+
+    assert result.rule is not None
+    assert result.rule.claim.metric == "requests"
+    assert result.rule.claim.amount == 40
+    assert result.rule.claim.window == "minute"
 
 
 @pytest.mark.spec("quota-research::Quota query")

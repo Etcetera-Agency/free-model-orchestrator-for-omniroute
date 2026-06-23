@@ -118,20 +118,41 @@ def _quota_provider_hint(provider: str) -> str:
 
 
 def run_quota_search(client, *, provider: str, model_id: str, query: str) -> SearchSnapshot:  # noqa: ARG001 - provider/model_id kept for call-site symmetry
-    response = client.post(
-        "/v1/search",
-        {
-            "query": query,
-            "provider": "gemini-grounded-search",
-            "search_type": "web",
-            "max_results": 10,
-            "time_range": "month",
-        },
-    )
-    answer_text = response.get("answer", {}).get("text", "")
+    payload = {
+        "query": query,
+        "provider": "gemini-grounded-search",
+        "search_type": "web",
+        "max_results": 10,
+        "time_range": "month",
+    }
+    try:
+        response = client.post("/v1/search", payload)
+    except OmniRouteRequestError as exc:
+        if exc.status_code != 429:
+            raise
+        # AICODE-NOTE: Live gemini-grounded-search can be rate-limited while
+        # /v1/search default routing still works; fallback keeps quota research moving.
+        fallback_payload = {key: value for key, value in payload.items() if key != "provider"}
+        response = client.post("/v1/search", fallback_payload)
+    answer_text = _search_answer_text(response)
     urls = tuple(result["url"] for result in response.get("results", []) if result.get("url"))
     content_hash = hashlib.sha256((query + answer_text + "".join(urls)).encode("utf-8")).hexdigest()
     return SearchSnapshot(query=query, answer_text=answer_text, evidence_urls=urls, content_hash=content_hash)
+
+
+def _search_answer_text(response: dict[str, Any]) -> str:
+    answer = response.get("answer")
+    if isinstance(answer, dict) and answer.get("text"):
+        return str(answer["text"])
+    chunks = []
+    for result in response.get("results", []):
+        if not isinstance(result, dict):
+            continue
+        title = result.get("title") or ""
+        snippet = result.get("snippet") or ""
+        if title or snippet:
+            chunks.append(f"{title}. {snippet}".strip())
+    return "\n".join(chunks)
 
 
 def research_quota_rule(
@@ -454,6 +475,10 @@ def _extract_axes(text: str) -> tuple[tuple[str, float, str], ...]:
         metric = "tokens" if match.group("metric").lower().startswith("token") else "requests"
         window = match.group("window").lower()
         axes.append((metric, _parse_amount(match.group("amount")), window))
+    rpm_pattern = re.compile(r"\b(?P<amount>\d+(?:[,\d]*)(?:\.\d+)?)\s*(?P<metric>RPM|TPM)\b", re.IGNORECASE)
+    for match in rpm_pattern.finditer(text):
+        metric = "tokens" if match.group("metric").lower() == "tpm" else "requests"
+        axes.append((metric, _parse_amount(match.group("amount")), "minute"))
     if not axes:
         _extract_amount(text)
         _extract_window(text)

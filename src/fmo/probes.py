@@ -35,13 +35,36 @@ def probe_endpoint(client, *, provider: str, model: str, capabilities: dict[str,
             "messages": [{"role": "user", "content": "Return exactly ok"}],
             "max_tokens": 2,
             "temperature": 0,
+            # AICODE-NOTE: Nvidia rejects OmniRoute-injected stream_options
+            # unless stream=true; probes intentionally consume SSE text.
+            "stream": True,
         },
         headers={"X-OmniRoute-No-Cache": "true"},
     )
     return ProbeResult(
-        passed=response["status_code"] == 200 and _probe_content_usable(response.get("content")),
+        passed=_probe_response_status(response) == 200 and _probe_content_usable(_probe_response_content(response)),
         suites=suites,
     )
+
+
+def _probe_response_status(response: dict) -> int:
+    return int(response.get("status_code") or 200)
+
+
+def _probe_response_content(response: dict) -> object:
+    if "content" in response:
+        return response.get("content")
+    choices = response.get("choices")
+    if not isinstance(choices, list):
+        return ""
+    parts = []
+    for choice in choices:
+        if not isinstance(choice, dict):
+            continue
+        message = choice.get("message") or {}
+        if isinstance(message, dict) and message.get("content"):
+            parts.append(str(message["content"]))
+    return "".join(parts)
 
 
 def _probe_content_usable(content: object) -> bool:

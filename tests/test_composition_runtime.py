@@ -68,6 +68,7 @@ def test_probe_stage_gates_on_confirmed_capacity_and_persists_results(postgres_u
     assert result.exit_code == 0
     assert result.stage_results[0]["details"]["effect"] == "repository_write"
     assert client.calls[-1][0] == "/v1/chat/completions"
+    assert client.calls[-1][1]["stream"] is True
     assert client.calls[-1][2] == {"X-OmniRoute-No-Cache": "true"}
     assert probe["passed"] is True
     assert probe["details"]["reserved_capacity"] is True

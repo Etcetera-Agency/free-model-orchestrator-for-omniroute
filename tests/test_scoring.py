@@ -40,6 +40,7 @@ def test_probe_uses_dedicated_route_no_cache_and_capability_suites():
     assert client.calls[0][0] == "/v1/chat/completions"
     assert client.calls[0][1]["model"] == "m"
     assert client.calls[0][1]["max_tokens"] == 2
+    assert client.calls[0][1]["stream"] is True
     assert client.calls[0][2]["X-OmniRoute-No-Cache"] == "true"
     assert result.suites == ("basic_text", "vision")
 

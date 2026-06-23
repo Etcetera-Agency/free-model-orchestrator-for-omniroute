@@ -1,5 +1,13 @@
 # Completion Review
 
+- Deploy fix: quota research now retries `/v1/search` without a pinned provider
+  when `gemini-grounded-search` returns 429, and falls back from `answer.text` to
+  result titles/snippets. This matches live OmniRoute: default search succeeds
+  through `exa-search` while `gemini-grounded-search` is rate-limited. Probe
+  requests now set `stream=true`, fixing Nvidia-style providers that reject
+  OmniRoute-injected `stream_options` unless streaming is enabled. Code
+  Simplifier review added the probe stream anchor and split fallback test
+  responsibilities.
 - Deploy fix: quota research now treats provider/account search as a topology
   discovery step before quota activation. Provider-wide or RPM-only answers can
   still write wildcard rules, but model-group/per-model answers fail closed

@@ -148,6 +148,15 @@ def test_summary_request_rate_only_activates_rate_capacity_rule():
     assert result.rule.claim.window == "minute"
 
 
+@pytest.mark.spec("quota-research::Requests-per-minute only activates rate capacity")
+def test_summary_rpm_abbreviation_activates_rate_capacity_rule():
+    claim = extract_summary_claim(_snapshot("NVIDIA NIM free tier allows 40 RPM with hard stop."))
+
+    assert claim.metric == "requests"
+    assert claim.amount == 40
+    assert claim.window == "minute"
+
+
 @pytest.mark.spec("quota-research::Inspector token claim carried through")
 def test_inspector_token_claim_is_carried_through_to_active_rule():
     transport = _SearchTransport()
