@@ -241,3 +241,7 @@
 - Final full-suite audit fixed quota-research all-failed status mapping and
   tightened rebalance fixtures so apply safety sees live quota evidence on the
   exact provider account selected by catalog scan.
+- Stage-body drain now removes the `composition_stages/_legacy.py` monolith,
+  keeps stage definitions in domain modules, and removes the helper alias layer;
+  final spec-coverage audit bound the newly archived architecture scenarios to
+  the structural runtime-doc tests.

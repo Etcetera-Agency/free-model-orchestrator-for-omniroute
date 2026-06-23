@@ -6,15 +6,19 @@
 
 ## Active proposal slices (awaiting TDD implementation)
 
-- `refactor-collapse-stage-helper-aliases` — proposed 2026-06-23. Removes the five
-  slug/hash/quota-math re-export aliases (`_canonical_slug = canonical_slug`, …)
-  left in `composition_stages/_helpers.py` by `refactor-unify-shared-helpers`, and
-  repoints the (now drained) cluster call sites to import the canonical
-  `idempotency`/`quota_normalize` names directly. No external consumers; full
-  pytest as oracle. Depends on `refactor-drain-stages-apply`.
+- `add-intelligence-inspector` — proposed 2026-06-23. Adds a second prompt-only
+  Hermes Inspector that assesses per-unit role intelligence needs, caches
+  content-hash verdicts, maps tier/axis to role quality anchors, and snaps roles
+  to reusable default combo grid cells. Its scenarios are temporarily listed in
+  `tests/spec_coverage_pending.txt` until the slice lands next.
 
 ## Resolved
 
+- `refactor-collapse-stage-helper-aliases` — archived 2026-06-23. Removed the
+  slug/hash/quota-math re-export aliases from `composition_stages/_helpers.py`,
+  repointed drained stage modules to canonical `idempotency`/`quota_normalize`
+  imports, and removed the root shim alias exports. Full pytest is green under
+  both entry points.
 - `refactor-drain-stages-apply` — archived 2026-06-23. Back-of-pipeline stage
   bodies now live in `allocation.py`, `apply.py`, `rollback.py`, and `audit.py`;
   shared stage dataclasses/adapter builder live in `_base.py`, cross-cluster

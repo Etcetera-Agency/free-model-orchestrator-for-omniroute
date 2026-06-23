@@ -8,19 +8,16 @@ from fmo.applier import ComboApplier
 from fmo.apply_guard import ApplyPreconditions, check_apply_preconditions
 from fmo.config import DEFAULT_APPLY_MIN_PERCENT_REMAINING, DEFAULT_APPLY_MIN_SAFETY_BUFFER
 from fmo.idempotency import combo_models_idempotency_key as _combo_models_idempotency_key
-from fmo.idempotency import hash_parts as _hash_parts
-from fmo.idempotency import utcnow
+from fmo.idempotency import hash_parts, utcnow
 from fmo.omniroute import OmniRouteRequestError
 from fmo.pipeline import PipelineContext, StageResult
-from fmo.quota_normalize import remaining_amount as _remaining_amount
+from fmo.quota_normalize import remaining_amount
 from fmo.smart_review import ComboReviewResult, run_combo_review
 
 from ._base import StageDependencies
 from ._helpers import _effect_result
 
 APPLY_STAGE_EVIDENCE_MAX_AGE = timedelta(days=1)
-
-_remaining_requests = _remaining_amount
 
 
 def _diff_stage(dependencies: StageDependencies, context: PipelineContext) -> StageResult:
@@ -50,7 +47,7 @@ def _diff_stage(dependencies: StageDependencies, context: PipelineContext) -> St
                 transaction,
                 role_id=plan["role_id"],
                 omniroute_combo_id=combo_id,
-                state_hash=_hash_parts(combo_id, str(diff)),
+                state_hash=hash_parts(combo_id, str(diff)),
                 state_json={**diff, "advisory_review": _review_payload(review)},
                 phase="diff",
                 run_id=context.run_id,
@@ -190,7 +187,7 @@ def _persist_applied_snapshot(context: PipelineContext, diff: Any, before: list[
             transaction,
             role_id=diff["role_id"],
             omniroute_combo_id=diff["omniroute_combo_id"],
-            state_hash=_hash_parts(diff["omniroute_combo_id"], str(desired), "applied", str(context.run_id)),
+            state_hash=hash_parts(diff["omniroute_combo_id"], str(desired), "applied", str(context.run_id)),
             state_json={"before": before, "after": desired},
             phase="applied",
             run_id=context.run_id,
@@ -317,7 +314,7 @@ def _endpoint_quota_row_is_safe(
         and isinstance(percent_remaining, int | float)
         and float(percent_remaining) > minimum_percent_remaining
         and evidence.get("locked_out") is not True
-        and _remaining_requests(row["effective_remaining"]) > safety_buffer
+        and remaining_amount(row["effective_remaining"]) > safety_buffer
         and (row["reset_at"] is None or row["reset_at"] <= now)
         and row["classified_at"] >= oldest_allowed
         and (row["valid_until"] is None or row["valid_until"] > now)

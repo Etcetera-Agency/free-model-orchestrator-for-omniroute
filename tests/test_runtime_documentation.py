@@ -11,7 +11,19 @@ ROOT = Path(__file__).resolve().parents[1]
 # Active proposal slices awaiting TDD implementation. Each entry is dropped from
 # tests/spec_coverage_pending.txt (and here) when its test lands. Slices are
 # listed in openspec/TODO.md and openspec/changes/<id>/.
-EXPECTED_ACTIVE_PENDING = set()
+EXPECTED_ACTIVE_PENDING = {
+    "hermes-inventory::Each describing unit is assessed individually",
+    "hermes-inventory::Axis and anchor set the band centre, not its edges",
+    "hermes-inventory::Shared combo takes the most demanding unit",
+    "hermes-inventory::Bare webhook role floors without an LLM call",
+    "hermes-inventory::Unchanged unit reuses its cached verdict",
+    "hermes-inventory::Cadence change does not re-run the intelligence Inspector",
+    "hermes-inventory::Changed persona re-assesses only its unit",
+    "hermes-inventory::Main role snaps to a reusable grid combo",
+    "hermes-inventory::Auxiliary combo snaps to the cheap cell without assessment",
+    "hermes-inventory::Special role mints a unique combo",
+    "hermes-inventory::Inspector failure falls back to seed anchor",
+}
 
 
 @pytest.mark.spec("runtime-documentation::Active docs state")
@@ -83,6 +95,7 @@ def test_composition_stage_package_preserves_front_stage_wiring():
 
 
 @pytest.mark.spec("system-architecture::Discovery, quota, and access stages live in dedicated modules")
+@pytest.mark.spec("system-architecture::Front-of-pipeline stages are defined in their own modules")
 def test_front_composition_stages_live_in_dedicated_modules():
     package = importlib.import_module("fmo.composition_stages")
 
@@ -104,6 +117,7 @@ def test_front_composition_stages_live_in_dedicated_modules():
 
 
 @pytest.mark.spec("system-architecture::Probing, telemetry, inventory, and role stages live in dedicated modules")
+@pytest.mark.spec("system-architecture::Middle-of-pipeline stages are defined in their own modules")
 def test_runtime_composition_stages_live_in_dedicated_modules():
     stages = importlib.import_module("fmo.composition_stages")
     adapters = stages._production_stage_adapters()
@@ -145,6 +159,7 @@ def test_role_scoring_helpers_live_with_role_stage_module():
 
 
 @pytest.mark.spec("system-architecture::Allocation, apply, rollback, and audit stages live in dedicated modules")
+@pytest.mark.spec("system-architecture::Each stage resolves to its own domain module")
 def test_back_pipeline_stages_live_in_dedicated_modules():
     root_module = ROOT / "src" / "fmo" / "composition_stages.py"
     legacy_module = ROOT / "src" / "fmo" / "composition_stages" / "_legacy.py"
@@ -198,10 +213,18 @@ def test_row_access_helpers_have_one_persistence_definition():
 
 
 @pytest.mark.spec("system-architecture::Timestamp and hashing helpers are centralized")
+@pytest.mark.spec("system-architecture::Stage helpers carry no re-export alias layer")
 def test_timestamp_hash_and_quota_helpers_are_centralized():
     idempotency = importlib.import_module("fmo.idempotency")
     quota_normalize = importlib.import_module("fmo.quota_normalize")
     stage_helpers = importlib.import_module("fmo.composition_stages._helpers")
+    discovery = (ROOT / "src" / "fmo" / "composition_stages" / "discovery.py").read_text(encoding="utf-8")
+    quota = (ROOT / "src" / "fmo" / "composition_stages" / "quota.py").read_text(encoding="utf-8")
+    access = (ROOT / "src" / "fmo" / "composition_stages" / "access.py").read_text(encoding="utf-8")
+    probing = (ROOT / "src" / "fmo" / "composition_stages" / "probing.py").read_text(encoding="utf-8")
+    allocation = (ROOT / "src" / "fmo" / "composition_stages" / "allocation.py").read_text(encoding="utf-8")
+    apply_stage = (ROOT / "src" / "fmo" / "composition_stages" / "apply.py").read_text(encoding="utf-8")
+    roles = (ROOT / "src" / "fmo" / "composition_stages" / "roles.py").read_text(encoding="utf-8")
     stage_source = "\n".join(
         path.read_text(encoding="utf-8")
         for path in (ROOT / "src" / "fmo" / "composition_stages").glob("*.py")
@@ -219,18 +242,26 @@ def test_timestamp_hash_and_quota_helpers_are_centralized():
         assert inspect.getmodule(getattr(idempotency, helper)).__name__ == "fmo.idempotency"
     for helper in ("quota_metric", "quota_limit", "remaining_amount"):
         assert inspect.getmodule(getattr(quota_normalize, helper)).__name__ == "fmo.quota_normalize"
-    for helper in ("_canonical_slug", "_hash_parts", "_quota_metric", "_quota_limit", "_remaining_amount"):
-        assert inspect.getmodule(getattr(stage_helpers, helper)).__name__ != "fmo.composition_stages._helpers"
+    old_aliases = [f"_{name}" for name in ("canonical_slug", "hash_parts", "quota_metric", "quota_limit")]
+    old_aliases.append("_" + "remaining_" + "amount")
+    for helper in old_aliases:
+        assert not hasattr(stage_helpers, helper)
 
-    for old_definition in (
-        r"def _canonical_slug\(",
-        r"def _hash_parts\(",
-        r"def _combo_models_idempotency_key\(",
-        r"def _quota_metric\(",
-        r"def _quota_limit\(",
-        r"def _remaining_amount\(",
-    ):
+    assert "from fmo.idempotency import canonical_slug" in discovery
+    assert "from fmo.idempotency import hash_parts" in quota
+    assert "from fmo.idempotency import hash_parts" in probing
+    assert "from fmo.idempotency import hash_parts" in allocation
+    assert "from fmo.idempotency import hash_parts" in apply_stage
+    assert "from fmo.idempotency import hash_parts" in roles
+    assert "from fmo.quota_normalize import quota_metric" in access
+    assert "from fmo.quota_normalize import remaining_amount" in probing
+    assert "from fmo.quota_normalize import remaining_amount" in allocation
+    assert "from fmo.quota_normalize import remaining_amount" in apply_stage
+    assert "from fmo.quota_normalize import remaining_amount" in roles
+
+    for old_definition in [rf"def {alias}\(" for alias in old_aliases]:
         assert re.search(old_definition, stage_source) is None
+    assert re.search(r"def _combo_models_idempotency_key\(", stage_source) is None
     assert "datetime.now(UTC)" not in stage_source
     assert "def _idempotency_key" not in model_registration_source
 

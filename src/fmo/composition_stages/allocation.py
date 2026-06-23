@@ -3,9 +3,9 @@ from __future__ import annotations
 from fmo.allocation import allocate_globally, build_priority_combo, validate_plan
 from fmo.config import DEFAULT_AUTO_ROUTER_TAIL, configured_router_entry, is_configured_router
 from fmo.forecast import apply_historical_reserve, cold_start_demand, protected_demand
-from fmo.idempotency import hash_parts as _hash_parts
+from fmo.idempotency import hash_parts
 from fmo.pipeline import PipelineContext, StageResult
-from fmo.quota_normalize import remaining_amount as _remaining_amount
+from fmo.quota_normalize import remaining_amount
 
 from ._base import StageDependencies
 from ._helpers import _effect_result
@@ -68,7 +68,7 @@ def _demand_forecast_stage(_dependencies: StageDependencies, context: PipelineCo
                     "role_id": role["id"],
                     "expected": reserve.reserved,
                     "protected": protected,
-                    "hash": _hash_parts(role["id"], str(reserve.reserved), cold_start.source),
+                    "hash": hash_parts(role["id"], str(reserve.reserved), cold_start.source),
                     "source": cold_start.source,
                     "base": reserve.base,
                     "multiplier": reserve.multiplier,
@@ -123,15 +123,13 @@ def _allocation_stage(_dependencies: StageDependencies, context: PipelineContext
                 "id": str(row["endpoint_id"]),
                 "pool": str(row["quota_pool_id"]),
                 "score": float(row["total_score"]),
-                "capacity": pool_remaining.get(
-                    str(row["quota_pool_id"]), _remaining_amount(row["effective_remaining"])
-                ),
+                "capacity": pool_remaining.get(str(row["quota_pool_id"]), remaining_amount(row["effective_remaining"])),
                 "is_router": is_configured_router(str(row["provider_model_id"])),
                 "input": _configured_router_input(str(row["provider_model_id"])),
                 "effective_context_window": int(row["effective_context_window"] or 0),
                 "access": "free_quota_available" if row["access_status"] == "confirmed" else "unknown_excluded",
                 "basic_probe": row["probe_status"] == "passed",
-                "quota": pool_remaining.get(str(row["quota_pool_id"]), _remaining_amount(row["effective_remaining"])),
+                "quota": pool_remaining.get(str(row["quota_pool_id"]), remaining_amount(row["effective_remaining"])),
                 "breaker": "closed",
             }
             for row in score_rows
@@ -185,7 +183,7 @@ def _allocation_stage(_dependencies: StageDependencies, context: PipelineContext
                     "role_status": validation.role_status,
                     "pool_reports": pool_reports,
                 },
-                input_state_hash=_hash_parts(role["id"], str(targets), str(pool_reports)),
+                input_state_hash=hash_parts(role["id"], str(targets), str(pool_reports)),
             )
             written += 1
     return _effect_result("allocation", changed=written > 0)

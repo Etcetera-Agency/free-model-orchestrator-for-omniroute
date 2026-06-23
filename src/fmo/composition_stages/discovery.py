@@ -7,7 +7,7 @@ from psycopg.types.json import Jsonb
 
 from fmo.accounts import AccountFetchError
 from fmo.external_metadata import ExternalMetadataError
-from fmo.idempotency import canonical_slug as _canonical_slug
+from fmo.idempotency import canonical_slug
 from fmo.matcher import match_model
 from fmo.metadata_sync import MetadataSyncResult
 from fmo.model_registration import register_new_free_models
@@ -233,7 +233,7 @@ def _model_matching_stage(_dependencies: StageDependencies, context: PipelineCon
             status = "auto_use" if result.auto_use else "review_required"
             canonical_id = None
             if result.auto_use:
-                slug = _canonical_slug(endpoint["provider_model_id"])
+                slug = canonical_slug(endpoint["provider_model_id"])
                 model = context.repository.canonical_models.upsert(transaction, canonical_slug=slug)
                 canonical_slugs.add(slug)
                 canonical_id = model["id"]

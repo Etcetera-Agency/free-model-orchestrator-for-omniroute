@@ -5,8 +5,7 @@ from typing import Any
 from psycopg.types.json import Jsonb
 
 from fmo.config import DEFAULT_APPLY_MIN_SAFETY_BUFFER
-from fmo.idempotency import hash_parts as _hash_parts
-from fmo.idempotency import utcnow
+from fmo.idempotency import hash_parts, utcnow
 from fmo.pipeline import PipelineContext, StageResult
 from fmo.quota_manager import QuotaFetchError, fetch_live_quota_snapshot
 from fmo.quota_research import research_quota_rule
@@ -88,7 +87,7 @@ def _quota_research_stage(dependencies: StageDependencies, context: PipelineCont
                 hard_stop_capable=claim.hard_stop,
                 confidence=rule.confidence,
                 status="active",
-                rule_hash=_hash_parts(str(endpoint["id"]), snapshot["content_hash"], str(rule.confidence)),
+                rule_hash=hash_parts(str(endpoint["id"]), snapshot["content_hash"], str(rule.confidence)),
             )
         written += 1
     if changes.lost:

@@ -8,7 +8,7 @@ from psycopg.types.json import Jsonb
 from fmo.access import classify_access
 from fmo.idempotency import utcnow
 from fmo.pipeline import PipelineContext, StageResult
-from fmo.quota_normalize import quota_metric as _quota_metric
+from fmo.quota_normalize import quota_metric
 
 from ._base import StageDependencies
 from ._helpers import _effect_result
@@ -50,7 +50,7 @@ def _access_classification_stage(_dependencies: StageDependencies, context: Pipe
             return StageResult(status="partial_stale", reason="quota_rule_missing")
         written = 0
         for row in [item for item in rows if item["quota_rule_id"] is not None]:
-            metric, limit = _quota_metric(row["limits"])
+            metric, limit = quota_metric(row["limits"])
             reset_at = utcnow() + timedelta(days=1)
             evidence = {
                 "quota_rule": True,

@@ -2,17 +2,9 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from fmo.idempotency import canonical_slug, hash_parts
 from fmo.pipeline import PipelineContext, StageResult
-from fmo.quota_normalize import quota_limit, quota_metric, remaining_amount
 
 from ._base import StageAdapter, StageAdapters, StageDependencies
-
-_canonical_slug = canonical_slug
-_hash_parts = hash_parts
-_quota_metric = quota_metric
-_quota_limit = quota_limit
-_remaining_amount = remaining_amount
 
 
 def _effect_result(stage_name: str, *, changed: bool) -> StageResult:

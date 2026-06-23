@@ -12,7 +12,7 @@ from fmo.hermes_inventory import (
     read_hermes_http_sources,
     run_inspector,
 )
-from fmo.idempotency import hash_parts as _hash_parts
+from fmo.idempotency import hash_parts
 from fmo.pipeline import PipelineContext, StageResult
 
 from ._base import StageDependencies
@@ -26,10 +26,10 @@ def _hermes_inventory_stage(dependencies: StageDependencies, context: PipelineCo
         inventory = _read_hermes_inventory(dependencies)
     except (ValueError, HermesInventoryError) as exc:
         return StageResult(status="validation_failed", reason=str(exc))
-    source_hash = _hash_parts(
+    source_hash = hash_parts(
         dependencies.config.hermes_inventory_mode,
         *[
-            _hash_parts(
+            hash_parts(
                 consumer.role_id,
                 consumer.consumer_type,
                 consumer.consumer,

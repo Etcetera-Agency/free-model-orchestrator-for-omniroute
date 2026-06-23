@@ -5,10 +5,10 @@ from typing import Any
 
 from fmo.context import context_eligible, effective_context_window
 from fmo.forecast import quality_band_for_demand
-from fmo.idempotency import hash_parts as _hash_parts
+from fmo.idempotency import hash_parts
 from fmo.pipeline import PipelineContext, StageResult
 from fmo.quality import evaluate_quality_gate
-from fmo.quota_normalize import remaining_amount as _remaining_amount
+from fmo.quota_normalize import remaining_amount
 from fmo.scoring import EligibilityDecision, aa_subscore, eligible_for_scoring, latency_score_source, score_endpoint
 
 from ._base import StageDependencies
@@ -21,8 +21,6 @@ AA_SCORE_PERCENTILES = {
     "coding_index": (0.0, 100.0),
     "agentic_index": (0.0, 100.0),
 }
-
-_remaining_requests = _remaining_amount
 
 
 def _role_lifecycle_stage(_dependencies: StageDependencies, context: PipelineContext) -> StageResult:
@@ -96,7 +94,7 @@ def _role_scoring_stage(_dependencies: StageDependencies, context: PipelineConte
             required = set(requirements.get("capabilities", []))
             for endpoint in endpoints:
                 remaining = pool_remaining.get(
-                    str(endpoint["quota_pool_id"]), _remaining_amount(endpoint["effective_remaining"])
+                    str(endpoint["quota_pool_id"]), remaining_amount(endpoint["effective_remaining"])
                 )
                 eligibility = eligible_for_scoring(
                     {
@@ -149,7 +147,7 @@ def _role_scoring_stage(_dependencies: StageDependencies, context: PipelineConte
                     component_scores=score.components,
                     eligibility=eligibility.eligible,
                     rejection_reasons=[] if eligibility.eligible else [eligibility.reason or "unknown"],
-                    input_state_hash=_hash_parts(str(role["id"]), str(endpoint["id"]), str(score.total)),
+                    input_state_hash=hash_parts(str(role["id"]), str(endpoint["id"]), str(score.total)),
                 )
                 written += 1
     return _effect_result("role-scoring", changed=written > 0)
@@ -220,9 +218,7 @@ def _quality_band_candidates(transaction: Any, metric: str) -> list[dict[str, An
     return [
         {
             "quality": float(row["quality"]),
-            "capacity": _remaining_requests(row["effective_remaining"])
-            if row["effective_remaining"] is not None
-            else 0,
+            "capacity": remaining_amount(row["effective_remaining"]) if row["effective_remaining"] is not None else 0,
             "confirmed_free": row["status"] == "confirmed" and bool(row["hard_stop_capable"]),
         }
         for row in rows
