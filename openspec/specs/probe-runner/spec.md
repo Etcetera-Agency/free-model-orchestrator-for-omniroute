@@ -30,9 +30,12 @@ is non-empty. Production probes SHALL use the shared OpenAI-compatible
 because provider-specific provider ids may be management identifiers that are
 not valid chat route slugs. Production probes SHALL request streaming mode so
 providers that reject OmniRoute-injected `stream_options` on non-stream requests
-can still be validated. Provider denial text that indicates unusable free quota
-(for example "prevent abuse of free resources" or "accounts that have not been
-recharged") SHALL fail the probe even when the upstream returns HTTP 200.
+can still be validated. Streaming probes SHALL use a distinct suite version and
+request hash from older non-stream probes, and endpoint `probe_status` SHALL
+reflect the stored probe row used for that run. Provider denial text that
+indicates unusable free quota (for example "prevent abuse of free resources" or
+"accounts that have not been recharged") SHALL fail the probe even when the
+upstream returns HTTP 200.
 
 #### Scenario: Non-200 or empty content
 - GIVEN a probe response has non-200 status or empty content
@@ -45,6 +48,12 @@ recharged") SHALL fail the probe even when the upstream returns HTTP 200.
   unrecharged accounts
 - WHEN probe result is evaluated
 - THEN `passed` is false
+
+#### Scenario: Streaming probe evidence supersedes old same-day failures
+- GIVEN an endpoint has an older same-day failed non-stream probe row
+- WHEN the streaming probe succeeds
+- THEN a new streaming suite probe row is stored
+- AND endpoint `probe_status` is `passed`
 ### Requirement: Capability-gated suites
 
 The system SHALL run the basic-text suite for every new endpoint and run

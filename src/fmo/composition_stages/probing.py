@@ -10,6 +10,8 @@ from ._base import StageDependencies
 from ._helpers import _effect_result
 from .apply import _read_current_combos
 
+PROBE_SUITE_VERSION = "production-v2-stream"
+
 
 def _probing_stage(dependencies: StageDependencies, context: PipelineContext) -> StageResult:
     if dependencies.omniroute_client is None:
@@ -60,12 +62,12 @@ def _probing_stage(dependencies: StageDependencies, context: PipelineContext) ->
             action, reason = handle_probe_error(exc.status_code)
             details.update({"error_action": action, "error_reason": reason})
         finished_at = utcnow()
-        request_hash = hash_parts(str(row["id"]), started_at.date().isoformat(), "basic")
+        request_hash = hash_parts(str(row["id"]), started_at.date().isoformat(), PROBE_SUITE_VERSION, "basic")
         with context.repository.database.transaction() as transaction:
-            context.repository.probes.record(
+            probe = context.repository.probes.record(
                 transaction,
                 endpoint_id=row["id"],
-                suite_version="production-v1",
+                suite_version=PROBE_SUITE_VERSION,
                 probe_type="basic",
                 request_hash=request_hash,
                 passed=passed,
@@ -76,7 +78,7 @@ def _probing_stage(dependencies: StageDependencies, context: PipelineContext) ->
             )
             transaction.execute(
                 "UPDATE provider_endpoints SET probe_status = %(status)s WHERE id = %(endpoint_id)s",
-                {"status": "passed" if passed else "failed", "endpoint_id": row["id"]},
+                {"status": "passed" if probe["passed"] else "failed", "endpoint_id": row["id"]},
             )
         written += 1
     return _effect_result("probing", changed=written > 0)

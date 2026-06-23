@@ -10,7 +10,8 @@
   responsibilities. Follow-up fix narrows provider-wide probing to current
   one-member combo seeds when wildcard quota rules confirm many endpoints, so
   live Nvidia probing no longer blasts unavailable catalog entries before
-  scoring can start.
+  scoring can start. Streaming probe evidence uses a new suite version/hash, so
+  old same-day failed probe rows no longer block apply after a fixed probe pass.
 - Deploy fix: quota research now treats provider/account search as a topology
   discovery step before quota activation. Provider-wide or RPM-only answers can
   still write wildcard rules, but model-group/per-model answers fail closed

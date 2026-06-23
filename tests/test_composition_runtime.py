@@ -101,6 +101,42 @@ def test_probe_stage_limits_provider_wildcard_pool_to_current_combo_seed_when_av
     ]
 
 
+@pytest.mark.spec("probe-runner::Streaming probe evidence supersedes old same-day failures")
+def test_probe_stage_records_new_stream_probe_after_old_same_day_failure(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    client = PipelineOpsClient()
+    prepare_confirmed_endpoint(repository, client=client)
+    with repository.database.transaction() as transaction:
+        endpoint = transaction.execute("SELECT id FROM provider_endpoints").fetchone()
+        repository.probes.record(
+            transaction,
+            endpoint_id=endpoint["id"],
+            suite_version="production-v1",
+            probe_type="basic",
+            request_hash=f"{endpoint['id']}:old-basic",
+            passed=False,
+            http_status=404,
+            started_at=datetime.now(UTC),
+            finished_at=datetime.now(UTC),
+            details={"error_reason": "old_failure"},
+        )
+
+    result = run_composed_stage(repository, "probing", client=client)
+
+    with repository.database.transaction() as transaction:
+        probes = transaction.execute(
+            "SELECT suite_version, passed FROM endpoint_probes ORDER BY started_at"
+        ).fetchall()
+        endpoint = transaction.execute("SELECT probe_status FROM provider_endpoints").fetchone()
+    assert result.exit_code == 0
+    assert [(row["suite_version"], row["passed"]) for row in probes] == [
+        ("production-v1", False),
+        ("production-v2-stream", True),
+    ]
+    assert endpoint["probe_status"] == "passed"
+
+
 @pytest.mark.spec("probe-runner::Probe HTTP errors are persisted fail-closed")
 def test_probe_stage_records_http_error_without_crashing(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
