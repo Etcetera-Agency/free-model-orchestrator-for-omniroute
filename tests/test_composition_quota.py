@@ -96,6 +96,59 @@ def test_access_classification_stage_persists_canonical_status_and_evidence(post
     assert stored["access_status"] == "confirmed"
 
 
+@pytest.mark.spec("access-classifier::Missing endpoint-local quota evidence fails closed")
+def test_access_classification_records_missing_quota_without_aborting_other_endpoints(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    confirmed_endpoint = seed_endpoint(repository, model_id="with-rule")
+    seed_endpoint(repository, model_id="missing-rule")
+    run_composed_stage(repository, "model-matching")
+    with repository.database.transaction() as transaction:
+        row = transaction.execute(
+            """
+            SELECT p.id AS provider_id, pa.id AS account_id
+            FROM provider_endpoints pe
+            JOIN provider_accounts pa ON pa.id = pe.provider_account_id
+            JOIN providers p ON p.id = pa.provider_id
+            WHERE pe.id = %(endpoint_id)s
+            """,
+            {"endpoint_id": confirmed_endpoint["id"]},
+        ).fetchone()
+        repository.quota_rules.upsert(
+            transaction,
+            provider_id=row["provider_id"],
+            provider_account_id=row["account_id"],
+            source_snapshot_id=None,
+            model_pattern="with-rule",
+            access_type="free_quota",
+            limits={"requests": 100, "window": "day"},
+            reset_policy={"window": "day"},
+            hard_stop_capable=True,
+            confidence=0.7,
+            status="active",
+            rule_hash="with-rule:test",
+        )
+
+    result = run_composed_stage(repository, "access-classification")
+
+    with repository.database.transaction() as transaction:
+        states = transaction.execute(
+            """
+            SELECT pe.provider_model_id, pe.access_status, eas.status, eas.reason_code, eas.evidence
+            FROM provider_endpoints pe
+            JOIN endpoint_access_states eas ON eas.endpoint_id = pe.id
+            ORDER BY pe.provider_model_id
+            """
+        ).fetchall()
+    assert result.exit_code == 0
+    assert [(row["provider_model_id"], row["status"], row["reason_code"]) for row in states] == [
+        ("missing-rule", "unknown", "quota_rule_missing"),
+        ("with-rule", "confirmed", "quota_rule_remaining"),
+    ]
+    assert [row["access_status"] for row in states] == ["unknown", "confirmed"]
+    assert states[0]["evidence"]["free_access"] is False
+
+
 @pytest.mark.spec("pipeline-orchestration::External payload missing fails closed")
 def test_quota_research_missing_external_payload_fails_closed(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))

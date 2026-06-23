@@ -1,5 +1,14 @@
 # Completion Review
 
+- Deploy fix: access classification now treats missing quota research as
+  endpoint-local fail-closed state (`unknown` / `quota_rule_missing`) instead of
+  aborting the whole batch. This lets live endpoints with active quota rules
+  continue into probe/score/allocation while silent models stay unusable until a
+  numeric quota source or calibration exists. Code Simplifier review kept the
+  fix scoped to the access stage plus live spec/TODO docs. Focused verification:
+  ruff on touched files, OpenSpec strict validation, and focused pytest invoked
+  on the project Python 3.12 venv (skipped locally because PostgreSQL initdb
+  cannot allocate `/dev/shm`).
 - Deploy fix: production Postgres and the baseline schema now allow
   `role_consumers.consumer_type='auxiliary'`, matching Hermes inventory output
   for auxiliary model slots. The live shlinker FMO dry-run no longer fails on

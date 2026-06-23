@@ -108,6 +108,13 @@
   liveness without overwriting research/calibration capacity. Apply now requires
   confirmed-free, hard-stop, fresh probe, known daily budget above buffer, fresh
   liveness above floor, and no lockout; null `resetAt` is healthy.
+- Live quota research follow-up — many OmniRoute free models return useful
+  search summaries but no numeric daily/monthly amount, and their live
+  `/api/usage/quota` rows may expose only liveness (`percentRemaining`) without
+  `quotaTotal`. Keep those endpoints fail-closed as `quota_rule_missing` while
+  allowing endpoints with active rules to classify/probe/allocate. Add a
+  calibration or provider-specific quota source before treating those silent
+  models as usable capacity.
 - `fix-selection-correctness` — archived 2026-06-22. Production role scoring now
   uses AA metrics, latency source priority, health/stability telemetry, and
   missing-AA uncertainty instead of constant placeholders. Allocation now uses

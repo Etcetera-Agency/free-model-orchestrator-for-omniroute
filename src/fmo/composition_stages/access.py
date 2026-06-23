@@ -46,8 +46,8 @@ def _access_classification_stage(_dependencies: StageDependencies, context: Pipe
         ]
         for row in lost_free_rows:
             _record_lost_free_access_state(transaction, row["endpoint_id"])
-        if missing_rows:
-            return StageResult(status="partial_stale", reason="quota_rule_missing")
+        for row in missing_rows:
+            _record_missing_quota_access_state(transaction, row["endpoint_id"])
         written = 0
         for row in [item for item in rows if item["quota_rule_id"] is not None]:
             metric, limit = quota_metric(row["limits"])
@@ -147,7 +147,7 @@ def _access_classification_stage(_dependencies: StageDependencies, context: Pipe
                 {"status": status, "endpoint_id": row["endpoint_id"]},
             )
             written += 1
-    return _effect_result("access-classification", changed=written > 0)
+    return _effect_result("access-classification", changed=bool(written or lost_free_rows or missing_rows))
 
 
 def _record_lost_free_access_state(transaction: Any, endpoint_id: Any) -> None:
@@ -171,6 +171,42 @@ def _record_lost_free_access_state(transaction: Any, endpoint_id: Any) -> None:
         )
         ON CONFLICT (endpoint_id)
         DO UPDATE SET
+          status = EXCLUDED.status,
+          reason_code = EXCLUDED.reason_code,
+          effective_remaining = EXCLUDED.effective_remaining,
+          reset_at = EXCLUDED.reset_at,
+          hard_stop_capable = EXCLUDED.hard_stop_capable,
+          evidence = EXCLUDED.evidence,
+          classified_at = now()
+        """,
+        {"endpoint_id": endpoint_id},
+    )
+
+
+def _record_missing_quota_access_state(transaction: Any, endpoint_id: Any) -> None:
+    # AICODE-NOTE: Missing quota evidence is endpoint-local fail-closed state;
+    # it must not abort classification for other endpoints that have rules.
+    transaction.execute(
+        """
+        UPDATE provider_endpoints
+        SET access_status = 'unknown'
+        WHERE id = %(endpoint_id)s
+        """,
+        {"endpoint_id": endpoint_id},
+    )
+    transaction.execute(
+        """
+        INSERT INTO endpoint_access_states (
+          endpoint_id, status, reason_code, effective_remaining,
+          reset_at, hard_stop_capable, evidence
+        )
+        VALUES (
+          %(endpoint_id)s, 'unknown', 'quota_rule_missing',
+          '{}'::jsonb, NULL, false, '{"free_access": false, "quota_rule": false}'::jsonb
+        )
+        ON CONFLICT (endpoint_id)
+        DO UPDATE SET
+          quota_rule_id = NULL,
           status = EXCLUDED.status,
           reason_code = EXCLUDED.reason_code,
           effective_remaining = EXCLUDED.effective_remaining,

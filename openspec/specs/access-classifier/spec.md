@@ -54,8 +54,20 @@ SHALL NOT prove free access for a specific account.
 ### Requirement: Fail closed
 
 The system SHALL fail closed when evidence is missing, empty or stale.
+During batch access classification, missing quota evidence for one endpoint SHALL
+be stored as endpoint-local `unknown` state with `quota_rule_missing`; it SHALL
+NOT abort classification for other endpoints that have usable quota evidence.
 
 #### Scenario: Empty evidence
 - GIVEN no usable evidence is present
 - WHEN access is classified
 - THEN the endpoint is not classified as usable free access
+
+#### Scenario: Missing endpoint-local quota evidence fails closed
+- GIVEN one endpoint has an active usable quota rule
+- AND another endpoint has no quota rule
+- WHEN access classification runs over both endpoints
+- THEN the endpoint with the rule is classified normally
+- AND the endpoint without the rule is stored as `unknown` with
+  `quota_rule_missing`
+- AND the stage succeeds so downstream stages can use confirmed endpoints
