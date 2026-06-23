@@ -9,11 +9,6 @@
   executable scenarios for reviewer prompt context, safety facts, external
   prompt file loading, prompt bounds, and secret redaction. Added those scenario
   ids to `tests/spec_coverage_pending.txt`; remove them as tests land.
-- `update-combo-member-identity` — implement before
-  `update-smart-combo-review-context`. The reviewer needs structured
-  provider/model/account, quota-pool, and canonical-model identities before its
-  patches can be validated and rendered safely. Added its allocator/combo-applier
-  scenario ids to `tests/spec_coverage_pending.txt`; remove them as tests land.
 - `update-aa-index-migration-inspector` — active proposal captures the AA
   migration inspector hardening slice: real prompt-file loading, deterministic
   migration context, shared resolver model selection, typed machine-used
@@ -23,6 +18,12 @@
 
 ## Resolved
 
+- `update-combo-member-identity` — archived 2026-06-23. Allocation targets
+  now carry structured OmniRoute model steps, account/quota-pool/canonical
+  identity, and diversity diagnostics; diff/apply persist structured members
+  with endpoint-id audit fields; apply sends structured `PUT /api/combos/{id}`
+  payloads while preserving drift, safety, smoke, and rollback gates. Full
+  pytest deferred to final all-slice verification by request.
 - `update-quota-research-range-resolution` — archived 2026-06-23. Quota
   research now threads `previous_limit` into the
   Instructor inspector prompt, documents deterministic range clamping in the

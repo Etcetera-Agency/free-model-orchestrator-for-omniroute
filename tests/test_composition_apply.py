@@ -21,6 +21,7 @@ from tests._composition_support import (
     run_composed_stage_with_dependencies,
     run_runtime_command,
     seed_apply_ready_diff,
+    structured_combo_step,
     valid_env,
 )
 
@@ -63,6 +64,8 @@ def test_demand_forecast_persists_floor_and_one_time_reserve(postgres_url):
 @pytest.mark.spec("pipeline-orchestration::Allocation persists one combo plan per role")
 @pytest.mark.spec("pipeline-orchestration::Oversubscription gate blocks zero-capacity pool")
 @pytest.mark.spec("pipeline-orchestration::Inventory precedes scoring")
+@pytest.mark.spec("allocator::Allocation target carries structured member identity")
+@pytest.mark.spec("allocator::Family concentration reported")
 def test_allocation_stage_persists_plan_and_constraint_report(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     repository = Repository(Database(postgres_url))
@@ -92,7 +95,22 @@ def test_allocation_stage_persists_plan_and_constraint_report(postgres_url):
     assert plan["role_id"] == "routing_fast"
     assert plan["status"] == "planned"
     assert len(plan["targets"]) == 1
+    target = plan["targets"][0]
+    assert target["endpoint_id"]
+    assert target["combo_step"] == {
+        "kind": "model",
+        "model": "free-chat",
+        "providerId": "provider-a",
+        "connectionId": "conn-provider-a",
+        "weight": 0,
+    }
+    assert target["groups"]["provider_account_id"]
+    assert target["groups"]["quota_pool_id"]
+    assert target["groups"]["canonical_model_id"]
+    assert "canonical_family" in target["groups"]
+    assert target["score"] > 0
     assert plan["constraint_report"]["apply"] is True
+    assert "canonical_family_concentration" in plan["constraint_report"]["diversity"]
     assert plan["constraint_report"]["pool_reports"][next(iter(plan["constraint_report"]["pool_reports"]))][
         "usage"
     ] == pytest.approx(39.6)
@@ -101,6 +119,7 @@ def test_allocation_stage_persists_plan_and_constraint_report(postgres_url):
 @pytest.mark.spec("pipeline-orchestration::Diff is computed without mutating OmniRoute")
 @pytest.mark.spec("smart-combo-reviewer::Reviewer output is recorded")
 @pytest.mark.spec("smart-combo-reviewer::Applied diff is independent of the reviewer")
+@pytest.mark.spec("combo-applier::Endpoint ids retained for audit")
 def test_diff_stage_persists_minimal_diff_without_mutating_omniroute(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     repository = Repository(Database(postgres_url))
@@ -125,6 +144,11 @@ def test_diff_stage_persists_minimal_diff_without_mutating_omniroute(postgres_ur
     assert llm_runtime.calls[0]["site"] == "smart-combo-reviewer"
     assert snapshot["phase"] == "diff"
     assert snapshot["state_json"]["remove"] == ["old-endpoint"]
+    assert snapshot["state_json"]["before"] == ["old-endpoint"]
+    assert snapshot["state_json"]["before_endpoint_ids"] == ["old-endpoint"]
+    assert snapshot["state_json"]["after_endpoint_ids"]
+    assert snapshot["state_json"]["after"][0]["providerId"] == "provider-a"
+    assert snapshot["state_json"]["after"][0]["connectionId"] == "conn-provider-a"
     assert snapshot["state_json"]["after"] != ["reviewer-added"]
     assert snapshot["state_json"]["advisory_review"]["status"] == "ok"
 
@@ -187,6 +211,7 @@ def test_smoke_combo_maps_non_2xx_response_to_failure():
 @pytest.mark.spec("combo-applier::Public combo projection is never used for management apply")
 @pytest.mark.spec("combo-applier::Research budget with healthy liveness passes")
 @pytest.mark.spec("combo-applier::Endpoint with null reset is not rejected")
+@pytest.mark.spec("combo-applier::Structured combo steps applied")
 @pytest.mark.spec("omniroute-client::Bridge denies combo test helper")
 def test_apply_stage_mutates_fmo_combo_and_reports_real_smoke_signal(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
@@ -207,7 +232,9 @@ def test_apply_stage_mutates_fmo_combo_and_reports_real_smoke_signal(postgres_ur
     assert any(call[0] == "/v1/chat/completions" for call in client.calls)
     assert not any(call[0] == "/api/combos/test" for call in client.calls)
     assert not any(call[0] == "/v1/combos" for call in client.calls)
-    assert next(call for call in client.calls if call[0].startswith("/api/combos/"))[3]
+    combo_put = next(call for call in client.calls if call[0].startswith("/api/combos/"))
+    assert combo_put[1]["models"] == [structured_combo_step(model_id="free-chat", connection_id="conn-provider-a")]
+    assert combo_put[3]
     assert client.combos["fmo-routing_fast"] != ["old-endpoint"]
 
 
@@ -413,6 +440,7 @@ def test_apply_stage_empty_smoke_completion_rolls_back(postgres_url):
 
 
 @pytest.mark.spec("combo-applier::Live state diverged from diff-time before")
+@pytest.mark.spec("combo-applier::Drift guard uses structured baseline")
 def test_apply_stage_blocks_when_live_combo_diverged_from_diff_before(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     repository = Repository(Database(postgres_url))
@@ -473,7 +501,8 @@ def test_apply_stage_skips_absent_combo_and_rebalances_present_combo(postgres_ur
     result = run_composed_stage(repository, "apply", client=client)
 
     assert result.exit_code == 0
-    assert client.combos["fmo-routing_fast"] == [present_endpoint]
+    assert present_endpoint
+    assert client.combos["fmo-routing_fast"] == [structured_combo_step(model_id="free-present")]
     assert "fmo-missing" not in client.combos
     assert any(call[0] == "/api/combos/fmo-routing_fast" for call in client.calls)
     assert not any(call[0] == "/api/combos/fmo-missing" for call in client.calls)

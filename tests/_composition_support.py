@@ -94,6 +94,7 @@ __all__ = [
     "seed_endpoint",
     "seed_free_registry_snapshot",
     "select_llm_model",
+    "structured_combo_step",
     "timedelta",
     "valid_env",
 ]
@@ -450,6 +451,18 @@ def seed_confirmed_llm_candidate(
     return endpoint
 
 
+def structured_combo_step(*, model_id, provider_id="provider-a", connection_id="pool-a"):
+    step = {
+        "kind": "model",
+        "model": model_id,
+        "providerId": provider_id,
+        "weight": 0,
+    }
+    if connection_id:
+        step["connectionId"] = connection_id
+    return step
+
+
 def seed_apply_ready_diff(repository, *, role_id, combo_id, before, after_model_id):
     endpoint = seed_confirmed_llm_candidate(
         repository,
@@ -485,7 +498,9 @@ def seed_apply_ready_diff(repository, *, role_id, combo_id, before, after_model_
             state_hash=f"{combo_id}:diff",
             state_json={
                 "before": before,
-                "after": [str(endpoint["id"])],
+                "after": [structured_combo_step(model_id=after_model_id)],
+                "before_endpoint_ids": before,
+                "after_endpoint_ids": [str(endpoint["id"])],
                 "add": [str(endpoint["id"])],
                 "remove": before,
             },

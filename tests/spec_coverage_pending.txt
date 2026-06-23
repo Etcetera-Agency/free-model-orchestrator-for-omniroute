@@ -10,13 +10,6 @@ smart-combo-reviewer::Reviewer receives planning and safety facts
 smart-combo-reviewer::Reviewer uses external prompt file
 smart-combo-reviewer::Reviewer prompt remains bounded and complete
 smart-combo-reviewer::Reviewer prompt redacts secrets
-combo-applier::Structured combo steps applied
-combo-applier::Endpoint ids retained for audit
-combo-applier::Drift guard uses structured baseline
-allocator::Allocation target carries structured member identity
-allocator::Duplicate canonical model avoided when alternative exists
-allocator::Family concentration reported
-allocator::Quota pool remains hard gate
 aa-index-migration::Prompt is not selected-model JSON
 aa-index-migration::Invalid proposal enters repair loop
 aa-index-migration::Unrepaired proposal fails closed

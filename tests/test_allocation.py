@@ -238,6 +238,90 @@ def test_priority_combo_drops_member_without_pool_capacity():
     assert pool_usage == {"pool-a": 10, "pool-b": 10}
 
 
+@pytest.mark.spec("allocator::Duplicate canonical model avoided when alternative exists")
+@pytest.mark.spec("allocator::Family concentration reported")
+def test_priority_combo_prefers_distinct_canonical_model_and_reports_family_concentration():
+    combo = build_priority_combo(
+        "routing_fast",
+        [
+            {
+                "id": "weak-a",
+                "pool": "pool-a",
+                "score": 1,
+                "capacity": 100,
+                "canonical_model_id": "model-a",
+                "canonical_family": "gemini",
+            },
+            {
+                "id": "weak-a-duplicate",
+                "pool": "pool-b",
+                "score": 2,
+                "capacity": 100,
+                "canonical_model_id": "model-a",
+                "canonical_family": "gemini",
+            },
+            {
+                "id": "weak-b",
+                "pool": "pool-c",
+                "score": 3,
+                "capacity": 100,
+                "canonical_model_id": "model-b",
+                "canonical_family": "gemini",
+            },
+        ],
+        per_pool_cap=2,
+        demand=10,
+        pool_usage={},
+        reserved_endpoint_id=None,
+    )
+
+    assert combo.endpoints == ["weak-a", "weak-b"]
+    assert combo.diagnostics["duplicate_canonical_model_skips"][0]["endpoint_id"] == "weak-a-duplicate"
+    assert combo.diagnostics["canonical_family_concentration"]["families"] == {"gemini": 2}
+
+
+@pytest.mark.spec("allocator::Quota pool remains hard gate")
+def test_priority_combo_keeps_quota_pool_capacity_as_hard_gate_before_diversity():
+    pool_usage = {"pool-b": 95}
+
+    combo = build_priority_combo(
+        "routing_fast",
+        [
+            {
+                "id": "same-family",
+                "pool": "pool-a",
+                "score": 1,
+                "capacity": 100,
+                "canonical_model_id": "model-a",
+                "canonical_family": "gemini",
+            },
+            {
+                "id": "diverse-but-full",
+                "pool": "pool-b",
+                "score": 2,
+                "capacity": 100,
+                "canonical_model_id": "model-b",
+                "canonical_family": "claude",
+            },
+            {
+                "id": "same-family-fallback",
+                "pool": "pool-c",
+                "score": 3,
+                "capacity": 100,
+                "canonical_model_id": "model-c",
+                "canonical_family": "gemini",
+            },
+        ],
+        per_pool_cap=2,
+        demand=10,
+        pool_usage=pool_usage,
+        reserved_endpoint_id=None,
+    )
+
+    assert combo.endpoints == ["same-family", "same-family-fallback"]
+    assert combo.diagnostics["quota_pool_rejections"][0]["endpoint_id"] == "diverse-but-full"
+
+
 @pytest.mark.spec("demand-forecast::Quality band widens to cover protected demand")
 def test_quality_band_widens_until_confirmed_free_capacity_covers_demand():
     band = quality_band_for_demand(

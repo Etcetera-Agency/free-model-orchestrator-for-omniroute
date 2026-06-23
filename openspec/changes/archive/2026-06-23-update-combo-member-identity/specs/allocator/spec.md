@@ -67,6 +67,12 @@ SHALL remain the hard blocker and SHALL NOT be relaxed for diversity.
 - THEN `kilo-auto/free` is skipped
 - AND `openrouter/free` is still eligible if all other hard filters pass
 
+#### Scenario: Router never outranks a scored endpoint
+- GIVEN a router whose computed score value would otherwise sort ahead of a
+  scored endpoint
+- WHEN the priority combo is built
+- THEN the router is still placed after every scored endpoint
+
 #### Scenario: Allocation target carries structured member identity
 - **WHEN** allocation persists a combo target
 - **THEN** the target includes endpoint id, structured OmniRoute model step,

@@ -1,5 +1,16 @@
 # Completion Review
 
+- `update-combo-member-identity` is archived: allocation targets now
+  include endpoint id, structured OmniRoute `combo_step`, provider account, quota
+  pool, canonical model, canonical slug/family, and score metadata. Combo
+  construction avoids duplicate canonical models when a safe alternative exists,
+  reports canonical-family concentration, and keeps quota-pool capacity as the
+  hard gate. Diff/apply snapshots now store structured members plus endpoint-id
+  audit fields, and apply sends structured model steps while keeping drift,
+  idempotency, smoke, rollback, and dry-run behavior. Focused verification:
+  allocation/apply/profile/advisory/spec coverage tests, ruff, and OpenSpec
+  strict for the change. Archive merged allocator, combo-applier, and
+  audit-rollback deltas into living specs.
 - `update-quota-research-range-resolution` is ready to archive: quota research
   now renders the quota inspector prompt from `reference/prompts/quota-research.md`,
   threads `previous_limit` into that prompt, exposes deterministic range-clamp
