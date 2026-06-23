@@ -24,7 +24,8 @@
   deterministic grid profile/snap/bootstrap helpers. Code Simplifier review
   tightened the cache-hit test setup and added an anchor on the content-hash
   refresh boundary. Static gates also surfaced a stale quota-summary
-  `previous_limit` signature; the minimal fix restored safe-mode derivation.
+  `previous_limit` signature and a missing `timedelta` test import; the minimal
+  fixes restored safe-mode derivation and static lint.
 - `refactor-unify-shared-helpers` is archived: row helpers remain single-home in
   `persistence/_base.py`, timestamp/slug/hash/idempotency-key helpers now live
   in `idempotency.py`, quota payload math lives in `quota_normalize.py`, and the
