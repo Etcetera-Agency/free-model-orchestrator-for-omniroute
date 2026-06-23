@@ -506,10 +506,20 @@ def observe_session_demand(connection: sqlite3.Connection) -> dict[str, float]:
     the role key (one combo per role). Reads the runtime-observation source named
     by the hermes-inventory spec; roles with no observed sessions are absent.
     """
+    if not _table_exists(connection, "sessions"):
+        return {}
     cursor = connection.execute(
         "SELECT model, AVG(api_call_count) FROM sessions WHERE model IS NOT NULL AND api_call_count > 0 GROUP BY model"
     )
     return {row[0]: float(row[1]) for row in cursor.fetchall() if row[0]}
+
+
+def _table_exists(connection: sqlite3.Connection, table: str) -> bool:
+    cursor = connection.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1",
+        (table,),
+    )
+    return cursor.fetchone() is not None
 
 
 def parse_cron_jobs(payload: Any, *, demand_by_role: dict[str, float] | None = None) -> list[Consumer]:

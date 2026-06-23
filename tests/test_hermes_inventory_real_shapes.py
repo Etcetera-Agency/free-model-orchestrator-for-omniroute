@@ -233,6 +233,17 @@ def test_live_slink_empty_state_fixture_records_current_absence():
     assert payload["sessions"] == []
 
 
+@pytest.mark.spec("hermes-inventory::Observed calls_per_run from state.db")
+def test_observe_session_demand_treats_empty_state_db_as_no_observed_demand(tmp_path):
+    db_path = tmp_path / "state.db"
+    db_path.touch()
+    conn = sqlite3.connect(db_path)
+    try:
+        assert observe_session_demand(conn) == {}
+    finally:
+        conn.close()
+
+
 @pytest.mark.spec("hermes-inventory::Mixed consumers recorded")
 def test_build_hermes_inventory_records_source_and_auxiliary_consumers_with_observed_demand(tmp_path):
     conn = _build_state_db(tmp_path / "state.db")
