@@ -1,5 +1,15 @@
 # Completion Review
 
+- `update-smart-combo-review-context` is archived: the diff stage now
+  builds a deterministic reviewer context containing role id, current combo,
+  target combo, minimal diff, role requirements, demand forecast, allocation
+  constraints, bounded candidate registry, quota summary, diversity summary,
+  validation report, and apply-precondition summary. `run_combo_review` renders
+  `reference/prompts/smart-combo-reviewer.md` through `LlmSiteConfig.prompt_path`,
+  redacts secret-like values, and keeps `ComboReviewResponse`/persisted advisory
+  payload stable. Focused verification: advisory/runtime/diff/e2e/spec coverage
+  tests, ruff, and OpenSpec strict for the change. Archive merged the
+  smart-combo-reviewer delta into the living spec.
 - `update-combo-member-identity` is archived: allocation targets now
   include endpoint id, structured OmniRoute `combo_step`, provider account, quota
   pool, canonical model, canonical slug/family, and score metadata. Combo

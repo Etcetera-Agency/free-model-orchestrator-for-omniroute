@@ -120,6 +120,8 @@ def test_allocation_stage_persists_plan_and_constraint_report(postgres_url):
 @pytest.mark.spec("smart-combo-reviewer::Reviewer output is recorded")
 @pytest.mark.spec("smart-combo-reviewer::Applied diff is independent of the reviewer")
 @pytest.mark.spec("combo-applier::Endpoint ids retained for audit")
+@pytest.mark.spec("smart-combo-reviewer::Reviewer receives deterministic combo context")
+@pytest.mark.spec("smart-combo-reviewer::Reviewer receives planning and safety facts")
 def test_diff_stage_persists_minimal_diff_without_mutating_omniroute(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     repository = Repository(Database(postgres_url))
@@ -142,6 +144,19 @@ def test_diff_stage_persists_minimal_diff_without_mutating_omniroute(postgres_ur
     assert client.get_calls[-1] == "/api/combos"
     assert not any(call[0].startswith("/api/combos") for call in client.calls)
     assert llm_runtime.calls[0]["site"] == "smart-combo-reviewer"
+    review_brief = llm_runtime.calls[0]["context"]["review_brief"]
+    assert '"role_id": "routing_fast"' in review_brief
+    assert '"current_combo": ["old-endpoint"]' in review_brief
+    assert '"target_combo": [{"connectionId": "conn-provider-a"' in review_brief
+    assert '"deterministic_diff"' in review_brief
+    assert '"role_requirements"' in review_brief
+    assert '"demand_forecast"' in review_brief
+    assert '"allocation_constraint_report"' in review_brief
+    assert '"candidate_registry"' in review_brief
+    assert '"quota_summary"' in review_brief
+    assert '"diversity_summary"' in review_brief
+    assert '"validation_report"' in review_brief
+    assert '"apply_precondition_summary"' in review_brief
     assert snapshot["phase"] == "diff"
     assert snapshot["state_json"]["remove"] == ["old-endpoint"]
     assert snapshot["state_json"]["before"] == ["old-endpoint"]

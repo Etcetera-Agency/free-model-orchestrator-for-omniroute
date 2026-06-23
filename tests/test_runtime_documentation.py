@@ -12,11 +12,6 @@ ROOT = Path(__file__).resolve().parents[1]
 # tests/spec_coverage_pending.txt (and here) when its test lands. Slices are
 # listed in openspec/TODO.md and openspec/changes/<id>/.
 EXPECTED_ACTIVE_PENDING = {
-    "smart-combo-reviewer::Reviewer receives deterministic combo context",
-    "smart-combo-reviewer::Reviewer receives planning and safety facts",
-    "smart-combo-reviewer::Reviewer uses external prompt file",
-    "smart-combo-reviewer::Reviewer prompt remains bounded and complete",
-    "smart-combo-reviewer::Reviewer prompt redacts secrets",
     "aa-index-migration::Prompt is not selected-model JSON",
     "aa-index-migration::Invalid proposal enters repair loop",
     "aa-index-migration::Unrepaired proposal fails closed",

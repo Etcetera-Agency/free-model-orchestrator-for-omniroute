@@ -6,7 +6,18 @@ from fmo.aa_migration import (
     select_migration_model,
     validate_migration_proposal,
 )
-from fmo.smart_review import apply_review_diffs, run_combo_review
+from fmo.smart_review import apply_review_diffs, build_combo_review_context, run_combo_review
+
+
+def _review_context(role_id="r", endpoints=None):
+    endpoints = endpoints or ["e1"]
+    return {
+        "role_id": role_id,
+        "current_combo": endpoints,
+        "target_combo": endpoints,
+        "deterministic_diff": {"combo_id": f"fmo-{role_id}", "after_endpoint_ids": endpoints},
+        "candidate_registry": {"candidates": [{"endpoint_id": endpoint} for endpoint in endpoints]},
+    }
 
 
 @pytest.mark.spec("smart-combo-reviewer::Unknown endpoint add")
@@ -20,7 +31,7 @@ def test_reviewer_single_call_and_forbidden_ops_rejected():
             "diffs": [{"op": "add", "role": "r", "endpoint_id": "e2", "position": 1}, {"op": "weight", "role": "r"}]
         }
 
-    review = run_combo_review(instructor, deterministic_combo={"r": ["e1"]}, trigger=True)
+    review = run_combo_review(instructor, review_context=_review_context(), trigger=True)
     assert len(calls) == 1
     assert review.valid_diffs == [{"op": "add", "role": "r", "endpoint_id": "e2", "position": 1}]
     assert review.rejected[0]["reason"] == "forbidden_op"
@@ -40,7 +51,7 @@ def test_review_diffs_validated_independently_fail_open_no_combo_test():
         minimum_combo_size=2,
     )
     skipped = run_combo_review(
-        lambda payload: (_ for _ in ()).throw(RuntimeError("down")), deterministic_combo={"r": ["e1"]}, trigger=True
+        lambda payload: (_ for _ in ()).throw(RuntimeError("down")), review_context=_review_context(), trigger=True
     )
     assert combo == {"r": ["e1", "e2"]}
     assert len(audit["rejected"]) == 2
@@ -53,7 +64,7 @@ def test_combo_review_trigger_false_skips_without_instructor_call():
     def instructor(_payload):
         raise AssertionError("instructor should not run")
 
-    review = run_combo_review(instructor, deterministic_combo={"r": ["e1"]}, trigger=False)
+    review = run_combo_review(instructor, review_context=_review_context(), trigger=False)
 
     assert review.status == "skipped_trigger"
     assert review.valid_diffs == []
@@ -110,6 +121,82 @@ def test_review_diffs_duplicate_add_is_idempotent():
 
     assert combo == {"r": ["e1"]}
     assert audit["rejected"] == []
+
+
+@pytest.mark.spec("smart-combo-reviewer::Reviewer receives deterministic combo context")
+@pytest.mark.spec("smart-combo-reviewer::Reviewer receives planning and safety facts")
+@pytest.mark.spec("smart-combo-reviewer::Reviewer prompt redacts secrets")
+def test_combo_review_context_contains_required_facts_and_redacts_secrets():
+    context = build_combo_review_context(
+        role_id="routing_fast",
+        current_combo=["old"],
+        target_combo=[{"kind": "model", "model": "free-chat", "providerId": "provider-a"}],
+        deterministic_diff={"combo_id": "fmo-routing_fast", "add": ["endpoint-a"], "after": ["endpoint-a"]},
+        targets=[
+            {
+                "endpoint_id": "endpoint-a",
+                "combo_step": {"kind": "model", "model": "free-chat", "providerId": "provider-a"},
+                "groups": {"canonical_family": "gemini", "provider_secret": "TOKEN=hidden"},
+                "score": 0.9,
+            }
+        ],
+        constraint_report={"apply": True, "diversity": {"canonical_family_concentration": {"gemini": 1}}},
+    )
+
+    assert context["role_id"] == "routing_fast"
+    assert context["current_combo"] == ["old"]
+    assert context["target_combo"][0]["providerId"] == "provider-a"
+    assert context["deterministic_diff"]["combo_id"] == "fmo-routing_fast"
+    assert "role_requirements" in context
+    assert "demand_forecast" in context
+    assert "allocation_constraint_report" in context
+    assert context["candidate_registry"]["candidates"][0]["endpoint_id"] == "endpoint-a"
+    assert "quota_summary" in context
+    assert "diversity_summary" in context
+    assert "validation_report" in context
+    assert "apply_precondition_summary" in context
+    assert "hidden" not in str(context)
+
+
+@pytest.mark.spec("smart-combo-reviewer::Reviewer prompt remains bounded and complete")
+def test_combo_review_context_summarizes_large_candidate_registry_without_dropping_sections():
+    targets = [
+        {
+            "endpoint_id": f"endpoint-{index:02d}",
+            "combo_step": {"kind": "model", "model": f"model-{index:02d}", "providerId": "provider-a"},
+            "groups": {"canonical_family": "family"},
+            "score": index,
+        }
+        for index in range(30)
+    ]
+
+    context = build_combo_review_context(
+        role_id="routing_fast",
+        current_combo=[],
+        target_combo=[],
+        deterministic_diff={"combo_id": "fmo-routing_fast"},
+        targets=targets,
+        constraint_report={"apply": True},
+        max_candidates=5,
+    )
+
+    assert len(context["candidate_registry"]["candidates"]) == 5
+    assert context["candidate_registry"]["omitted_candidates"] == 25
+    for section in (
+        "role_id",
+        "current_combo",
+        "target_combo",
+        "deterministic_diff",
+        "role_requirements",
+        "demand_forecast",
+        "allocation_constraint_report",
+        "candidate_registry",
+        "quota_summary",
+        "diversity_summary",
+        "validation_report",
+        "apply_precondition_summary",
+    ):
+        assert section in context
 
 
 @pytest.mark.spec("aa-index-migration::New major index arrives")

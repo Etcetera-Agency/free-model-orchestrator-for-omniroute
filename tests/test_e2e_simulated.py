@@ -175,7 +175,13 @@ def test_simulated_e2e_failure_paths_fail_closed_without_paid_or_combo_test():
     access = classify_access({"models_dev_free": True, "live_paid_charge": True})
     review = run_combo_review(
         lambda payload: {"diffs": [{"op": "strategy", "role": "routing_fast", "endpoint_id": "cookie-1"}]},
-        deterministic_combo={"routing_fast": ["safe-free"]},
+        review_context={
+            "role_id": "routing_fast",
+            "current_combo": ["safe-free"],
+            "target_combo": ["safe-free"],
+            "deterministic_diff": {"combo_id": "fmo-routing_fast", "after_endpoint_ids": ["safe-free"]},
+            "candidate_registry": {"candidates": [{"endpoint_id": "safe-free"}]},
+        },
         trigger=True,
     )
     applier = ComboApplier(current={"fmo-role-routing-fast": ["safe-free"]})

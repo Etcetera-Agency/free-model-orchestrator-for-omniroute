@@ -36,6 +36,16 @@ def _runtime(transport):
     )
 
 
+def _review_context():
+    return {
+        "role_id": "research_scout",
+        "current_combo": ["free:model-b"],
+        "target_combo": ["free:model-b"],
+        "deterministic_diff": {"combo_id": "fmo-research_scout", "after_endpoint_ids": ["free:model-b"]},
+        "candidate_registry": {"candidates": [{"endpoint_id": "free:model-a"}]},
+    }
+
+
 @pytest.mark.spec("llm-runtime::All sites use the adapter")
 @pytest.mark.spec("llm-runtime::Add or change runtime defaults")
 def test_all_structured_llm_sites_use_shared_adapter_and_validate_pydantic_outputs():
@@ -44,7 +54,7 @@ def test_all_structured_llm_sites_use_shared_adapter_and_validate_pydantic_outpu
 
     quota_claim = run_quota_inspector(runtime, "quota prompt")
     forecast = run_inspector(runtime, "forecast prompt")
-    review = run_combo_review(transport, deterministic_combo={"research_scout": ["free:model-b"]}, trigger=True)
+    review = run_combo_review(transport, review_context=_review_context(), trigger=True)
     migration = run_migration_agent(transport, {"endpoint": "free:model-a", "available": True})
 
     assert quota_claim.amount == 60
@@ -128,11 +138,36 @@ def test_adapter_redacts_prompt_and_applies_site_limit_before_transport_call():
     assert calls[0]["model"] == "free:model"
 
 
+@pytest.mark.spec("smart-combo-reviewer::Reviewer uses external prompt file")
+@pytest.mark.spec("smart-combo-reviewer::Reviewer prompt redacts secrets")
+def test_smart_combo_reviewer_uses_prompt_file_and_redacts_context_before_transport():
+    calls = []
+
+    def transport(payload):
+        calls.append(payload)
+        return {"diffs": []}
+
+    review = run_combo_review(
+        transport,
+        review_context={
+            **_review_context(),
+            "provider_config": {"api_key": "secret-value"},
+            "notes": "Bearer secret-token",
+        },
+        trigger=True,
+    )
+
+    assert review.status == "no_valid_diffs"
+    assert "Prompt: smart-combo-reviewer" in calls[0]["prompt"]
+    assert "secret-value" not in calls[0]["prompt"]
+    assert "secret-token" not in calls[0]["prompt"]
+
+
 @pytest.mark.spec("llm-runtime::Malformed completion repaired or rejected")
 def test_malformed_completion_uses_repair_path_and_unrepairable_result_fails_deterministically():
     completions = fixture_body("omniroute_structured_llm_completions")
     transport = RecordingCompletionTransport({"smart_combo_reviewer": completions["smart_combo_reviewer"]})
-    review = run_combo_review(transport, deterministic_combo={"research_scout": ["free:model-b"]}, trigger=True)
+    review = run_combo_review(transport, review_context=_review_context(), trigger=True)
 
     assert review.status == "ok"
 
@@ -147,7 +182,7 @@ def test_malformed_completion_uses_repair_path_and_unrepairable_result_fails_det
 
 @pytest.mark.spec("llm-runtime::Advisory site fails open")
 def test_advisory_sites_fail_open_when_llm_returns_nothing_usable():
-    review = run_combo_review(lambda _payload: "", deterministic_combo={"r": ["e1"]}, trigger=True)
+    review = run_combo_review(lambda _payload: "", review_context=_review_context(), trigger=True)
     migration = run_migration_agent(lambda _payload: "", {"endpoint": "free:model-a", "available": True})
 
     assert review.status == "failed"

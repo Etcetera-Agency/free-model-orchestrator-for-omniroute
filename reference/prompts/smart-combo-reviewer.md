@@ -39,11 +39,20 @@ The user message contains a redacted JSON review brief:
 Expected top-level sections:
 
 - `run`: run id, timestamps, prompt/schema versions
-- `cells`: all reviewed combo-grid cells
-- `scarce_pools`: global quota/model/capability pressure summary
-- `candidate_registry`: bounded endpoint candidates referenced by cells
-- `deterministic_rules`: hard gates and policy limits used by validator
-- `validation_report`: deterministic risk/degraded/unsafe findings
+- `role_id`: reviewed role/cell id
+- `current_combo`: live managed combo members in priority order
+- `target_combo`: deterministic target members in priority order
+- `deterministic_diff`: exact minimal diff from current to target
+- `role_requirements`: capabilities, context, criticality, expected load
+- `demand_forecast`: protected and expected demand used by allocation
+- `allocation_constraint_report`: pool, diversity, degraded, and rejection facts
+- `candidate_registry`: bounded endpoint candidates referenced by the diff
+- `quota_summary`: current free-capacity and hard-stop facts for candidates
+- `diversity_summary`: provider/account/quota/canonical concentration facts
+- `validation_report`: deterministic validation summary
+- `apply_precondition_summary`: structured-step and endpoint-id safety summary
+- optional `cells`, `scarce_pools`, and `deterministic_rules` summaries when a
+  run reviews multiple grid cells at once
 
 Each `cells[]` item may include:
 

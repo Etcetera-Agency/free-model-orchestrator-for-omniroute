@@ -12,7 +12,7 @@ from fmo.idempotency import hash_parts, utcnow
 from fmo.omniroute import OmniRouteRequestError
 from fmo.pipeline import PipelineContext, StageResult
 from fmo.quota_normalize import remaining_amount
-from fmo.smart_review import ComboReviewResult, run_combo_review
+from fmo.smart_review import ComboReviewResult, build_combo_review_context, run_combo_review
 
 from ._base import StageDependencies
 from ._helpers import _effect_result
@@ -25,7 +25,7 @@ def _diff_stage(dependencies: StageDependencies, context: PipelineContext) -> St
     with context.repository.database.transaction() as transaction:
         plans = transaction.execute(
             """
-            SELECT DISTINCT ON (role_id) role_id, targets
+            SELECT DISTINCT ON (role_id) role_id, targets, constraint_report
             FROM allocation_plans
             ORDER BY role_id, created_at DESC
             """
@@ -51,7 +51,7 @@ def _diff_stage(dependencies: StageDependencies, context: PipelineContext) -> St
                 ],
                 "remove": [member for member in before_endpoint_ids if member not in desired_endpoint_ids],
             }
-            review = _review_diff(dependencies, diff)
+            review = _review_diff(dependencies, diff, plan=plan, transaction=transaction, run_id=context.run_id)
             context.repository.combo_snapshots.upsert(
                 transaction,
                 role_id=plan["role_id"],
@@ -65,13 +65,30 @@ def _diff_stage(dependencies: StageDependencies, context: PipelineContext) -> St
     return _effect_result("diff", changed=written > 0)
 
 
-def _review_diff(dependencies: StageDependencies, diff: dict[str, Any]) -> ComboReviewResult:
+def _review_diff(
+    dependencies: StageDependencies,
+    diff: dict[str, Any],
+    *,
+    plan: Any | None = None,
+    transaction: Any = None,
+    run_id: Any = None,
+) -> ComboReviewResult:
     if dependencies.config is not None and dependencies.config.llm_smart_review_call_limit == 0:
-        return run_combo_review(lambda _payload: {}, deterministic_combo={}, trigger=False)
+        return run_combo_review(lambda _payload: {}, review_context={}, trigger=False)
     if dependencies.llm_runtime is None:
         return ComboReviewResult(status="failed", valid_diffs=[], rejected=[])
-    deterministic_combo = {str(diff["combo_id"]): list(diff.get("after_endpoint_ids", []))}
-    return run_combo_review(dependencies.llm_runtime, deterministic_combo=deterministic_combo, trigger=True)
+    targets = list(plan["targets"]) if plan is not None else []
+    review_context = build_combo_review_context(
+        role_id=str(plan["role_id"]) if plan is not None else str(diff["combo_id"]).removeprefix("fmo-"),
+        current_combo=list(diff.get("before", [])),
+        target_combo=list(diff.get("after", [])),
+        deterministic_diff=diff,
+        targets=targets,
+        constraint_report=dict(plan["constraint_report"] or {}) if plan is not None else {},
+        run_id=run_id,
+        transaction=transaction,
+    )
+    return run_combo_review(dependencies.llm_runtime, review_context=review_context, trigger=True)
 
 
 def _review_payload(review: ComboReviewResult) -> dict[str, Any]:

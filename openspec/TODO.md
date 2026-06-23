@@ -5,10 +5,6 @@
 - Server-side default combo grid bootstrap — separate deploy task. Regenerate
   seed models with the live FMO matcher, back up `GET /api/combos`, then create
   the default one-seed combos from `docs/combo-grid-bootstrap.md` on OmniRoute.
-- `update-smart-combo-review-context` — active proposal has uncovered
-  executable scenarios for reviewer prompt context, safety facts, external
-  prompt file loading, prompt bounds, and secret redaction. Added those scenario
-  ids to `tests/spec_coverage_pending.txt`; remove them as tests land.
 - `update-aa-index-migration-inspector` — active proposal captures the AA
   migration inspector hardening slice: real prompt-file loading, deterministic
   migration context, shared resolver model selection, typed machine-used
@@ -18,6 +14,13 @@
 
 ## Resolved
 
+- `update-smart-combo-review-context` — archived 2026-06-23. Reviewer calls
+  now receive deterministic current/target/diff context plus role, demand,
+  allocation, candidate, quota, diversity, validation, and apply-precondition
+  facts through the external prompt file. Candidate details are bounded and
+  secret-like values are redacted. Reviewer output remains advisory only and
+  does not alter the applied deterministic diff. Full pytest deferred to final
+  all-slice verification by request.
 - `update-combo-member-identity` — archived 2026-06-23. Allocation targets
   now carry structured OmniRoute model steps, account/quota-pool/canonical
   identity, and diversity diagnostics; diff/apply persist structured members
