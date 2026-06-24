@@ -117,8 +117,11 @@ class CatalogScanner:
                 UPDATE providers
                 SET enabled = false,
                     last_seen_at = now()
-                WHERE omniroute_instance_id = %(omniroute_instance_id)s
-                  AND NOT (omniroute_provider_id = ANY(%(provider_slugs)s::text[]))
+                WHERE omniroute_instance_id != %(omniroute_instance_id)s
+                   OR (
+                     omniroute_instance_id = %(omniroute_instance_id)s
+                     AND NOT (omniroute_provider_id = ANY(%(provider_slugs)s::text[]))
+                   )
                 """,
                 {
                     "omniroute_instance_id": omniroute_instance_id,
@@ -132,9 +135,10 @@ class CatalogScanner:
                     last_seen_at = now()
                 FROM providers p
                 WHERE p.id = pa.provider_id
-                  AND p.omniroute_instance_id = %(omniroute_instance_id)s
                   AND (
-                    NOT (p.omniroute_provider_id = ANY(%(provider_slugs)s::text[]))
+                    p.omniroute_instance_id != %(omniroute_instance_id)s
+                    OR p.enabled = false
+                    OR NOT (p.omniroute_provider_id = ANY(%(provider_slugs)s::text[]))
                     OR NOT (pa.omniroute_connection_id = ANY(%(account_refs)s::text[]))
                   )
                 """,
@@ -250,6 +254,7 @@ def scan_live_omniroute_catalogs(
             model_count=len(catalog["models"]),
             snapshot=snapshot,
         )
+    _mark_disabled_provider_models_removed(scanner)
     return results
 
 
@@ -289,6 +294,21 @@ def _mark_missing_provider_models_removed(
               AND NOT (provider_model_id = ANY(%(model_ids)s::text[]))
             """,
             {"provider_id": provider_id, "model_ids": model_ids},
+        )
+
+
+def _mark_disabled_provider_models_removed(scanner: CatalogScanner) -> None:
+    with scanner.repository.database.transaction() as transaction:
+        transaction.execute(
+            """
+            UPDATE provider_endpoints pe
+            SET lifecycle_status = 'removed',
+                removed_at = COALESCE(pe.removed_at, now())
+            FROM providers p
+            WHERE p.id = pe.provider_id
+              AND p.enabled = false
+              AND pe.removed_at IS NULL
+            """
         )
 
 

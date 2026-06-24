@@ -161,6 +161,12 @@ def test_live_catalog_scan_disables_absent_provider_accounts(postgres_url):
         provider_type="apikey",
         account_ref="nvidia-conn",
     )
+    scanner.upsert_provider_account(
+        omniroute_instance_id="default",
+        provider_slug="nvidia",
+        provider_type="apikey",
+        account_ref="stale-default-conn",
+    )
     transport = _CatalogTransport(providers_body={"connections": []}, models_body={"object": "list", "data": []})
     client = OmniRouteClient(base_url="https://omniroute.test", api_key="manage-key", transport=transport)
 
@@ -169,7 +175,7 @@ def test_live_catalog_scan_disables_absent_provider_accounts(postgres_url):
     with psycopg.connect(postgres_url) as connection:
         row = connection.execute(
             """
-            SELECT p.enabled, pa.enabled
+            SELECT bool_or(p.enabled), bool_or(pa.enabled)
             FROM provider_accounts pa
             JOIN providers p ON p.id = pa.provider_id
             WHERE p.omniroute_provider_id = 'nvidia'

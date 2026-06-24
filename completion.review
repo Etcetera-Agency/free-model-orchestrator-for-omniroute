@@ -5,14 +5,14 @@
   `GET /api/providers` and `GET /v1/models` before commands and scheduled
   pipelines read cached endpoint rows; disabled/absent providers and accounts
   are marked disabled, absent active models are tombstoned, and reappearing
-  models clear `removed_at`. Matching, quota research, access classification,
-  probing, telemetry, role scoring, allocation, and provider sweep candidate
-  reads now exclude disabled or tombstoned rows, and direct `apply` blocks old
-  diffs whose desired endpoints are no longer active. This fixes the stale-cache
-  failure where FMO could still test/allocate Nvidia rows after Nvidia was
-  disabled in OmniRoute. Verification: focused catalog/sweep/runtime/apply
-  tests, ruff on touched files, `git diff --check`, and OpenSpec strict
-  validation.
+  models clear `removed_at`. Old cache rows from a previous OmniRoute instance
+  id are disabled too. Matching, quota research, access classification, probing,
+  telemetry, role scoring, allocation, and provider sweep candidate reads now
+  exclude disabled or tombstoned rows, and direct `apply` blocks old diffs whose
+  desired endpoints are no longer active. This fixes the stale-cache failure
+  where FMO could still test/allocate Nvidia rows after Nvidia was disabled in
+  OmniRoute. Verification: focused catalog/sweep/runtime/apply tests, ruff on
+  touched files, `git diff --check`, and OpenSpec strict validation.
 - Feature: added explicit `sweep-provider-models` operator command for provider
   catalog probing. It walks stored endpoints for one provider with
   `--limit`, `--offset`, `--delay-seconds`, `--timeout-seconds`, `--dry-run`,
