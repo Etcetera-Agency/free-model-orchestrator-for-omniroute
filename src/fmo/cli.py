@@ -243,3 +243,4 @@ def _add_common_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--offset", type=int, default=0)
     parser.add_argument("--delay-seconds", type=float, default=0.0)
+    parser.add_argument("--timeout-seconds", type=float, default=0.0)

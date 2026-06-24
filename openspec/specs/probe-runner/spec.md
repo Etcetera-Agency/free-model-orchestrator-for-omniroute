@@ -10,8 +10,8 @@ When a provider/account wildcard quota rule confirms many endpoints and live
 one-member FMO combos exist, the probing stage SHALL probe those current combo
 seed models first instead of probing the entire provider pool in one run.
 The explicit operator sweep command MAY probe stored endpoints for one provider
-with limit, offset, delay, dry-run, and force controls; this SHALL NOT widen the
-default pipeline probing stage.
+with limit, offset, delay, timeout, dry-run, and force controls; this SHALL NOT
+widen the default pipeline probing stage.
 
 #### Scenario: No reserved capacity
 - GIVEN an endpoint does not have reserved capacity

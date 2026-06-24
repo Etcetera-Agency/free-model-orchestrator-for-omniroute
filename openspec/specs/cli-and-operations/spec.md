@@ -16,7 +16,7 @@ migration subcommands, the `normalize-profiles` command, the
 (`explain-endpoint`, `explain-role`, `show-*`).
 Common flags include `--dry-run`, `--provider`, `--account`, `--endpoint`,
 `--role`, `--run-id`, `--force`, `--json`, `--verbose`, `--limit`, `--offset`,
-and `--delay-seconds`.
+`--delay-seconds`, and `--timeout-seconds`.
 
 Each per-stage command SHALL execute its corresponding pipeline stage through the
 pipeline runner and return that stage's real outcome and exit code; commands
@@ -68,7 +68,9 @@ read persisted state.
 #### Scenario: Sweep provider models
 - **WHEN** `sweep-provider-models --provider nvidia` runs
 - **THEN** the runtime probes stored Nvidia endpoints with the configured limit,
-  offset, delay, dry-run, force, and JSON options
+  offset, delay, timeout, dry-run, force, and JSON options
+- **AND** the command prints live flushed progress before and after each model
+  request so operators can see which provider model is hanging or failing
 - **AND** the command prints a per-model pass/fail/skip report
 
 ### Requirement: Deterministic exit codes

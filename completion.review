@@ -2,14 +2,18 @@
 
 - Feature: added explicit `sweep-provider-models` operator command for provider
   catalog probing. It walks stored endpoints for one provider with
-  `--limit`, `--offset`, `--delay-seconds`, `--dry-run`, `--force`, and
-  `--json`, uses the same streaming/no-cache probe route as production probes,
-  records `endpoint_probes`, updates endpoint `probe_status`, and prints a
-  per-model pass/fail/skip report. Live specs document that this command is the
-  intentional full-provider sweep path, while the default `probe-models` stage
-  remains seed-bounded for live safety. Verification: provider sweep, CLI, and
-  composition runtime tests; ruff on touched files; `git diff --check`; and
-  OpenSpec strict validation.
+  `--limit`, `--offset`, `--delay-seconds`, `--timeout-seconds`, `--dry-run`,
+  `--force`, and `--json`, uses the same streaming/no-cache probe route as
+  production probes, records `endpoint_probes`, updates endpoint `probe_status`,
+  and prints a per-model pass/fail/skip report. Live specs document that this
+  command is the intentional full-provider sweep path, while the default
+  `probe-models` stage remains seed-bounded for live safety. Initial live Nvidia
+  sweep showed bad catalog entries can hang until the default 30s client timeout,
+  so the command includes explicit per-request timeout control and live flushed
+  `probe_start`/`probe_done` logs that identify which model was requested and
+  what status came back. Verification: provider sweep, CLI, and composition
+  runtime tests; ruff on touched files; `git diff --check`; and OpenSpec strict
+  validation.
 - Deploy fix: apply smoke now sends `stream=true` and treats non-empty SSE/text
   responses from the shared OmniRoute client as a smoke pass. Live real `apply`
   showed `fmo-grid-aux-text` returns HTTP 400 without streaming but succeeds

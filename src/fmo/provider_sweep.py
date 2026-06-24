@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -48,6 +49,8 @@ def sweep_provider_models(
     force: bool = False,
     dry_run: bool = False,
     delay_seconds: float = 0.0,
+    timeout_seconds: float = 0.0,
+    log: Callable[[str], None] | None = None,
     sleep=time.sleep,
 ) -> ProviderSweepResult:
     if not provider:
@@ -58,37 +61,51 @@ def sweep_provider_models(
     passed = 0
     failed = 0
     skipped = 0
-    for row in rows:
-        if not force and row["probe_status"] == "passed":
-            skipped += 1
-            items.append(
-                ProviderSweepItem(
-                    endpoint_id=str(row["id"]),
-                    provider_model_id=row["provider_model_id"],
-                    status="skipped_passed",
-                    http_status=None,
-                    reason="already_passed",
+    original_timeout = getattr(client, "timeout", None)
+    if timeout_seconds > 0 and original_timeout is not None:
+        client.timeout = timeout_seconds
+    try:
+        for row in rows:
+            if not force and row["probe_status"] == "passed":
+                skipped += 1
+                items.append(
+                    ProviderSweepItem(
+                        endpoint_id=str(row["id"]),
+                        provider_model_id=row["provider_model_id"],
+                        status="skipped_passed",
+                        http_status=None,
+                        reason="already_passed",
+                    )
                 )
-            )
-            continue
-        if dry_run:
-            skipped += 1
-            items.append(
-                ProviderSweepItem(
-                    endpoint_id=str(row["id"]),
-                    provider_model_id=row["provider_model_id"],
-                    status="would_probe",
-                    http_status=None,
+                continue
+            if dry_run:
+                skipped += 1
+                items.append(
+                    ProviderSweepItem(
+                        endpoint_id=str(row["id"]),
+                        provider_model_id=row["provider_model_id"],
+                        status="would_probe",
+                        http_status=None,
+                    )
                 )
-            )
-            continue
-        if probed and delay_seconds > 0:
-            sleep(delay_seconds)
-        outcome = _probe_one(repository, client, provider=provider, row=row)
-        probed += 1
-        passed += int(outcome.status == "passed")
-        failed += int(outcome.status == "failed")
-        items.append(outcome)
+                continue
+            if probed and delay_seconds > 0:
+                sleep(delay_seconds)
+            if log is not None:
+                log(f"probe_start model={row['provider_model_id']}")
+            outcome = _probe_one(repository, client, provider=provider, row=row)
+            if log is not None:
+                log(
+                    f"probe_done model={outcome.provider_model_id} status={outcome.status} "
+                    f"http={outcome.http_status} reason={outcome.reason or '-'}"
+                )
+            probed += 1
+            passed += int(outcome.status == "passed")
+            failed += int(outcome.status == "failed")
+            items.append(outcome)
+    finally:
+        if timeout_seconds > 0 and original_timeout is not None:
+            client.timeout = original_timeout
     return ProviderSweepResult(
         provider=provider,
         dry_run=dry_run,

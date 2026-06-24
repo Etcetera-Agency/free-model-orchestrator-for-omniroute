@@ -116,6 +116,9 @@ class ComposedRuntime:
         )
 
     def sweep_provider_models(self, args: argparse.Namespace) -> ProviderSweepResult:
+        def log(message: str) -> None:
+            print(message, flush=True)
+
         return sweep_provider_models(
             self.repository,
             self.omniroute_client,
@@ -125,6 +128,8 @@ class ComposedRuntime:
             force=args.force,
             dry_run=args.dry_run,
             delay_seconds=args.delay_seconds,
+            timeout_seconds=args.timeout_seconds,
+            log=log,
         )
 
 

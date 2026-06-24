@@ -15,6 +15,7 @@ class SweepClient:
     def __init__(self, statuses: dict[str, int] | None = None):
         self.statuses = statuses or {}
         self.calls = []
+        self.timeout = 30.0
 
     def post(self, path, payload, headers=None, idempotency_key=None):
         self.calls.append((path, payload, headers, idempotency_key))
@@ -32,8 +33,11 @@ def test_provider_sweep_probes_provider_endpoints_and_updates_status(postgres_ur
     second = seed_endpoint(repository, model_id="nvidia/fails", provider_id="nvidia", connection_id="nvidia-b")
     seed_endpoint(repository, model_id="other/works", provider_id="other", connection_id="other-a")
     client = SweepClient({"nvidia/fails": 404})
+    logs = []
 
-    result = sweep_provider_models(repository, client, provider="nvidia", force=True)
+    result = sweep_provider_models(
+        repository, client, provider="nvidia", force=True, timeout_seconds=3.0, log=logs.append
+    )
 
     with repository.database.transaction() as transaction:
         statuses = transaction.execute(
@@ -65,6 +69,13 @@ def test_provider_sweep_probes_provider_endpoints_and_updates_status(postgres_ur
     assert {probe["probe_type"] for probe in probes} == {"provider_sweep"}
     assert [call[1]["stream"] for call in client.calls] == [True, True]
     assert [call[2] for call in client.calls] == [{"X-OmniRoute-No-Cache": "true"}] * 2
+    assert client.timeout == 30.0
+    assert logs == [
+        "probe_start model=nvidia/fails",
+        "probe_done model=nvidia/fails status=failed http=404 reason=unknown",
+        "probe_start model=nvidia/works",
+        "probe_done model=nvidia/works status=passed http=200 reason=-",
+    ]
 
 
 @pytest.mark.spec("probe-runner::Operator sweep probes provider catalog explicitly")
@@ -95,6 +106,7 @@ def test_sweep_provider_models_cli_routes_to_sweeper_and_formats_json():
         assert args.limit == 2
         assert args.offset == 4
         assert args.delay_seconds == 1.5
+        assert args.timeout_seconds == 3.0
         assert args.force is True
         assert args.dry_run is True
         return ProviderSweepResult(
@@ -118,6 +130,8 @@ def test_sweep_provider_models_cli_routes_to_sweeper_and_formats_json():
             "4",
             "--delay-seconds",
             "1.5",
+            "--timeout-seconds",
+            "3",
             "--force",
             "--dry-run",
             "--json",
