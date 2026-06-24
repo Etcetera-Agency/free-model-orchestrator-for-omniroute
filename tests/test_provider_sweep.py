@@ -17,10 +17,30 @@ class SweepResponse:
 
 
 class SweepClient:
-    def __init__(self, statuses: dict[str, int] | None = None):
+    def __init__(self, statuses: dict[str, int] | None = None, *, active: bool = True):
         self.statuses = statuses or {}
+        self.active = active
         self.calls = []
+        self.get_calls = []
         self.timeout = 30.0
+
+    def get(self, path):
+        self.get_calls.append(path)
+        if path == "/api/providers":
+            return {
+                "connections": [
+                    {"id": "nvidia-a", "provider": "nvidia", "authType": "apikey", "isActive": self.active},
+                    {"id": "nvidia-b", "provider": "nvidia", "authType": "apikey", "isActive": self.active},
+                ]
+            }
+        if path == "/v1/models":
+            return {
+                "data": [
+                    {"id": "nvidia/fails", "owned_by": "nvidia"},
+                    {"id": "nvidia/works", "owned_by": "nvidia"},
+                ]
+            }
+        raise AssertionError(f"unexpected get: {path}")
 
     def post_response(self, path, payload, headers=None, idempotency_key=None):
         self.calls.append((path, payload, headers, idempotency_key))
@@ -44,7 +64,13 @@ def test_provider_sweep_probes_provider_endpoints_and_updates_status(postgres_ur
     logs = []
 
     result = sweep_provider_models(
-        repository, client, provider="nvidia", force=True, timeout_seconds=3.0, log=logs.append
+        repository,
+        client,
+        provider="nvidia",
+        force=True,
+        timeout_seconds=3.0,
+        omniroute_instance_id="local",
+        log=logs.append,
     )
 
     with repository.database.transaction() as transaction:
@@ -80,6 +106,7 @@ def test_provider_sweep_probes_provider_endpoints_and_updates_status(postgres_ur
     assert [call[1]["modelId"] for call in client.calls] == ["nvidia/fails", "nvidia/works"]
     assert [call[1]["connectionId"] for call in client.calls] == ["nvidia-b", "nvidia-a"]
     assert [call[2] for call in client.calls] == [{"X-OmniRoute-No-Cache": "true"}] * 2
+    assert client.get_calls == ["/api/providers", "/v1/models"]
     assert client.timeout == 30.0
     assert logs == [
         "model_test_start model=nvidia/fails",
@@ -108,6 +135,37 @@ def test_provider_sweep_dry_run_lists_without_writing(postgres_url):
     assert client.calls == []
     assert probe_total == 0
     assert endpoint["probe_status"] == "not_run"
+
+
+@pytest.mark.spec("probe-runner::Operator sweep probes provider catalog explicitly")
+def test_provider_sweep_refreshes_live_catalog_and_skips_disabled_provider(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    seed_endpoint(repository, model_id="nvidia/works", provider_id="nvidia", connection_id="nvidia-a")
+    client = SweepClient(active=False)
+
+    result = sweep_provider_models(
+        repository,
+        client,
+        provider="nvidia",
+        force=True,
+        omniroute_instance_id="local",
+    )
+
+    with repository.database.transaction() as transaction:
+        row = transaction.execute(
+            """
+            SELECT p.enabled, pa.enabled, pe.removed_at IS NOT NULL AS removed
+            FROM provider_endpoints pe
+            JOIN provider_accounts pa ON pa.id = pe.provider_account_id
+            JOIN providers p ON p.id = pa.provider_id
+            WHERE p.omniroute_provider_id = 'nvidia'
+            """
+        ).fetchone()
+    assert result.scanned == 0
+    assert result.probed == 0
+    assert client.calls == []
+    assert row == (False, False, True)
 
 
 @pytest.mark.spec("cli-and-operations::Sweep provider models")
@@ -162,6 +220,21 @@ def test_sweep_provider_models_cli_requires_provider():
 
     assert result.exit_code == EXIT_CODES["validation_failed"]
     assert result.error_reason == "provider_required"
+
+
+@pytest.mark.spec("cli-and-operations::Sweep provider models")
+def test_sweep_provider_models_cli_fails_closed_when_refresh_fails():
+    def sweeper(_args: argparse.Namespace) -> ProviderSweepResult:
+        raise RuntimeError("omniroute unavailable")
+
+    result = run_cli(
+        ["sweep-provider-models", "--provider", "nvidia"],
+        preconditions_ok=True,
+        provider_sweeper=sweeper,
+    )
+
+    assert result.exit_code == EXIT_CODES["external_dependency_failed"]
+    assert result.error_reason == "provider_sweep_failed:omniroute unavailable"
 
 
 def test_provider_sweep_text_report_lists_per_model_status():

@@ -48,6 +48,7 @@ class ProviderEndpointRepository:
               probe_status = EXCLUDED.probe_status,
               capabilities = EXCLUDED.capabilities,
               metadata_hash = EXCLUDED.metadata_hash,
+              removed_at = NULL,
               last_seen_at = now()
             RETURNING *
             """,

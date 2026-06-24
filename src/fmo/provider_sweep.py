@@ -10,6 +10,7 @@ from fmo.idempotency import hash_parts, utcnow
 from fmo.omniroute import OmniRouteRequestError
 from fmo.persistence import Repository
 from fmo.probes import handle_probe_error, probe_suites
+from fmo.scanner import CatalogScanner, scan_live_omniroute_catalogs
 
 SWEEP_SUITE_VERSION = "provider-sweep-v2-model-test"
 
@@ -50,11 +51,18 @@ def sweep_provider_models(
     dry_run: bool = False,
     delay_seconds: float = 0.0,
     timeout_seconds: float = 0.0,
+    omniroute_instance_id: str = "default",
     log: Callable[[str], None] | None = None,
     sleep=time.sleep,
 ) -> ProviderSweepResult:
     if not provider:
         raise ValueError("provider_required")
+    if not dry_run:
+        scan_live_omniroute_catalogs(
+            CatalogScanner(repository),
+            client,
+            omniroute_instance_id=omniroute_instance_id,
+        )
     rows = _provider_endpoint_rows(repository, provider=provider, limit=limit, offset=offset)
     items: list[ProviderSweepItem] = []
     probed = 0
@@ -158,6 +166,8 @@ def _provider_endpoint_rows(repository: Repository, *, provider: str, limit: int
                 JOIN providers p ON p.id = pe.provider_id
                 JOIN provider_accounts pa ON pa.id = pe.provider_account_id
                 WHERE p.omniroute_provider_id = %(provider)s
+                  AND p.enabled = true
+                  AND pa.enabled = true
                   AND pe.removed_at IS NULL
                 ORDER BY pe.provider_model_id
                 {limit_sql}

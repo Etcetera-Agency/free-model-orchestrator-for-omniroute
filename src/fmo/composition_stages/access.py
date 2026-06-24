@@ -36,6 +36,9 @@ def _access_classification_stage(_dependencies: StageDependencies, context: Pipe
              AND qr.model_pattern IN (pe.provider_model_id, '*')
              AND qr.status = 'active'
             WHERE pe.canonical_model_id IS NOT NULL
+              AND pe.removed_at IS NULL
+              AND p.enabled = true
+              AND pa.enabled = true
             ORDER BY pe.id,
                      CASE WHEN qr.model_pattern = pe.provider_model_id THEN 0 ELSE 1 END,
                      qr.created_at DESC NULLS LAST

@@ -37,6 +37,9 @@ def _quota_research_stage(dependencies: StageDependencies, context: PipelineCont
               JOIN provider_accounts pa ON pa.id = pe.provider_account_id
               JOIN providers p ON p.id = pa.provider_id
               WHERE pe.canonical_model_id IS NOT NULL
+                AND pe.removed_at IS NULL
+                AND p.enabled = true
+                AND pa.enabled = true
                 AND (
                   %(endpoint_filter)s::text IS NULL
                   OR pe.id::text = %(endpoint_filter)s

@@ -63,6 +63,14 @@ def expand_account_scopes(
     return expanded
 
 
+def connection_is_enabled(connection: dict[str, Any]) -> bool:
+    if "isActive" in connection:
+        return bool(connection["isActive"])
+    if "enabled" in connection:
+        return bool(connection["enabled"])
+    return True
+
+
 def usable_capacity(pools: dict[str, QuotaPool]) -> float:
     unique = {key: pool for key, pool in pools.items() if key == pool.pool_key}
     return sum(pool.capacity for pool in unique.values() if pool.independence_status == "confirmed")

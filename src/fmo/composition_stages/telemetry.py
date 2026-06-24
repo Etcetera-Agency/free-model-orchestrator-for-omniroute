@@ -43,6 +43,9 @@ def _telemetry_sync_stage(dependencies: StageDependencies, context: PipelineCont
                 JOIN providers p ON p.id = pa.provider_id
                 WHERE p.omniroute_provider_id = %(provider_id)s
                   AND pe.provider_model_id = %(model_id)s
+                  AND pe.removed_at IS NULL
+                  AND p.enabled = true
+                  AND pa.enabled = true
                 LIMIT 1
                 """,
                 {"provider_id": provider_id, "model_id": model_id},

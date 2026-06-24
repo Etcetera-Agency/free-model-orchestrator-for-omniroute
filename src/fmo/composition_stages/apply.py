@@ -126,7 +126,7 @@ def _apply_stage(dependencies: StageDependencies, context: PipelineContext) -> S
                 db_available=True,
                 snapshot_saved=bool(diffs),
                 desired_state_valid=all(isinstance(diff["state_json"].get("after"), list) for diff in diffs),
-                quota_safe=safety["quota_safe"],
+                quota_safe=safety["endpoints_active"] and safety["quota_safe"],
                 probes_passed=safety["probes_passed"],
             )
         )
@@ -296,8 +296,9 @@ def _derive_apply_stage_safety(
 ) -> dict[str, bool]:
     endpoint_ids = _desired_apply_endpoint_ids(diffs)
     if not endpoint_ids:
-        return {"quota_safe": True, "probes_passed": True}
+        return {"endpoints_active": True, "quota_safe": True, "probes_passed": True}
     return {
+        "endpoints_active": _desired_endpoints_are_active(transaction, endpoint_ids),
         "quota_safe": _desired_endpoints_have_current_quota_safety(
             transaction,
             endpoint_ids,
@@ -316,6 +317,23 @@ def _desired_apply_endpoint_ids(diffs: Sequence[Any]) -> list[str]:
             continue
         endpoint_ids.update(str(endpoint_id) for endpoint_id in desired)
     return sorted(endpoint_ids)
+
+
+def _desired_endpoints_are_active(transaction: Any, endpoint_ids: Sequence[str]) -> bool:
+    rows = transaction.execute(
+        """
+        SELECT pe.id
+        FROM provider_endpoints pe
+        JOIN provider_accounts pa ON pa.id = pe.provider_account_id
+        JOIN providers p ON p.id = pa.provider_id
+        WHERE pe.id::text = ANY(%(endpoint_ids)s)
+          AND pe.removed_at IS NULL
+          AND p.enabled = true
+          AND pa.enabled = true
+        """,
+        {"endpoint_ids": list(endpoint_ids)},
+    ).fetchall()
+    return len(rows) == len(endpoint_ids)
 
 
 def _desired_endpoints_have_current_quota_safety(

@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from fmo.accounts import connection_is_enabled
 from fmo.idempotency import provider_model_idempotency_key
 from fmo.persistence import Repository
 
@@ -86,7 +87,7 @@ def _reachable_providers(client: Any) -> set[str]:
     return {
         str(connection["provider"])
         for connection in connections
-        if isinstance(connection, dict) and connection.get("provider") and connection.get("enabled", True)
+        if isinstance(connection, dict) and connection.get("provider") and connection_is_enabled(connection)
     }
 
 

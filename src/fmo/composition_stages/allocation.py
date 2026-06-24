@@ -102,6 +102,9 @@ def _allocation_stage(_dependencies: StageDependencies, context: PipelineContext
             LEFT JOIN canonical_models cm ON cm.id = pe.canonical_model_id
             JOIN endpoint_access_states eas ON eas.endpoint_id = pe.id
             WHERE rs.eligibility = true
+              AND pe.removed_at IS NULL
+              AND p.enabled = true
+              AND pa.enabled = true
             ORDER BY rs.role_id, rs.endpoint_id, rs.calculated_at DESC
             """
         ).fetchall()

@@ -5,7 +5,7 @@ from typing import Any
 
 from psycopg.types.json import Jsonb
 
-from fmo.accounts import AccountFetchError
+from fmo.accounts import AccountFetchError, connection_is_enabled
 from fmo.external_metadata import ExternalMetadataError
 from fmo.idempotency import canonical_slug
 from fmo.matcher import canonical_slug_candidates, match_model
@@ -121,6 +121,7 @@ def _persist_account_discovery(context: PipelineContext, transaction: Any, outco
             omniroute_instance_id="default",
             omniroute_provider_id=provider_slug,
             provider_type=str(connection.get("authType") or connection.get("auth_type") or "unknown"),
+            enabled=connection_is_enabled(connection),
         )
         account = context.repository.provider_accounts.upsert(
             transaction,
@@ -133,7 +134,7 @@ def _persist_account_discovery(context: PipelineContext, transaction: Any, outco
                 or connection_id
             ),
             metadata=connection,
-            enabled=bool(connection.get("enabled", True)),
+            enabled=connection_is_enabled(connection),
         )
         pool = outcome.pools[connection_id]
         quota_pool_id = _ensure_named_quota_pool(transaction, provider_slug, pool.pool_key)
@@ -182,7 +183,7 @@ def _persist_account_discovery(context: PipelineContext, transaction: Any, outco
         {
             "run_id": context.run_id,
             "raw_count": len(outcome.connections),
-            "active_count": sum(1 for connection in outcome.connections if connection.get("enabled", True)),
+            "active_count": sum(1 for connection in outcome.connections if connection_is_enabled(connection)),
             "virtual_count": len(accounts_by_connection),
             "independent_count": independent_count,
             "snapshot": Jsonb(
@@ -214,7 +215,11 @@ def _model_matching_stage(_dependencies: StageDependencies, context: PipelineCon
             """
             SELECT pe.id, pe.provider_model_id, pe.canonical_model_id
             FROM provider_endpoints pe
+            JOIN provider_accounts pa ON pa.id = pe.provider_account_id
+            JOIN providers p ON p.id = pa.provider_id
             WHERE pe.removed_at IS NULL
+              AND p.enabled = true
+              AND pa.enabled = true
             ORDER BY pe.provider_model_id
             """
         ).fetchall()
@@ -371,9 +376,17 @@ def _reachable_providers(client: Any) -> set[str] | None:
     return {
         str(connection["provider"])
         for connection in connections
-        if isinstance(connection, dict) and connection.get("provider") and connection.get("enabled", True)
+        if isinstance(connection, dict) and connection.get("provider") and connection_is_enabled(connection)
     }
 
 
 def _scan_catalogs(scanner: CatalogScanner, client: Any, omniroute_instance_id: str) -> object:
     return scan_live_omniroute_catalogs(scanner, client, omniroute_instance_id=omniroute_instance_id)
+
+
+def _refresh_live_catalog(repository: Any, client: Any, omniroute_instance_id: str) -> object:
+    return scan_live_omniroute_catalogs(
+        CatalogScanner(repository),
+        client,
+        omniroute_instance_id=omniroute_instance_id,
+    )

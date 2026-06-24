@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import argparse
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from urllib.parse import urljoin
 
@@ -13,6 +13,8 @@ from fmo.composition_stages import (
     StageDependencies,
     _account_discovery_stage,
     _adapter_stage,
+    _default_live_catalog_refresh,
+    _effect_result,
     _free_candidate_stage,
     _latest_role_diagnostic,
     _metadata_stage,
@@ -24,7 +26,7 @@ from fmo.llm_runtime import LlmProviderConfig, SharedInstructorRuntime, build_in
 from fmo.metadata_sync import sync_external_metadata
 from fmo.omniroute import OmniRouteClient
 from fmo.persistence import Database, Repository
-from fmo.pipeline import CANONICAL_STAGE_NAMES, PipelineRunner, PipelineRunResult, Stage
+from fmo.pipeline import CANONICAL_STAGE_NAMES, PipelineContext, PipelineRunner, PipelineRunResult, Stage, StageResult
 from fmo.profile_normalization import ProfileNormalizationResult
 from fmo.profile_normalization import normalize_profiles as normalize_profile_configs
 from fmo.provider_sweep import ProviderSweepResult, sweep_provider_models
@@ -39,8 +41,12 @@ class ComposedRuntime:
     cron: str
     llm_runtime: SharedInstructorRuntime
     config: StartupConfig
+    live_catalog_refresh: Callable[[Repository, OmniRouteClient, str], object]
 
     def run_command(self, command: str, args: argparse.Namespace) -> RuntimeCliResult:
+        refresh_result = self._refresh_live_catalog()
+        if refresh_result is not None:
+            return refresh_result
         if command == "rollback":
             selected_stages = [
                 Stage(
@@ -69,6 +75,9 @@ class ComposedRuntime:
         return _cli_result(result)
 
     def read_diagnostics(self, kind: str, identifier: str) -> str:
+        refresh_result = self._refresh_live_catalog()
+        if refresh_result is not None:
+            return f"{kind}:{identifier}:live_catalog_refresh_failed:{refresh_result.error_reason}"
         with self.repository.database.transaction() as transaction:
             if kind == "endpoint":
                 row = self.repository.provider_endpoints.get(transaction, identifier)
@@ -90,9 +99,13 @@ class ComposedRuntime:
         return _cli_result(result)
 
     def run_pipeline(self, trigger: str, run_type: str) -> PipelineRunResult:
+        stages = [
+            Stage("live-catalog-refresh", self._live_catalog_refresh_stage),
+            *list(self.stages),
+        ]
         return PipelineRunner(
             self.repository,
-            stages=list(self.stages),
+            stages=stages,
             config={"command": run_type, "dry_run": False},
         ).run(trigger=trigger, run_type=run_type)
 
@@ -100,6 +113,9 @@ class ComposedRuntime:
         return _run_aa_index_command(self.repository, self.llm_runtime, self.config, command)
 
     def normalize_profiles(self, args: argparse.Namespace) -> RuntimeCliResult:
+        refresh_result = self._refresh_live_catalog()
+        if refresh_result is not None:
+            return refresh_result
         if not self.config.hermes_home:
             return RuntimeCliResult(exit_code=3, changed=False, error_reason="hermes_home_required")
         # AICODE-NOTE: profile normalization never creates combos; live combos
@@ -129,8 +145,23 @@ class ComposedRuntime:
             dry_run=args.dry_run,
             delay_seconds=args.delay_seconds,
             timeout_seconds=args.timeout_seconds,
+            omniroute_instance_id=self.config.omniroute_url,
             log=log,
         )
+
+    def _refresh_live_catalog(self) -> RuntimeCliResult | None:
+        try:
+            self.live_catalog_refresh(self.repository, self.omniroute_client, self.config.omniroute_url)
+        except Exception as exc:
+            return RuntimeCliResult(exit_code=4, changed=False, error_reason=f"live_catalog_refresh:{exc}")
+        return None
+
+    def _live_catalog_refresh_stage(self, _context: PipelineContext):
+        try:
+            self.live_catalog_refresh(self.repository, self.omniroute_client, self.config.omniroute_url)
+        except Exception as exc:
+            return StageResult(status="external_dependency_failed", reason=f"live_catalog_refresh:{exc}")
+        return _effect_result("live-catalog-refresh", changed=True)
 
 
 def compose_runtime(
@@ -143,7 +174,7 @@ def compose_runtime(
         raise ValueError("database_url_required")
     if config.omniroute_api_key is None:
         raise ValueError("omniroute_api_key_required")
-    selected_adapters = adapters or StageAdapters()
+    selected_adapters = adapters or StageAdapters(live_catalog_refresh=_default_live_catalog_refresh())
     repository = Repository(Database(config.database_url))
     client = OmniRouteClient(base_url=config.omniroute_url, api_key=config.omniroute_api_key)
     llm_runtime = build_production_llm_runtime(config, repository, live_quota_client=client, adapters=selected_adapters)
@@ -163,6 +194,7 @@ def compose_runtime(
         cron=config.hermes_inventory_cron,
         llm_runtime=llm_runtime,
         config=config,
+        live_catalog_refresh=selected_adapters.live_catalog_refresh,
     )
 
 

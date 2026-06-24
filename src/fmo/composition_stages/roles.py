@@ -82,9 +82,13 @@ def _role_scoring_stage(_dependencies: StageDependencies, context: PipelineConte
                    COALESCE(pa.quota_pool_id, pe.provider_account_id) AS quota_pool_id
             FROM provider_endpoints pe
             JOIN provider_accounts pa ON pa.id = pe.provider_account_id
+            JOIN providers p ON p.id = pa.provider_id
             JOIN endpoint_access_states eas ON eas.endpoint_id = pe.id
             WHERE pe.access_status = 'confirmed'
               AND pe.probe_status = 'passed'
+              AND pe.removed_at IS NULL
+              AND p.enabled = true
+              AND pa.enabled = true
             ORDER BY pe.provider_model_id
             """
         ).fetchall()
@@ -256,8 +260,13 @@ def _quality_band_candidates(transaction: Any, metric: str) -> list[dict[str, An
         SELECT aa.{metric} AS quality, pe.probe_status, eas.effective_remaining, eas.status, eas.hard_stop_capable
         FROM provider_endpoints pe
         JOIN artificial_analysis_model_metrics aa ON aa.canonical_model_id = pe.canonical_model_id
+        JOIN provider_accounts pa ON pa.id = pe.provider_account_id
+        JOIN providers p ON p.id = pa.provider_id
         LEFT JOIN endpoint_access_states eas ON eas.endpoint_id = pe.id
         WHERE aa.{metric} IS NOT NULL
+          AND pe.removed_at IS NULL
+          AND p.enabled = true
+          AND pa.enabled = true
         """
     ).fetchall()
     return [

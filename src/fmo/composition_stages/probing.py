@@ -26,6 +26,9 @@ def _probing_stage(dependencies: StageDependencies, context: PipelineContext) ->
             JOIN providers p ON p.id = pa.provider_id
             JOIN endpoint_access_states eas ON eas.endpoint_id = pe.id
             WHERE eas.status = 'confirmed'
+              AND pe.removed_at IS NULL
+              AND p.enabled = true
+              AND pa.enabled = true
             ORDER BY pe.provider_model_id
             """
         ).fetchall()

@@ -53,6 +53,69 @@ class FailingProbeClient(PipelineOpsClient):
         return super().post(path, payload, headers=headers, idempotency_key=idempotency_key)
 
 
+@pytest.mark.spec("pipeline-orchestration::Full run calls production adapters")
+def test_runtime_refreshes_live_catalog_before_command_stages(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    config = build_startup_config(valid_env(DATABASE_URL=postgres_url))
+    calls = []
+
+    def live_catalog_refresh(_repository, _client, omniroute_instance_id):
+        calls.append(f"refresh:{omniroute_instance_id}")
+        return {}
+
+    def role_scoring(_dependencies, _context):
+        calls.append("role-scoring")
+        return effectful_success("role-scoring", "idempotent_no_change")
+
+    runtime = compose_runtime(
+        config,
+        metadata_sync=lambda **_kwargs: MetadataSyncResult(
+            candidates={}, aa_snapshot=AASnapshot(index_version="4.1", models=())
+        ),
+        adapters=StageAdapters(
+            live_catalog_refresh=live_catalog_refresh,
+            stage_adapters={"role-scoring": role_scoring},
+        ),
+    )
+
+    result = runtime.run_command("score-roles", object())
+
+    assert result.exit_code == 0
+    assert calls == [f"refresh:{config.omniroute_url}", "role-scoring"]
+
+
+@pytest.mark.spec("pipeline-orchestration::Live catalog preflight")
+def test_runtime_fails_closed_when_live_catalog_refresh_fails(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    config = build_startup_config(valid_env(DATABASE_URL=postgres_url))
+    calls = []
+
+    def live_catalog_refresh(_repository, _client, _omniroute_instance_id):
+        calls.append("refresh")
+        raise RuntimeError("omniroute unavailable")
+
+    def role_scoring(_dependencies, _context):
+        calls.append("role-scoring")
+        return effectful_success("role-scoring", "idempotent_no_change")
+
+    runtime = compose_runtime(
+        config,
+        metadata_sync=lambda **_kwargs: MetadataSyncResult(
+            candidates={}, aa_snapshot=AASnapshot(index_version="4.1", models=())
+        ),
+        adapters=StageAdapters(
+            live_catalog_refresh=live_catalog_refresh,
+            stage_adapters={"role-scoring": role_scoring},
+        ),
+    )
+
+    result = runtime.run_command("score-roles", object())
+
+    assert result.exit_code == 4
+    assert result.error_reason == "live_catalog_refresh:omniroute unavailable"
+    assert calls == ["refresh"]
+
+
 @pytest.mark.spec("pipeline-orchestration::Probe respects confirmed free capacity")
 @pytest.mark.spec("pipeline-orchestration::Probe persists results and excludes failures")
 def test_probe_stage_gates_on_confirmed_capacity_and_persists_results(postgres_url):

@@ -110,6 +110,124 @@ def test_live_catalog_scan_fans_models_out_to_fingerprint_accounts(postgres_url)
     assert {row[2] for row in rows} == {"mimocode/mimo-auto"}
 
 
+@pytest.mark.spec("provider-scanner::Catalog fetched before scan")
+def test_live_catalog_scan_tombstones_disabled_provider_models(postgres_url):
+    scanner = _prepare_scanner(postgres_url)
+    _provider_id, account_id = scanner.upsert_provider_account(
+        omniroute_instance_id="local",
+        provider_slug="nvidia",
+        provider_type="apikey",
+        account_ref="nvidia-conn",
+    )
+    scanner.upsert_endpoint(account_id, "nvidia/z-ai/glm-5.1")
+    providers_body = {
+        "connections": [
+            {
+                "id": "nvidia-conn",
+                "provider": "nvidia",
+                "authType": "apikey",
+                "isActive": False,
+            }
+        ]
+    }
+    models_body = {"object": "list", "data": [{"id": "nvidia/z-ai/glm-5.1", "owned_by": "nvidia"}]}
+    transport = _CatalogTransport(providers_body=providers_body, models_body=models_body)
+    client = OmniRouteClient(base_url="https://omniroute.test", api_key="manage-key", transport=transport)
+
+    result = scan_live_omniroute_catalogs(scanner, client, omniroute_instance_id="local")
+
+    with psycopg.connect(postgres_url) as connection:
+        row = connection.execute(
+            """
+            SELECT p.enabled AS provider_enabled, pa.enabled AS account_enabled,
+                   pe.lifecycle_status, pe.removed_at IS NOT NULL AS removed
+            FROM provider_endpoints pe
+            JOIN provider_accounts pa ON pa.id = pe.provider_account_id
+            JOIN providers p ON p.id = pa.provider_id
+            WHERE p.omniroute_provider_id = 'nvidia'
+            """
+        ).fetchone()
+
+    assert result["nvidia"].model_count == 0
+    assert row == (False, False, "removed", True)
+
+
+@pytest.mark.spec("provider-scanner::Catalog fetched before scan")
+def test_live_catalog_scan_disables_absent_provider_accounts(postgres_url):
+    scanner = _prepare_scanner(postgres_url)
+    scanner.upsert_provider_account(
+        omniroute_instance_id="local",
+        provider_slug="nvidia",
+        provider_type="apikey",
+        account_ref="nvidia-conn",
+    )
+    transport = _CatalogTransport(providers_body={"connections": []}, models_body={"object": "list", "data": []})
+    client = OmniRouteClient(base_url="https://omniroute.test", api_key="manage-key", transport=transport)
+
+    result = scan_live_omniroute_catalogs(scanner, client, omniroute_instance_id="local")
+
+    with psycopg.connect(postgres_url) as connection:
+        row = connection.execute(
+            """
+            SELECT p.enabled, pa.enabled
+            FROM provider_accounts pa
+            JOIN providers p ON p.id = pa.provider_id
+            WHERE p.omniroute_provider_id = 'nvidia'
+            """
+        ).fetchone()
+
+    assert result == {}
+    assert row == (False, False)
+
+
+@pytest.mark.spec("provider-scanner::Catalog fetched before scan")
+def test_live_catalog_scan_reactivates_returned_model(postgres_url):
+    scanner = _prepare_scanner(postgres_url)
+    _provider_id, account_id = scanner.upsert_provider_account(
+        omniroute_instance_id="local",
+        provider_slug="nvidia",
+        provider_type="apikey",
+        account_ref="nvidia-conn",
+    )
+    scanner.upsert_endpoint(account_id, "nvidia/z-ai/glm-5.1")
+    with psycopg.connect(postgres_url) as connection:
+        connection.execute(
+            """
+            UPDATE provider_endpoints
+            SET lifecycle_status = 'removed',
+                removed_at = now()
+            """
+        )
+        connection.commit()
+    providers_body = {
+        "connections": [
+            {
+                "id": "nvidia-conn",
+                "provider": "nvidia",
+                "authType": "apikey",
+                "isActive": True,
+            }
+        ]
+    }
+    models_body = {"object": "list", "data": [{"id": "nvidia/z-ai/glm-5.1", "owned_by": "nvidia"}]}
+    transport = _CatalogTransport(providers_body=providers_body, models_body=models_body)
+    client = OmniRouteClient(base_url="https://omniroute.test", api_key="manage-key", transport=transport)
+
+    result = scan_live_omniroute_catalogs(scanner, client, omniroute_instance_id="local")
+
+    with psycopg.connect(postgres_url) as connection:
+        row = connection.execute(
+            """
+            SELECT lifecycle_status, removed_at
+            FROM provider_endpoints
+            WHERE provider_model_id = 'nvidia/z-ai/glm-5.1'
+            """
+        ).fetchone()
+
+    assert result["nvidia"].model_count == 1
+    assert row == ("discovered", None)
+
+
 @pytest.mark.spec("provider-scanner::Fetch failure does not overwrite")
 def test_live_catalog_scan_records_failed_snapshots_without_overwriting_success(postgres_url):
     scanner = _prepare_scanner(postgres_url)

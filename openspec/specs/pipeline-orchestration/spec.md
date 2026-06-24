@@ -40,6 +40,42 @@ declared effect SHALL be rejected by the executable test suite.
 - **AND** an adapter that returns `success` without producing its declared effect
   fails the executable test suite
 
+### Requirement: Live catalog preflight
+
+The composed runtime SHALL refresh OmniRoute's current provider/account/model
+catalog before any FMO command or scheduled pipeline uses local repository state
+to make decisions. The refresh SHALL read `GET /api/providers` and `GET
+/v1/models`, persist active/inactive provider and account state, tombstone
+cached endpoints absent from the active live catalog, and clear tombstones for
+models that reappear. Matching, quota research, access classification, probing,
+telemetry, quota sync, role scoring, allocation, diff, apply, diagnostics,
+profile normalization, and operator sweeps SHALL treat the local FMO repository
+as cache after that refresh, not as the availability source of truth.
+
+If the live catalog refresh fails, decision-making commands SHALL fail closed as
+an external dependency failure rather than using stale cached availability.
+
+#### Scenario: Command refreshes live catalog first
+- **WHEN** an operator runs any decision-making FMO command such as
+  `score-roles`, `allocate`, `apply`, or `sweep-provider-models`
+- **THEN** the runtime refreshes the live OmniRoute provider/model catalog before
+  the command stage reads endpoint candidates
+- **AND** disabled or missing live provider/model rows are excluded from that
+  command
+
+#### Scenario: Scheduled run refreshes live catalog first
+- **WHEN** a scheduled full pipeline starts
+- **THEN** the first recorded stage refreshes live OmniRoute provider/model
+  availability
+- **AND** downstream stages consume only the refreshed cache state
+
+#### Scenario: Refresh failure fails closed
+- **GIVEN** OmniRoute provider/model catalog fetch fails or returns invalid
+  payload
+- **WHEN** an FMO command would otherwise use cached endpoint rows
+- **THEN** the command exits with external dependency failure
+- **AND** no stale cached endpoint is probed, scored, allocated, or applied
+
 ### Requirement: Idempotent stage skipping
 
 The runner SHALL skip a stage whose idempotency key (catalog snapshot, quota

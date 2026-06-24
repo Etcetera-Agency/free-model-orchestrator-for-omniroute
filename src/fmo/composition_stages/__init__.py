@@ -27,6 +27,7 @@ from ._base import (
 from ._base import (
     StageDependencies as StageDependencies,
 )
+from ._base import _default_live_catalog_refresh as _default_live_catalog_refresh
 from ._base import (
     _production_stage_adapters as _production_stage_adapters,
 )

@@ -18,6 +18,7 @@ from fmo.scanner import CatalogScanner
 MetadataSync = Callable[..., MetadataSyncResult]
 RegistrySync = Callable[[Any], FreeRegistrySyncOutcome]
 CatalogScan = Callable[[CatalogScanner, Any, str], object]
+LiveCatalogRefresh = Callable[[Repository, Any, str], object]
 AccountDiscovery = Callable[..., object]
 StageAdapter = Callable[["StageDependencies", PipelineContext], StageResult]
 HermesInventoryAdapter = Callable[[StartupConfig], Inventory]
@@ -27,6 +28,16 @@ def _default_catalog_scan() -> CatalogScan:
     from .discovery import _scan_catalogs
 
     return _scan_catalogs
+
+
+def _default_live_catalog_refresh() -> LiveCatalogRefresh:
+    from .discovery import _refresh_live_catalog
+
+    return _refresh_live_catalog
+
+
+def _noop_live_catalog_refresh() -> LiveCatalogRefresh:
+    return lambda _repository, _client, _omniroute_instance_id: {}
 
 
 def _default_stage_adapters() -> dict[str, StageAdapter]:
@@ -46,6 +57,7 @@ class StageDependencies:
 class StageAdapters:
     registry_sync: RegistrySync = sync_live_free_registry
     catalog_scan: CatalogScan = field(default_factory=_default_catalog_scan)
+    live_catalog_refresh: LiveCatalogRefresh = field(default_factory=_noop_live_catalog_refresh)
     account_discovery: AccountDiscovery = discover_live_accounts
     stage_adapters: dict[str, StageAdapter] = field(default_factory=_default_stage_adapters)
     hermes_inventory: HermesInventoryAdapter | None = None

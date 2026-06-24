@@ -475,6 +475,26 @@ def test_apply_stage_blocks_mutation_without_current_quota_safety(postgres_url, 
     assert not any(call[0].startswith("/api/combos/") for call in client.calls)
 
 
+@pytest.mark.spec("pipeline-orchestration::Refresh failure fails closed")
+def test_apply_stage_blocks_mutation_when_desired_endpoint_is_disabled(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    client = PipelineOpsClient()
+    prepare_scored_endpoint(repository, client=client)
+    run_composed_stage(repository, "role-scoring", client=client)
+    run_composed_stage(repository, "demand-forecast", client=client)
+    run_composed_stage(repository, "allocation", client=client)
+    run_composed_stage(repository, "diff", client=client)
+    with repository.database.transaction() as transaction:
+        transaction.execute("UPDATE providers SET enabled = false")
+
+    result = run_composed_stage(repository, "apply", client=client)
+
+    assert result.exit_code == 5
+    assert client.combos["fmo-routing_fast"] == ["old-endpoint"]
+    assert not any(call[0].startswith("/api/combos/") for call in client.calls)
+
+
 @pytest.mark.spec("combo-applier::Assumed remaining does not satisfy the apply gate")
 def test_apply_stage_rejects_assumed_remaining_evidence(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))

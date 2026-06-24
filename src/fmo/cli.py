@@ -193,7 +193,14 @@ def _run_provider_sweep(args: argparse.Namespace, sweeper: ProviderSweeper | Non
         return CliResult(exit_code=EXIT_CODES["validation_failed"], changed=False, error_reason="provider_required")
     if sweeper is None:
         return CliResult(exit_code=EXIT_CODES["success"], changed=False)
-    result = sweeper(args)
+    try:
+        result = sweeper(args)
+    except Exception as exc:
+        return CliResult(
+            exit_code=EXIT_CODES["external_dependency_failed"],
+            changed=False,
+            error_reason=f"provider_sweep_failed:{exc}",
+        )
     return CliResult(
         exit_code=EXIT_CODES["success"],
         changed=bool(getattr(result, "changed", False)),

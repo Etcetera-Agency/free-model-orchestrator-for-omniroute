@@ -25,14 +25,10 @@
   connection timed out after 20s for `nvidia/z-ai/glm-5.1` and
   `nvidia/minimaxai/minimax-m2.7`; after FMO `e3ecf74` deployed, the
   model-test-backed `sweep-provider-models` command reproduced the same timeout
-  for both models at offsets 125 and 45. This supersedes the earlier direct
-  chat-route sweep evidence: per-model availability must be judged through
-  `/api/models/test` or `/api/models/test-all`, not the connection-level
-  `POST /api/providers/{connectionId}/test` and not an FMO-only raw chat probe.
-  Control `codestral/codestral-latest` passed through the same corrected sweep,
-  so next work should inspect Nvidia provider execution/rate-limit/proxy logs or
-  run OmniRoute `/api/models/test-all` on Nvidia batches to separate upstream
-  outage, queue timeout, and per-model failures.
+  for both models at offsets 125 and 45. Nvidia was later disabled in OmniRoute,
+  so FMO must not use cached Nvidia rows while the provider is inactive. If
+  Nvidia is re-enabled, rerun OmniRoute `/api/models/test-all` on Nvidia batches
+  to separate upstream outage, queue timeout, and per-model failures.
 ## Resolved
 
 - Nvidia/provider model sweep tooling — deployed 2026-06-24, then corrected to
@@ -45,6 +41,11 @@
   the corrected deploy: `codestral/codestral-latest` passed; the two
   user-flagged Nvidia models timed out through the same corrected model-test
   path.
+- Live OmniRoute catalog preflight — FMO now refreshes active provider/account
+  and model availability from OmniRoute before decision commands and scheduled
+  pipelines use cached rows. Disabled or absent providers/accounts are marked
+  disabled, inactive or absent active models are tombstoned, reappearing models
+  clear tombstones, and downstream stages ignore disabled/tombstoned rows.
 - Live combo rebalance readiness — deployed 2026-06-24. The live server is on
   FMO `f0cf757`; provider/model endpoint duplicates are removed, target Nvidia
   aliases bind to canonical AA slugs, active quota rules exist, two endpoints

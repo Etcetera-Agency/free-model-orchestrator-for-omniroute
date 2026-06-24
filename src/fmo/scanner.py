@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
 
-from fmo.accounts import expand_account_scopes
+from fmo.accounts import connection_is_enabled, expand_account_scopes
 from fmo.idempotency import utcnow
 from fmo.omniroute import OmniRouteRequestError
 from fmo.persistence import Repository
@@ -82,18 +82,24 @@ class CatalogScanner:
         *,
         omniroute_instance_id: str,
         provider_accounts: list[dict[str, Any]],
-    ) -> dict[str, tuple[str, list[str]]]:
-        providers = {}
+    ) -> dict[str, tuple[str, list[str], bool]]:
+        providers_by_slug = {}
+        provider_types_by_slug = {}
+        seen_account_refs = []
         with self.repository.database.transaction() as transaction:
             for account_payload in provider_accounts:
                 provider_slug = str(account_payload["provider"])
+                provider_type = str(account_payload.get("authType") or "unknown")
+                enabled = connection_is_enabled(account_payload)
                 account_ref = str(account_payload.get("id") or account_payload.get("name") or provider_slug)
+                seen_account_refs.append(account_ref)
                 external_ref = str(account_payload.get("external_account_ref") or account_ref)
                 provider = self.repository.providers.upsert(
                     transaction,
                     omniroute_instance_id=omniroute_instance_id,
                     omniroute_provider_id=provider_slug,
-                    provider_type=str(account_payload.get("authType") or "unknown"),
+                    provider_type=provider_type,
+                    enabled=enabled,
                 )
                 self.repository.provider_accounts.upsert(
                     transaction,
@@ -101,13 +107,64 @@ class CatalogScanner:
                     omniroute_connection_id=account_ref,
                     external_account_ref=external_ref,
                     metadata=account_payload,
+                    enabled=enabled,
                 )
+                providers_by_slug[provider_slug] = provider
+                provider_types_by_slug[provider_slug] = provider_type
+            provider_slugs = list(providers_by_slug)
+            transaction.execute(
+                """
+                UPDATE providers
+                SET enabled = false,
+                    last_seen_at = now()
+                WHERE omniroute_instance_id = %(omniroute_instance_id)s
+                  AND NOT (omniroute_provider_id = ANY(%(provider_slugs)s::text[]))
+                """,
+                {
+                    "omniroute_instance_id": omniroute_instance_id,
+                    "provider_slugs": provider_slugs,
+                },
+            )
+            transaction.execute(
+                """
+                UPDATE provider_accounts pa
+                SET enabled = false,
+                    last_seen_at = now()
+                FROM providers p
+                WHERE p.id = pa.provider_id
+                  AND p.omniroute_instance_id = %(omniroute_instance_id)s
+                  AND (
+                    NOT (p.omniroute_provider_id = ANY(%(provider_slugs)s::text[]))
+                    OR NOT (pa.omniroute_connection_id = ANY(%(account_refs)s::text[]))
+                  )
+                """,
+                {
+                    "omniroute_instance_id": omniroute_instance_id,
+                    "provider_slugs": provider_slugs,
+                    "account_refs": seen_account_refs,
+                },
+            )
+            providers = {}
+            for provider_slug, provider in providers_by_slug.items():
                 accounts = self.repository.provider_accounts.list_for_provider(
                     transaction,
                     omniroute_instance_id=omniroute_instance_id,
                     omniroute_provider_id=provider_slug,
                 )
-                providers[provider_slug] = (str(provider["id"]), [str(account["id"]) for account in accounts])
+                active_accounts = [account for account in accounts if account["enabled"]]
+                provider_enabled = bool(active_accounts)
+                self.repository.providers.upsert(
+                    transaction,
+                    omniroute_instance_id=omniroute_instance_id,
+                    omniroute_provider_id=provider_slug,
+                    provider_type=provider_types_by_slug[provider_slug],
+                    enabled=provider_enabled,
+                )
+                providers[provider_slug] = (
+                    str(provider["id"]),
+                    [str(account["id"]) for account in active_accounts],
+                    provider_enabled,
+                )
         return providers
 
     def store_snapshot(self, *, provider_id: str, catalog: dict[str, Any], fetch_status: str) -> StoredSnapshot:
@@ -175,16 +232,18 @@ def scan_live_omniroute_catalogs(
     except CatalogFetchError as exc:
         return {
             provider_slug: _store_failed_catalog(scanner, provider_slug, provider_id, exc)
-            for provider_slug, (provider_id, _account_ids) in provider_refs.items()
+            for provider_slug, (provider_id, _account_ids, _provider_enabled) in provider_refs.items()
         }
 
     results = {}
-    for provider_slug, (provider_id, account_ids) in provider_refs.items():
-        catalog = {"models": catalogs.get(provider_slug, [])}
+    for provider_slug, (provider_id, account_ids, provider_enabled) in provider_refs.items():
+        live_models = catalogs.get(provider_slug, []) if provider_enabled else []
+        catalog = {"models": live_models, "provider_enabled": provider_enabled}
         snapshot = scanner.store_snapshot(provider_id=provider_id, catalog=catalog, fetch_status="success")
         for account_id in account_ids:
             for model in catalog["models"]:
                 scanner.upsert_endpoint(account_id, model["id"])
+        _mark_missing_provider_models_removed(scanner, provider_id=provider_id, live_models=live_models)
         results[provider_slug] = CatalogScanResult(
             provider_slug=provider_slug,
             fetch_status="success",
@@ -208,6 +267,29 @@ def _fetch_provider_accounts(client: Any) -> list[dict[str, Any]]:
         connection for connection in connections if isinstance(connection, dict) and connection.get("provider")
     ]
     return expand_account_scopes(provider_accounts)
+
+
+def _mark_missing_provider_models_removed(
+    scanner: CatalogScanner,
+    *,
+    provider_id: str,
+    live_models: list[dict[str, Any]],
+) -> None:
+    model_ids = [str(model["id"]) for model in live_models if isinstance(model.get("id"), str)]
+    with scanner.repository.database.transaction() as transaction:
+        # AICODE-NOTE: OmniRoute `/v1/models` plus active provider connections
+        # is the live catalog truth; FMO endpoint rows are only cache.
+        transaction.execute(
+            """
+            UPDATE provider_endpoints
+            SET lifecycle_status = 'removed',
+                removed_at = COALESCE(removed_at, now())
+            WHERE provider_id = %(provider_id)s
+              AND removed_at IS NULL
+              AND NOT (provider_model_id = ANY(%(model_ids)s::text[]))
+            """,
+            {"provider_id": provider_id, "model_ids": model_ids},
+        )
 
 
 def _fetch_models_catalogs(client: Any) -> dict[str, list[dict[str, Any]]]:

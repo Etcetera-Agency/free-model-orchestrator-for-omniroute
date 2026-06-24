@@ -72,11 +72,43 @@ failures, and raise a structured error on auth failure, non-2xx status, or
 invalid payload. A failed fetch SHALL record a failed snapshot and SHALL NOT
 fabricate or overwrite the previous catalog.
 
+OmniRoute's current provider/model state SHALL be the source of truth for FMO
+availability decisions. FMO database provider, account, endpoint, probe, quota,
+score, and allocation rows are cache/snapshot state only. A provider connection
+with `isActive = false` or `enabled = false`, or a provider/model absent from
+the current OmniRoute payload, SHALL be disabled/tombstoned locally before FMO
+uses cached rows for matching, quota research, probing, scoring, allocation,
+diff, apply, diagnostics, or operator sweeps. When a model reappears in the
+current OmniRoute catalog, the scanner SHALL clear the endpoint tombstone during
+upsert.
+
 #### Scenario: Catalog fetched before scan
 - GIVEN no catalog payload is injected and OmniRoute credentials are configured
 - WHEN the daily catalog scan starts
 - THEN the provider/model catalog is fetched from the OmniRoute management API
 - AND the parsed catalog is passed to the scan
+
+#### Scenario: Disabled provider is tombstoned before use
+- GIVEN FMO has cached endpoint rows for a provider
+- AND OmniRoute returns that provider connection with `isActive = false`
+- WHEN the live catalog refresh runs
+- THEN the provider and account are marked disabled
+- AND cached endpoint rows for that provider are marked removed
+- AND downstream FMO stages do not treat those endpoint rows as candidates
+
+#### Scenario: Absent provider is disabled before use
+- GIVEN FMO has cached provider/account rows
+- AND OmniRoute no longer returns that provider in `GET /api/providers`
+- WHEN the live catalog refresh runs
+- THEN the cached provider and accounts are marked disabled
+- AND downstream FMO stages do not use their endpoint rows
+
+#### Scenario: Reappearing model clears tombstone
+- GIVEN a cached endpoint was marked removed after disappearing from OmniRoute
+- AND the same provider/model id appears again in the current OmniRoute catalog
+- WHEN the live catalog refresh upserts that endpoint
+- THEN `removed_at` is cleared
+- AND the endpoint re-enters normal discovery status
 
 #### Scenario: Fetch failure does not overwrite
 - GIVEN the OmniRoute catalog fetch fails with a non-2xx status
