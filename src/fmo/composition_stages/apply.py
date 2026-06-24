@@ -300,10 +300,12 @@ def _desired_endpoints_have_current_quota_safety(
 ) -> bool:
     rows = transaction.execute(
         """
-        SELECT endpoint_id, effective_remaining, hard_stop_capable, evidence,
-               reset_at, classified_at, valid_until, status
-        FROM endpoint_access_states
-        WHERE endpoint_id::text = ANY(%(endpoint_ids)s)
+        SELECT eas.endpoint_id, eas.effective_remaining, eas.hard_stop_capable, eas.evidence,
+               eas.reset_at, eas.classified_at, eas.valid_until, eas.status,
+               qr.limits AS quota_rule_limits
+        FROM endpoint_access_states eas
+        LEFT JOIN quota_rules qr ON qr.id = eas.quota_rule_id
+        WHERE eas.endpoint_id::text = ANY(%(endpoint_ids)s)
         """,
         {"endpoint_ids": list(endpoint_ids)},
     ).fetchall()
@@ -334,18 +336,34 @@ def _endpoint_quota_row_is_safe(
     evidence = row["evidence"] if isinstance(row["evidence"], dict) else {}
     safety_buffer = max(float(evidence.get("safety_buffer") or 0), minimum_safety_buffer)
     percent_remaining = evidence.get("percent_remaining")
-    return (
-        row["status"] == "confirmed"
-        and row["hard_stop_capable"] is True
-        and evidence.get("remaining_source") == "live_observed"
+    has_known_daily_budget = (
+        evidence.get("remaining_source") == "live_observed"
         and evidence.get("daily_budget_source") in {"research", "calibration"}
         and isinstance(percent_remaining, int | float)
         and float(percent_remaining) > minimum_percent_remaining
+    )
+    has_request_window_budget = _request_window_rule_is_safe(row, evidence=evidence)
+    return (
+        row["status"] == "confirmed"
+        and row["hard_stop_capable"] is True
+        and (has_known_daily_budget or has_request_window_budget)
         and evidence.get("locked_out") is not True
         and remaining_amount(row["effective_remaining"]) > safety_buffer
         and (row["reset_at"] is None or row["reset_at"] <= now)
         and row["classified_at"] >= oldest_allowed
         and (row["valid_until"] is None or row["valid_until"] > now)
+    )
+
+
+def _request_window_rule_is_safe(row: Any, *, evidence: dict[str, Any]) -> bool:
+    limits = row["quota_rule_limits"] if isinstance(row["quota_rule_limits"], dict) else {}
+    return (
+        evidence.get("remaining_source") == "assumed"
+        and evidence.get("quota_rule") is True
+        and evidence.get("daily_budget_source") == "research"
+        and evidence.get("hard_stop") is True
+        and limits.get("window") in {"minute", "hour"}
+        and isinstance(limits.get("requests"), int | float)
     )
 
 

@@ -182,9 +182,12 @@ OmniRoute and SHALL NOT be used as the daily-budget capacity. The safety buffer
 SHALL be a configured positive floor, not an implicit `0`. Liveness SHALL come
 from a live quota observation, not from a value assumed at classification time: an
 assumed remaining synthesized at classification without any live observation SHALL
-NOT satisfy `quota_safe`. A future `resetAt` SHALL mean the endpoint is currently
-locked out and excluded; a null `resetAt` SHALL NOT by itself fail the gate (it is
-the healthy, not-rate-limited state). `probes_passed` SHALL be true only when
+NOT satisfy `quota_safe`, except when it is tied to a researched active hard-stop
+quota rule whose only known capacity is a sub-day request window (minute/hour)
+and the effective request remaining is above the configured safety buffer. A
+future `resetAt` SHALL mean the endpoint is currently locked out and excluded; a
+null `resetAt` SHALL NOT by itself fail the gate (it is the healthy,
+not-rate-limited state). `probes_passed` SHALL be true only when
 every endpoint in the desired combos has a passing, non-stale probe/smoke result.
 The evaluation SHALL fail closed: any missing, unknown, assumed, stale, exhausted,
 or locked-out input yields the corresponding value `False`, the stage returns
@@ -211,9 +214,18 @@ or locked-out input yields the corresponding value `False`, the stage returns
 
 #### Scenario: Assumed remaining does not satisfy the apply gate
 - **WHEN** an endpoint's only quota evidence is an assumed remaining synthesized
-  at classification time, with no live liveness observation
+  at classification time, with no live liveness observation or researched
+  request-window hard-stop rule
 - **THEN** the stage derives `quota_safe` as `False` for that endpoint
 - **AND** the stage returns `unsafe_to_apply` (exit 5) and mutates no combo
+
+#### Scenario: Request-window hard-stop quota can satisfy apply safety
+- **WHEN** a confirmed-free endpoint has a researched active hard-stop quota rule
+  for requests per minute or hour
+- AND the endpoint has assumed request remaining above the safety buffer
+- AND it is not locked out
+- **THEN** the stage derives `quota_safe` as `True` without requiring a daily or
+  monthly live budget
 
 #### Scenario: Zero safety buffer does not satisfy the apply gate
 - **WHEN** an endpoint's daily-budget record carries no safety buffer and its

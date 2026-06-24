@@ -452,6 +452,54 @@ def test_apply_stage_rejects_assumed_remaining_evidence(postgres_url):
     assert not any(call[0].startswith("/api/combos/") for call in client.calls)
 
 
+@pytest.mark.spec("combo-applier::Request-window hard-stop quota can satisfy apply safety")
+def test_apply_stage_allows_researched_request_window_hard_stop(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    client = PipelineOpsClient()
+    prepare_scored_endpoint(repository, client=client)
+    run_composed_stage(repository, "role-scoring", client=client)
+    run_composed_stage(repository, "demand-forecast", client=client)
+    run_composed_stage(repository, "allocation", client=client)
+    run_composed_stage(repository, "diff", client=client)
+    with repository.database.transaction() as transaction:
+        rule = transaction.execute(
+            """
+            INSERT INTO quota_rules (
+              provider_id, provider_account_id, model_pattern, access_type,
+              limits, reset_policy, hard_stop_capable, confidence, status, rule_hash
+            )
+            SELECT pa.provider_id, pa.id, '*', 'free_quota',
+                   '{"window": "minute", "requests": 40}'::jsonb,
+                   '{"window": "minute"}'::jsonb,
+                   true, 0.7, 'active', 'request-window-hard-stop'
+            FROM provider_accounts pa
+            LIMIT 1
+            RETURNING id
+            """
+        ).fetchone()
+        transaction.execute(
+            """
+            UPDATE endpoint_access_states
+            SET quota_rule_id = %(rule_id)s,
+                effective_remaining = '{"requests": 40}'::jsonb,
+                evidence = '{
+                  "remaining_source": "assumed",
+                  "daily_budget_source": "research",
+                  "quota_rule": true,
+                  "hard_stop": true,
+                  "safety_buffer": 1
+                }'::jsonb
+            """,
+            {"rule_id": rule["id"]},
+        )
+
+    result = run_composed_stage(repository, "apply", client=client)
+
+    assert result.exit_code == 0
+    assert client.combos["fmo-routing_fast"] != ["old-endpoint"]
+
+
 @pytest.mark.spec("combo-applier::Zero safety buffer does not satisfy the apply gate")
 def test_apply_stage_uses_minimum_safety_buffer_floor(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
