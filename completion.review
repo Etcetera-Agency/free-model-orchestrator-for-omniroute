@@ -14,13 +14,16 @@
   what status came back. Live Nvidia testing on the deployed command found zero
   currently routable stored Nvidia model ids; catalog entries return mostly HTTP
   404 with several timeout/http=0 failures, and the old seed-backed FMO combos
-  returned HTTP 503 afterward. Control live sweeps against other providers
-  succeeded (`codestral/codestral-latest`, `groq/allam-2-7b`, and
-  `groq/groq/compound` passed), so the current failure is Nvidia/provider-route
-  specific rather than a broken sweep command. OpenSpec TODO now tracks Nvidia
-  routing/catalog repair instead of a generic sweep task. Verification: provider
-  sweep, CLI, and composition runtime tests; ruff on touched files; `git diff
-  --check`; and OpenSpec strict validation.
+  returned HTTP 503 afterward. OmniRoute's provider connection test returns
+  `valid:true` for the Nvidia connection but also returns true for bogus model
+  payloads, so it is a provider-key preflight rather than per-model proof.
+  Control live sweeps against other providers succeeded
+  (`codestral/codestral-latest`, `groq/allam-2-7b`, and `groq/groq/compound`
+  passed), so the current failure is Nvidia model-route/execution specific
+  rather than a broken sweep command. OpenSpec TODO now tracks Nvidia model
+  routing repair instead of a generic sweep task. Verification: provider sweep,
+  CLI, and composition runtime tests; ruff on touched files; `git diff --check`;
+  and OpenSpec strict validation.
 - Deploy fix: apply smoke now sends `stream=true` and treats non-empty SSE/text
   responses from the shared OmniRoute client as a smoke pass. Live real `apply`
   showed `fmo-grid-aux-text` returns HTTP 400 without streaming but succeeds

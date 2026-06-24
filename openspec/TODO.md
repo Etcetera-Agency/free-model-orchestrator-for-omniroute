@@ -20,16 +20,20 @@
   `provider='gemini-grounded-search'` returns HTTP 429 even for `hello world`;
   FMO now has a fallback, but the intended grounded-search provider still needs
   platform-side setup/repair.
-- Repair Nvidia provider routing/catalog mismatch. The explicit
+- Repair Nvidia model routing/execution mismatch. The explicit
   `sweep-provider-models --provider nvidia` live run on 2026-06-24 tested the
   stored Nvidia catalog through the shared streaming chat route and found zero
   currently routable provider model ids: the catalog entries return mostly HTTP
   404, with several timeout/http=0 failures. The previously seed-backed
   `fmo-grid-aux-text` and `fmo-grid-int-med` combos also returned HTTP 503 after
-  the sweep. Control sweeps against other providers succeeded
+  the sweep. OmniRoute's provider connection test
+  `POST /api/providers/{connectionId}/test` returns `valid:true` for the Nvidia
+  connection, but that endpoint is connection-level and returns true even for a
+  bogus `model` payload; it does not prove per-model routability. Control sweeps
+  against other providers succeeded
   (`codestral/codestral-latest`, `groq/allam-2-7b`, and `groq/groq/compound`
-  passed), so Nvidia should be treated as provider-down or route-mismatched
-  until OmniRoute routing/stored model ids are repaired and a new sweep records
+  passed), so Nvidia should be treated as model-route/execution mismatched until
+  OmniRoute model routing/stored model ids are repaired and a new sweep records
   passed probes.
 ## Resolved
 
