@@ -29,12 +29,13 @@
 ## Resolved
 
 - Live combo rebalance readiness — deployed 2026-06-24. The live server is on
-  FMO `7a8d077`; provider/model endpoint duplicates are removed, target Nvidia
+  FMO `f0cf757`; provider/model endpoint duplicates are removed, target Nvidia
   aliases bind to canonical AA slugs, active quota rules exist, two endpoints
   have passed probes, allocation produces non-duplicated targets for
-  `fmo-grid-aux-text` and `fmo-grid-int-med`, and `full --dry-run` exits 0.
-  Follow-up commit excludes superseded `fmo-fmo-*` diff snapshots by selecting
-  the latest diff per role before apply.
+  `fmo-grid-aux-text` and `fmo-grid-int-med`, real `apply` exits successfully
+  with streaming combo smoke, degraded empty-target combos are skipped without
+  destructive writes, and final `full --dry-run` exits successfully with
+  `unmanaged_combos=[]`.
 - `update-aa-index-migration-inspector` — archived 2026-06-23. AA migration
   now renders the external prompt file with deterministic migration context,
   leaves model selection to the shared resolver, normalizes proposals to typed
