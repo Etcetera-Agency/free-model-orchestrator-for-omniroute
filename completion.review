@@ -6,7 +6,9 @@
   `minimax-m2.7` -> `minimax-m2-7` and `gemma-3n-e2b-it` -> `gemma-3n-e2b` are
   accepted as exact-slug matches. Live evidence showed AA did contain both
   canonical families, but model matching had created separate provider slugs,
-  leaving passed Nvidia seeds without scorer metrics.
+  leaving passed Nvidia seeds without scorer metrics. Follow-up fix makes
+  AA-backed canonical slugs win alias collisions against stale provider-specific
+  canonical rows left by previous matching.
 - Deploy fix: `sync-metadata` now routes through the composed production
   external-metadata stage instead of returning a no-op success when a runtime
   pipeline runner is present. The metadata repository also persists Artificial

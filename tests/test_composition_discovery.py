@@ -43,7 +43,17 @@ def test_model_matching_stage_uses_existing_canonical_alias(postgres_url):
     repository = Repository(Database(postgres_url))
     endpoint = seed_endpoint(repository, model_id="nvidia/google/gemma-3n-e2b-it", provider_id="nvidia")
     with repository.database.transaction() as transaction:
+        repository.canonical_models.upsert(transaction, canonical_slug="gemma-3n-e2b-it")
         expected = repository.canonical_models.upsert(transaction, canonical_slug="gemma-3n-e2b")
+        transaction.execute(
+            """
+            INSERT INTO artificial_analysis_model_metrics (
+              canonical_model_id, intelligence_index, index_version, source_payload_hash, stale_after
+            )
+            VALUES (%(canonical_id)s, 20, '4.1', 'gemma-aa', now() + interval '1 day')
+            """,
+            {"canonical_id": expected["id"]},
+        )
 
     result = run_composed_stage(repository, "model-matching")
 

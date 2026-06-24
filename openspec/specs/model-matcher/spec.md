@@ -27,6 +27,8 @@ unmatched. All attempts SHALL be stored in `model_match_candidates`;
 - WHEN matching runs
 - THEN the endpoint is matched to canonical slug `gemma-3n-e2b`
 - AND it is auto-used at exact-slug confidence
+- AND if a stale provider-specific canonical slug such as `gemma-3n-e2b-it`
+  already exists without AA metrics, the AA-backed canonical slug still wins
 
 ### Requirement: Forbidden automatic merges
 

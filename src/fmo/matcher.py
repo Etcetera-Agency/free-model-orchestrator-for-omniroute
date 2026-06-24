@@ -26,9 +26,14 @@ def match_model(
     *,
     canonical_slugs: set[str],
     provider_catalog_ids: set[str],
+    preferred_canonical_slugs: set[str] | None = None,
 ) -> MatchResult:
     normalized_candidates = _normalized_candidates(provider_model_id)
     primary_normalized = normalized_candidates[0]
+    preferred = preferred_canonical_slugs or set()
+    for candidate in normalized_candidates:
+        if candidate in preferred:
+            return _result(MatchMethod.EXACT_SLUG, 0.95, canonical_slug=candidate)
     for candidate in normalized_candidates:
         if candidate in canonical_slugs:
             return _result(MatchMethod.EXACT_SLUG, 0.95, canonical_slug=candidate)

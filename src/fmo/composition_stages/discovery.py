@@ -218,10 +218,18 @@ def _model_matching_stage(_dependencies: StageDependencies, context: PipelineCon
             ORDER BY pe.provider_model_id
             """
         ).fetchall()
-        canonical_slugs = {
-            row["canonical_slug"]
-            for row in transaction.execute("SELECT canonical_slug FROM canonical_models").fetchall()
-        }
+        canonical_rows = transaction.execute(
+            """
+            SELECT cm.canonical_slug, EXISTS (
+                SELECT 1
+                FROM artificial_analysis_model_metrics aa
+                WHERE aa.canonical_model_id = cm.id
+            ) AS has_aa_metrics
+            FROM canonical_models cm
+            """
+        ).fetchall()
+        canonical_slugs = {row["canonical_slug"] for row in canonical_rows}
+        preferred_canonical_slugs = {row["canonical_slug"] for row in canonical_rows if row["has_aa_metrics"]}
         provider_catalog_ids = {row["provider_model_id"] for row in endpoints}
         matched = 0
         for endpoint in endpoints:
@@ -229,6 +237,7 @@ def _model_matching_stage(_dependencies: StageDependencies, context: PipelineCon
                 endpoint["provider_model_id"],
                 canonical_slugs=canonical_slugs,
                 provider_catalog_ids=provider_catalog_ids,
+                preferred_canonical_slugs=preferred_canonical_slugs,
             )
             status = "auto_use" if result.auto_use else "review_required"
             canonical_id = None
