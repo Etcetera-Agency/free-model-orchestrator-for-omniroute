@@ -1,5 +1,13 @@
 # Completion Review
 
+- Deploy fix: the service entrypoint now derives apply preconditions from the
+  latest diff snapshots with the same quota/probe safety as the apply stage.
+  Live `apply --dry-run` had passed the stage-local Nvidia request-window quota
+  check, but the older bootstrap guard still rejected apply by checking all
+  historical probes and stale allocation-plan flags. Code Simplifier review kept
+  bootstrap as a thin caller of the apply-stage safety logic. Verification:
+  focused bootstrap/apply tests, ruff on touched files, `git diff --check`, and
+  OpenSpec strict validation.
 - Deploy fix: model matching now prefers existing canonical AA slugs before the
   provider-catalog fallback and carries the matched canonical slug into the
   endpoint binding. Provider punctuation/tuning aliases such as

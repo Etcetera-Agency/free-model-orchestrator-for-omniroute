@@ -110,7 +110,10 @@ The entrypoint SHALL compute apply preconditions by evaluating the apply guard â
 database availability, a saved snapshot, a valid desired state, quota safety, and
 a passing probe/smoke result â€” and SHALL pass that computed value into CLI
 dispatch instead of a hardcoded value. The evaluation SHALL fail closed: any
-unknown, stale, or unavailable input yields preconditions `False`.
+unknown, stale, or unavailable input yields preconditions `False`. The
+entrypoint's quota and probe safety SHALL be scoped to the desired endpoint ids
+from the latest `diff` snapshots and SHALL use the same request-window hard-stop
+quota rules as the apply stage.
 
 #### Scenario: Failing guard input blocks apply
 - **WHEN** any apply-guard input is failing, unknown, or stale at the entrypoint
@@ -120,6 +123,13 @@ unknown, stale, or unavailable input yields preconditions `False`.
 #### Scenario: Healthy guard inputs allow apply
 - **WHEN** every apply-guard input is healthy at the entrypoint
 - **THEN** apply preconditions are `True`
+- **AND** `apply` is allowed to proceed through the runner's gating
+
+#### Scenario: Diff-scoped request-window guard allows apply
+- **WHEN** the latest diff targets an endpoint with researched minute/hour
+  hard-stop request quota and a fresh passing probe
+- **AND** unrelated endpoint probes or old probe attempts have failed
+- **THEN** entrypoint preconditions are still derived from the diff target
 - **AND** `apply` is allowed to proceed through the runner's gating
 
 ### Requirement: Production apply invokes the real smoke path

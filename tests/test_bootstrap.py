@@ -7,6 +7,7 @@ from fmo.bootstrap import bootstrap_and_dispatch, build_startup_config
 from fmo.cli import main
 from fmo.db import MigrationRunner
 from fmo.persistence import Database, Repository
+from tests._composition_support import seed_apply_ready_diff
 
 
 def valid_env(**overrides):
@@ -136,6 +137,76 @@ def test_apply_entrypoint_fails_closed_when_guard_inputs_missing(postgres_url):
     with repository.database.transaction() as transaction:
         assert repository.runs.list(transaction) == []
     assert exit_code == 5
+
+
+@pytest.mark.spec("combo-applier::Diff-scoped request-window guard allows apply")
+def test_apply_entrypoint_uses_diff_scoped_apply_safety(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    endpoint_id = seed_apply_ready_diff(
+        repository,
+        role_id="routing_fast",
+        combo_id="fmo-routing_fast",
+        before=["old-endpoint"],
+        after_model_id="request-window-model",
+    )
+    with repository.database.transaction() as transaction:
+        rule = transaction.execute(
+            """
+            INSERT INTO quota_rules (
+              provider_id, provider_account_id, model_pattern, access_type,
+              limits, reset_policy, hard_stop_capable, confidence, status, rule_hash
+            )
+            SELECT pa.provider_id, pa.id, '*', 'free_quota',
+                   '{"window": "minute", "requests": 40}'::jsonb,
+                   '{"window": "minute"}'::jsonb,
+                   true, 0.7, 'active', 'request-window-bootstrap'
+            FROM provider_accounts pa
+            LIMIT 1
+            RETURNING id
+            """
+        ).fetchone()
+        transaction.execute(
+            """
+            UPDATE endpoint_access_states
+            SET quota_rule_id = %(rule_id)s,
+                effective_remaining = '{"requests": 40}'::jsonb,
+                reset_at = now() + interval '1 minute',
+                evidence = '{
+                  "remaining_source": "assumed",
+                  "daily_budget_source": "research",
+                  "quota_rule": true,
+                  "hard_stop": true,
+                  "safety_buffer": 1
+                }'::jsonb
+            WHERE endpoint_id = %(endpoint_id)s
+            """,
+            {"rule_id": rule["id"], "endpoint_id": endpoint_id},
+        )
+        transaction.execute(
+            """
+            INSERT INTO endpoint_probes (
+              endpoint_id, suite_version, probe_type, request_hash, passed, http_status,
+              started_at, finished_at, details
+            )
+            VALUES (
+              %(endpoint_id)s, 'production-v1', 'basic', 'old-failed-probe', false, 500,
+              now() - interval '1 hour', now() - interval '1 hour', '{}'::jsonb
+            )
+            """,
+            {"endpoint_id": endpoint_id},
+        )
+    calls = []
+
+    exit_code = main(
+        ["apply"],
+        env=valid_env(DATABASE_URL=postgres_url),
+        health_check=lambda: {"ok": True},
+        dispatcher=lambda argv, preconditions_ok, config: calls.append((argv, preconditions_ok)) or 0,
+    )
+
+    assert exit_code == 0
+    assert calls == [(["apply"], True)]
 
 
 @pytest.mark.spec("runtime-bootstrap::Entrypoint uses real arguments")

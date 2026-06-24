@@ -85,15 +85,24 @@ def _requires_apply_preconditions(argv: Sequence[str]) -> bool:
 def _apply_preconditions_ok(config: StartupConfig) -> bool:
     if config.database_url is None:
         return False
+    from fmo.composition_stages.apply import _derive_apply_stage_safety
+
     try:
         repository = Repository(Database(config.database_url))
         with repository.database.transaction() as transaction:
+            diffs = _latest_apply_diffs(transaction)
+            safety = _derive_apply_stage_safety(
+                transaction,
+                diffs,
+                minimum_safety_buffer=config.apply_min_safety_buffer,
+                minimum_percent_remaining=config.apply_min_percent_remaining,
+            )
             preconditions = ApplyPreconditions(
                 db_available=_database_available(transaction),
-                snapshot_saved=_snapshot_saved(transaction),
-                desired_state_valid=_desired_state_valid(transaction),
-                quota_safe=_quota_safe(transaction),
-                probes_passed=_probes_passed(transaction),
+                snapshot_saved=bool(diffs),
+                desired_state_valid=all(isinstance(diff["state_json"].get("after"), list) for diff in diffs),
+                quota_safe=safety["quota_safe"],
+                probes_passed=safety["probes_passed"],
             )
         check_apply_preconditions(preconditions)
     except Exception:
@@ -106,52 +115,13 @@ def _database_available(transaction: Any) -> bool:
     return True
 
 
-def _snapshot_saved(transaction: Any) -> bool:
-    row = transaction.execute(
+def _latest_apply_diffs(transaction: Any) -> list[Any]:
+    return transaction.execute(
         """
-        SELECT 1
+        SELECT DISTINCT ON (omniroute_combo_id) id, role_id, omniroute_combo_id, state_json
         FROM combo_snapshots
-        WHERE phase IN ('current', 'planned')
-        LIMIT 1
+        WHERE phase = 'diff'
+          AND omniroute_combo_id LIKE 'fmo-%'
+        ORDER BY omniroute_combo_id, created_at DESC
         """
-    ).fetchone()
-    return row is not None
-
-
-def _desired_state_valid(transaction: Any) -> bool:
-    row = transaction.execute(
-        """
-        SELECT 1
-        FROM allocation_plans
-        WHERE status IN ('planned', 'validated')
-          AND jsonb_array_length(targets) > 0
-        LIMIT 1
-        """
-    ).fetchone()
-    return row is not None
-
-
-def _quota_safe(transaction: Any) -> bool:
-    row = transaction.execute(
-        """
-        SELECT constraint_report
-        FROM allocation_plans
-        WHERE status IN ('planned', 'validated')
-        ORDER BY created_at DESC
-        LIMIT 1
-        """
-    ).fetchone()
-    if row is None:
-        return False
-    report = row["constraint_report"]
-    return isinstance(report, dict) and report.get("ok") is True and report.get("quota_safe") is not False
-
-
-def _probes_passed(transaction: Any) -> bool:
-    row = transaction.execute(
-        """
-        SELECT bool_and(passed) AS passed, count(*) AS total
-        FROM endpoint_probes
-        """
-    ).fetchone()
-    return row is not None and row["total"] > 0 and row["passed"] is True
+    ).fetchall()
