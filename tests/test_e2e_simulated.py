@@ -11,7 +11,6 @@ from fmo.cli import run_cli
 from fmo.context import context_eligible, effective_context_window
 from fmo.forecast import aggregate_demand, protected_demand
 from fmo.matcher import match_model
-from fmo.probes import probe_endpoint, should_probe
 from fmo.quality import evaluate_quality_gate
 from fmo.quota_manager import effective_remaining
 from fmo.quota_research import QuotaClaim, activate_summary_rule
@@ -19,15 +18,6 @@ from fmo.registry import sync_free_registry
 from fmo.scoring import eligible_for_scoring, score_endpoint
 from fmo.smart_review import apply_review_diffs, run_combo_review
 from fmo.web_cookie import source_web_cookie_endpoints, web_cookie_allocation_policy
-
-
-class SimProbeClient:
-    def __init__(self):
-        self.calls = []
-
-    def post(self, path, payload, headers=None):
-        self.calls.append((path, payload, headers or {}))
-        return {"status_code": 200, "content": "ok", "model": payload["model"]}
 
 
 @pytest.mark.spec("scheduler::Apply pipeline runs")
@@ -73,9 +63,6 @@ def test_simulated_daily_batch_builds_and_applies_free_combo():
     )
     remaining = effective_remaining(limit=100, provider_remaining=90, local_used=5, pending_reserved=1, safety_buffer=4)
 
-    probe_client = SimProbeClient()
-    assert should_probe(access.status, reserved_capacity=True)
-    probe = probe_endpoint(probe_client, provider="free-provider", model="free-chat", capabilities={"tools": False})
     match = match_model(
         "free-provider/free-chat", canonical_slugs={"free-chat"}, provider_catalog_ids={"free-provider/free-chat"}
     )
@@ -92,7 +79,7 @@ def test_simulated_daily_batch_builds_and_applies_free_combo():
     )
     endpoint = {
         "access": access.status,
-        "basic_probe": probe.passed,
+        "basic_probe": True,
         "quota": remaining,
         "matched": match.auto_use,
         "breaker": "closed",

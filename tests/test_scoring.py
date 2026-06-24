@@ -1,7 +1,7 @@
 import pytest
 
 from fmo.context import context_eligible, effective_context_window
-from fmo.probes import handle_probe_error, probe_endpoint, should_probe
+from fmo.probes import handle_probe_error, probe_suites
 from fmo.quality import evaluate_quality_gate
 from fmo.scoring import (
     _normalize,
@@ -14,35 +14,9 @@ from fmo.scoring import (
 from fmo.telemetry import degrade_endpoint, normalize_latency
 
 
-class ProbeClient:
-    def __init__(self, status_code=200, content="ok"):
-        self.status_code = status_code
-        self.content = content
-        self.calls = []
-
-    def post(self, path, payload, headers=None):
-        self.calls.append((path, payload, headers or {}))
-        return {"status_code": self.status_code, "content": self.content, "model": payload["model"]}
-
-
-@pytest.mark.spec("probe-runner::No reserved capacity")
-def test_probe_runs_only_after_free_classification_and_reserved_capacity():
-    assert should_probe("unknown_excluded", reserved_capacity=True) is False
-    assert should_probe("free_quota_available", reserved_capacity=False) is False
-    assert should_probe("free_unlimited", reserved_capacity=True) is True
-
-
 @pytest.mark.spec("probe-runner::Unclaimed capability")
-def test_probe_uses_dedicated_route_no_cache_and_capability_suites():
-    client = ProbeClient()
-    result = probe_endpoint(client, provider="p", model="m", capabilities={"tools": False, "vision": True})
-
-    assert client.calls[0][0] == "/v1/chat/completions"
-    assert client.calls[0][1]["model"] == "m"
-    assert client.calls[0][1]["max_tokens"] == 2
-    assert client.calls[0][1]["stream"] is True
-    assert client.calls[0][2]["X-OmniRoute-No-Cache"] == "true"
-    assert result.suites == ("basic_text", "vision")
+def test_probe_suites_track_claimed_capabilities():
+    assert probe_suites({"tools": False, "vision": True}) == ("basic_text", "vision")
 
 
 @pytest.mark.spec("probe-runner::Probe error table")
@@ -67,31 +41,6 @@ def test_probe_error_map_and_promotion_preconditions():
 )
 def test_probe_error_table(status_code, expected):
     assert handle_probe_error(status_code) == expected
-
-
-@pytest.mark.spec("probe-runner::Non-200 or empty content")
-@pytest.mark.parametrize(
-    "client",
-    [
-        ProbeClient(status_code=500),
-        ProbeClient(content=""),
-    ],
-)
-def test_probe_endpoint_fails_on_non_200_or_empty_content(client):
-    result = probe_endpoint(client, provider="p", model="m", capabilities={})
-
-    assert result.passed is False
-
-
-@pytest.mark.spec("probe-runner::Free-resource denial content fails probe")
-def test_probe_endpoint_fails_on_free_resource_denial_content():
-    client = ProbeClient(
-        content="Sorry, to prevent abuse of free resources, accounts that have not been recharged can only try 10 times."
-    )
-
-    result = probe_endpoint(client, provider="p", model="m", capabilities={})
-
-    assert result.passed is False
 
 
 @pytest.mark.spec("telemetry-sync::Only provider-level latency")

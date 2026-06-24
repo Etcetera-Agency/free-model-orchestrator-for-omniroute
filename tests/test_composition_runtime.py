@@ -47,10 +47,10 @@ from tests._composition_support import (
 
 
 class FailingProbeClient(PipelineOpsClient):
-    def post(self, path, payload, headers=None, idempotency_key=None):
-        if path.endswith("/chat/completions"):
+    def post_response(self, path, payload, headers=None, idempotency_key=None):
+        if path == "/api/models/test-all":
             raise OmniRouteRequestError("POST", path, 400)
-        return super().post(path, payload, headers=headers, idempotency_key=idempotency_key)
+        return super().post_response(path, payload, headers=headers, idempotency_key=idempotency_key)
 
 
 @pytest.mark.spec("pipeline-orchestration::Full run calls production adapters")
@@ -131,12 +131,20 @@ def test_probe_stage_gates_on_confirmed_capacity_and_persists_results(postgres_u
         endpoint = transaction.execute("SELECT probe_status FROM provider_endpoints").fetchone()
     assert result.exit_code == 0
     assert result.stage_results[0]["details"]["effect"] == "repository_write"
-    assert client.calls[-1][0] == "/v1/chat/completions"
-    assert client.calls[-1][1]["stream"] is True
+    assert client.calls[-1][0] == "/api/models/test-all"
+    assert client.calls[-1][1] == {
+        "providerId": "provider-a",
+        "modelIds": ["free-chat"],
+        "respectRateLimit": True,
+        "autoHideFailed": True,
+        "connectionId": "conn-provider-a",
+    }
     assert client.calls[-1][2] == {"X-OmniRoute-No-Cache": "true"}
     assert probe["passed"] is True
     assert probe["details"]["reserved_capacity"] is True
+    assert probe["details"]["omniroute_model_test_all"] is True
     assert endpoint["probe_status"] == "passed"
+    assert client.get_calls[-2:] == ["/api/providers", "/v1/models"]
 
 
 @pytest.mark.spec("probe-runner::Current combo seeds are probed before wider provider pool")
@@ -195,7 +203,7 @@ def test_probe_stage_records_new_stream_probe_after_old_same_day_failure(postgre
     assert result.exit_code == 0
     assert [(row["suite_version"], row["passed"]) for row in probes] == [
         ("production-v1", False),
-        ("production-v2-stream", True),
+        ("production-v3-model-test-all", True),
     ]
     assert endpoint["probe_status"] == "passed"
 
@@ -217,6 +225,179 @@ def test_probe_stage_records_http_error_without_crashing(postgres_url):
     assert probe["http_status"] == 400
     assert probe["details"]["error_reason"] == "unknown"
     assert endpoint["probe_status"] == "failed"
+
+
+@pytest.mark.spec("probe-runner::Daily probe uses OmniRoute batch model test")
+def test_probe_stage_batches_by_provider_connection_and_chunks_model_ids(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    client = PipelineOpsClient()
+    for index in range(101):
+        seed_confirmed_llm_candidate(
+            repository,
+            model_id=f"provider-a/model-{index:03d}",
+            intelligence_index=40,
+            provider_id="provider-a",
+            connection_id="conn-a",
+        )
+    seed_confirmed_llm_candidate(
+        repository,
+        model_id="provider-a/other-connection",
+        intelligence_index=40,
+        provider_id="provider-a",
+        connection_id="conn-b",
+    )
+
+    result = run_composed_stage(repository, "probing", client=client)
+
+    test_all_calls = [call for call in client.calls if call[0] == "/api/models/test-all"]
+    assert result.exit_code == 0
+    assert [call[1]["connectionId"] for call in test_all_calls] == ["conn-a", "conn-a", "conn-b"]
+    assert [len(call[1]["modelIds"]) for call in test_all_calls] == [100, 1, 1]
+    assert all(call[1]["respectRateLimit"] is True for call in test_all_calls)
+    assert all(call[1]["autoHideFailed"] is True for call in test_all_calls)
+
+
+@pytest.mark.spec("probe-runner::Daily probe skips auto aliases")
+def test_probe_stage_skips_auto_model_aliases(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    client = PipelineOpsClient()
+    seed_confirmed_llm_candidate(
+        repository,
+        model_id="provider-a/model-auto",
+        intelligence_index=40,
+        provider_id="provider-a",
+        connection_id="conn-a",
+    )
+    seed_confirmed_llm_candidate(
+        repository,
+        model_id="provider-a/model",
+        intelligence_index=40,
+        provider_id="provider-a",
+        connection_id="conn-a",
+    )
+
+    result = run_composed_stage(repository, "probing", client=client)
+
+    with repository.database.transaction() as transaction:
+        rows = transaction.execute(
+            """
+            SELECT provider_model_id, probe_status
+            FROM provider_endpoints
+            ORDER BY provider_model_id
+            """
+        ).fetchall()
+    assert result.exit_code == 0
+    assert [call[1]["modelIds"] for call in client.calls if call[0] == "/api/models/test-all"] == [
+        ["provider-a/model"]
+    ]
+    assert [(row["provider_model_id"], row["probe_status"]) for row in rows] == [
+        ("provider-a/model", "passed"),
+        ("provider-a/model-auto", "not_run"),
+    ]
+
+
+@pytest.mark.spec("probe-runner::Daily probe uses OmniRoute batch model test")
+def test_probe_stage_fail_closes_missing_and_rate_limited_batch_results(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    client = PipelineOpsClient()
+    seed_confirmed_llm_candidate(
+        repository,
+        model_id="provider-a/missing",
+        intelligence_index=40,
+        provider_id="provider-a",
+        connection_id="conn-a",
+    )
+    seed_confirmed_llm_candidate(
+        repository,
+        model_id="provider-a/rate-limited",
+        intelligence_index=40,
+        provider_id="provider-a",
+        connection_id="conn-a",
+    )
+    client.model_test_all_results = {
+        "provider-a/rate-limited": {"status": "error", "latencyMs": 1, "rateLimited": True}
+    }
+
+    def missing_result_response(path, payload, headers=None, idempotency_key=None):
+        response = PipelineOpsClient.post_response(client, path, payload, headers, idempotency_key)
+        response.body["results"].pop("provider-a/missing", None)
+        response.body["stoppedEarly"] = True
+        response.body["stopReason"] = "consecutive_rate_limits"
+        return response
+
+    client.post_response = missing_result_response
+
+    result = run_composed_stage(repository, "probing", client=client)
+
+    with repository.database.transaction() as transaction:
+        probes = transaction.execute(
+            """
+            SELECT pe.provider_model_id, ep.http_status, ep.details
+            FROM endpoint_probes ep
+            JOIN provider_endpoints pe ON pe.id = ep.endpoint_id
+            ORDER BY pe.provider_model_id
+            """
+        ).fetchall()
+    assert result.exit_code == 0
+    assert [(row["provider_model_id"], row["http_status"], row["details"]["error_reason"]) for row in probes] == [
+        ("provider-a/missing", 500, "missing_model_test_result"),
+        ("provider-a/rate-limited", 429, "rate_limited"),
+    ]
+    assert all(row["details"]["stopped_early"] is True for row in probes)
+
+
+@pytest.mark.spec("probe-runner::Daily probe refreshes catalog after model test")
+def test_probe_stage_refreshes_live_catalog_after_model_test(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    client = PipelineOpsClient()
+    seed_confirmed_llm_candidate(
+        repository,
+        model_id="provider-a/bad",
+        intelligence_index=40,
+        provider_id="provider-a",
+        connection_id="conn-provider-a",
+        omniroute_instance_id="default",
+    )
+    client.model_test_all_results = {
+        "provider-a/bad": {
+            "status": "error",
+            "latencyMs": 2,
+            "statusCode": 404,
+            "error": "not found",
+            "hidden": True,
+        }
+    }
+    client.providers_body = {
+        "connections": [
+            {
+                "id": "conn-provider-a",
+                "provider": "provider-a",
+                "enabled": True,
+                "isActive": True,
+                "status": "confirmed",
+            }
+        ]
+    }
+
+    result = run_composed_stage(repository, "probing", client=client)
+
+    with repository.database.transaction() as transaction:
+        endpoint = transaction.execute(
+            """
+            SELECT removed_at IS NOT NULL AS removed, lifecycle_status, probe_status
+            FROM provider_endpoints
+            WHERE provider_model_id = 'provider-a/bad'
+            """
+        ).fetchone()
+        probe = transaction.execute("SELECT details FROM endpoint_probes").fetchone()
+    assert result.exit_code == 0
+    assert endpoint == (True, "removed", "failed")
+    assert probe["details"]["hidden"] is True
+    assert client.get_calls[-2:] == ["/api/providers", "/v1/models"]
 
 
 @pytest.mark.spec("pipeline-orchestration::Telemetry sync writes normalized rows")

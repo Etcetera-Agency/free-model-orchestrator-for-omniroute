@@ -36,35 +36,60 @@ widen the default pipeline probing stage.
 - AND the default `probe-models` stage remains seed-bounded
 ### Requirement: Isolated probe request
 
-The system SHALL pass a probe only when the response status is `200` and content
-is non-empty. Production probes SHALL use the shared OpenAI-compatible
-`/v1/chat/completions` route with a tiny completion budget and no-cache header,
-because provider-specific provider ids may be management identifiers that are
-not valid chat route slugs. Production probes SHALL request streaming mode so
-providers that reject OmniRoute-injected `stream_options` on non-stream requests
-can still be validated. Streaming probes SHALL use a distinct suite version and
-request hash from older non-stream probes, and endpoint `probe_status` SHALL
-reflect the stored probe row used for that run. Provider denial text that
-indicates unusable free quota (for example "prevent abuse of free resources" or
-"accounts that have not been recharged") SHALL fail the probe even when the
-upstream returns HTTP 200.
+The system SHALL pass a probe only when OmniRoute's model-test result for that
+model is `status='ok'`. Production daily probes SHALL call OmniRoute's
+`/api/models/test-all` endpoint instead of hand-rolled chat completions, using
+explicit active model ids from the current live catalog. The stage SHALL group
+eligible models by provider and connection, send batches of at most 100
+`modelIds`, set `respectRateLimit=true`, set `autoHideFailed=true`, and include
+the no-cache header. Daily probes SHALL skip model aliases whose final path
+segment ends with `-auto`. Each returned model entry SHALL be persisted as an
+individual `endpoint_probes` row, and endpoint `probe_status` SHALL reflect that
+stored probe row. If OmniRoute auto-hides any hard-failed model during
+`test-all`, that same required post-test catalog reread SHALL let the normal
+catalog scanner tombstone removed models in the same run.
 
 #### Scenario: Non-200 or empty content
-- GIVEN a probe response has non-200 status or empty content
+- GIVEN a model-test entry has `status='error'`
 - WHEN probe result is evaluated
 - THEN `passed` is false
 
-#### Scenario: Free-resource denial content fails probe
-- GIVEN a probe response has HTTP 200
-- AND the content states the free resource is blocked for abuse prevention or
-  unrecharged accounts
-- WHEN probe result is evaluated
-- THEN `passed` is false
+#### Scenario: Daily probe uses OmniRoute batch model test
+- GIVEN confirmed-free endpoints with reserved capacity across provider
+  connections
+- WHEN the daily probe stage runs
+- THEN it sends `/api/models/test-all` requests grouped by provider and
+  connection
+- AND every request contains at most 100 `modelIds`
+- AND every request sets `respectRateLimit=true` and `autoHideFailed=true`
+- AND every returned model result is persisted as one endpoint probe row
 
-#### Scenario: Streaming probe evidence supersedes old same-day failures
+#### Scenario: Daily probe skips auto aliases
+- GIVEN active confirmed-free models include a model id whose final path segment
+  ends with `-auto`
+- WHEN the daily probe stage builds `/api/models/test-all` batches
+- THEN the `-auto` model id is omitted from every `modelIds` payload
+- AND the stored endpoint remains unprobed rather than tombstoned
+
+#### Scenario: Batch failures are persisted fail-closed
+- GIVEN `/api/models/test-all` returns a rate-limited entry for one model
+- AND omits another requested model because the batch stopped early
+- WHEN the daily probe stage records results
+- THEN the rate-limited model is stored as failed with HTTP `429`
+- AND the missing model is stored as failed with reason
+  `missing_model_test_result`
+
+#### Scenario: Daily probe refreshes catalog after model test
+- GIVEN `/api/models/test-all` has returned probe results
+- WHEN the daily probe stage completes that batch
+- THEN FMO immediately rereads `/api/providers` and `/v1/models`
+- AND models removed from the active live catalog are tombstoned through the
+  normal catalog scanner
+
+#### Scenario: Model-test probe evidence supersedes old same-day failures
 - GIVEN an endpoint has an older same-day failed non-stream probe row
-- WHEN the streaming probe succeeds
-- THEN a new streaming suite probe row is stored
+- WHEN the OmniRoute model-test probe succeeds
+- THEN a new model-test suite probe row is stored
 - AND endpoint `probe_status` is `passed`
 ### Requirement: Capability-gated suites
 

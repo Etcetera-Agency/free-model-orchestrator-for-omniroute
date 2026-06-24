@@ -1,5 +1,19 @@
 # Completion Review
 
+- Deploy fix: daily probe now delegates live model health to OmniRoute's
+  `/api/models/test-all` instead of the removed raw `/v1/chat/completions`
+  probe helper. The probe stage uses the current live catalog preflight rows,
+  skips final-path `-auto` aliases, groups eligible models by provider and
+  connection, chunks `modelIds` at 100, sends `respectRateLimit=true` and
+  `autoHideFailed=true`, persists each returned model-test entry as a separate
+  endpoint probe, and fail-closes missing/rate-limited batch entries. After
+  test-all runs, FMO immediately rereads `/api/providers` and `/v1/models`
+  instead of parsing OmniRoute visibility internals; the existing live catalog
+  scanner tombstones anything no longer active in the same daily run. The old
+  raw probe endpoint helper and tests were removed rather than kept for
+  compatibility. Verification: focused runtime/sweep/scoring/catalog/e2e tests,
+  ruff on touched files,
+  `git diff --check`, and OpenSpec strict validation.
 - Deploy fix: FMO now treats OmniRoute active provider/model state as the
   source of truth before any decision stage. The composed runtime refreshes
   `GET /api/providers` and `GET /v1/models` before commands and scheduled

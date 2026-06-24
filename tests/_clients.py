@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 
 from fmo.aa_migration import MigrationProposalResponse
 from fmo.hermes_inventory import InspectorForecastResponse, IntelligenceForecastResponse
-from fmo.omniroute import OmniRouteRequestError
+from fmo.omniroute import OmniRouteHttpResponse, OmniRouteRequestError
 from fmo.quota_research import QuotaClaimResponse
 from fmo.smart_review import ComboReviewResponse
 from tests._fixtures import fixture_body
@@ -49,6 +49,8 @@ class PipelineOpsClient(QuotaSearchClient):
         self.rate_limits_body = deepcopy(fixture_body("omniroute_api_rate_limits"))
         self.analytics_body = deepcopy(fixture_body("omniroute_api_usage_analytics"))
         self.quota_body = deepcopy(fixture_body("omniroute_api_usage_quota"))
+        self.models_body = {"data": [{"id": "free-chat", "owned_by": "provider-a"}]}
+        self.model_test_all_results = {}
         self.providers_body.setdefault("connections", []).append(
             {
                 "id": "conn-provider-a",
@@ -118,6 +120,18 @@ class PipelineOpsClient(QuotaSearchClient):
         self.calls.append((path, payload, headers, idempotency_key))
         return {"status_code": self.probe_status, "content": "ok" if self.probe_status == 200 else ""}
 
+    def post_response(self, path, payload, headers=None, idempotency_key=None):
+        self.calls.append((path, payload, headers, idempotency_key))
+        if path != "/api/models/test-all":
+            raise AssertionError(f"unexpected POST response {path}")
+        results = {}
+        for model_id in payload["modelIds"]:
+            results[model_id] = self.model_test_all_results.get(
+                model_id,
+                {"status": "ok", "latencyMs": 12, "responseText": "ok"},
+            )
+        return OmniRouteHttpResponse(status_code=200, body={"results": results}, text="", headers={})
+
     def delete(self, path):
         self.deleted_paths.append(path)
         raise AssertionError(f"unexpected DELETE {path}")
@@ -126,6 +140,8 @@ class PipelineOpsClient(QuotaSearchClient):
         self.get_calls.append(path)
         if path == "/api/providers":
             return self.providers_body
+        if path == "/v1/models":
+            return self.models_body
         if path == "/api/rate-limits":
             return self.rate_limits_body
         if path == "/api/usage/analytics":
