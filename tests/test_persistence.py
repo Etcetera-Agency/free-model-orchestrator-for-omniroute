@@ -305,6 +305,62 @@ def test_idempotent_repository_writes_do_not_duplicate(repository):
         assert repository.probes.count_by_request_hash(transaction, "same-key") == 1
 
 
+@pytest.mark.spec("persistence::Provider endpoint upsert overwrites provider/model identity")
+def test_provider_endpoint_upsert_overwrites_provider_model_identity(repository):
+    with repository.database.transaction() as transaction:
+        provider = repository.providers.upsert(
+            transaction,
+            omniroute_instance_id="local",
+            omniroute_provider_id="nvidia",
+            provider_type="api",
+        )
+        first_account = repository.provider_accounts.upsert(
+            transaction,
+            provider_id=provider["id"],
+            omniroute_connection_id="pool-a",
+        )
+        second_account = repository.provider_accounts.upsert(
+            transaction,
+            provider_id=provider["id"],
+            omniroute_connection_id="pool-b",
+        )
+
+        first = repository.provider_endpoints.upsert(
+            transaction,
+            provider_account_id=first_account["id"],
+            provider_model_id="nvidia/google/gemma-3n-e2b-it",
+            model_type="chat",
+            lifecycle_status="discovered",
+            access_status="access_pending",
+            metadata_hash="first",
+        )
+        second = repository.provider_endpoints.upsert(
+            transaction,
+            provider_account_id=second_account["id"],
+            provider_model_id="nvidia/google/gemma-3n-e2b-it",
+            model_type="chat",
+            lifecycle_status="active",
+            access_status="confirmed",
+            metadata_hash="second",
+        )
+
+        total = transaction.execute(
+            """
+            SELECT count(*) AS total
+            FROM provider_endpoints
+            WHERE provider_id = %(provider_id)s
+              AND provider_model_id = 'nvidia/google/gemma-3n-e2b-it'
+              AND model_type = 'chat'
+            """,
+            {"provider_id": provider["id"]},
+        ).fetchone()["total"]
+
+    assert second["id"] == first["id"]
+    assert second["provider_account_id"] == second_account["id"]
+    assert second["metadata_hash"] == "second"
+    assert total == 1
+
+
 @pytest.mark.spec("persistence::Re-run does not duplicate")
 def test_combo_snapshot_rerun_refreshes_existing_snapshot_recency(repository):
     with repository.database.transaction() as transaction:

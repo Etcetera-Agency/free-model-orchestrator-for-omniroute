@@ -25,6 +25,7 @@ the end of `schema.sql`; they were extracted so the baseline stays clean.
 | `0008_v3.20_atomic_run_locks.sql` | 3.20 | partial unique index for active `sync_runs` lock rows |
 | `0009_v3.21_quality_band_upper_bound.sql` | 3.21 | `roles.maximum_quality_*` quality-band columns |
 | `0010_v3.22_auxiliary_role_consumers.sql` | 3.22 | `role_consumers.consumer_type` accepts Hermes auxiliary slots |
+| `0011_v3.23_provider_endpoint_identity.sql` | 3.23 | `provider_endpoints.provider_id` and provider/model dedupe identity |
 
 > The AA index-migration / threshold-version tables, demand tables, quota
 > attribution tables, bootstrap profiles, combo review, role lifecycle events,

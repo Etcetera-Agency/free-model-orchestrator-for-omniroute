@@ -17,7 +17,7 @@ snapshot for unchanged detection.
 
 The system SHALL diff model id, name, type, flags, pricing, capabilities and
 visibility, emit the corresponding `provider_model_*` events, and upsert
-endpoints keyed by (provider_account_id, provider_model_id, model_type). A new
+endpoints keyed by (provider_id, provider_model_id, model_type). A new
 endpoint SHALL start `lifecycle_status = discovered`, `access_status =
 access_pending`, `probe_status = not_run`.
 

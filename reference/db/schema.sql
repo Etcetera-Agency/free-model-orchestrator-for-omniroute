@@ -100,6 +100,7 @@ CREATE TABLE canonical_models (
 
 CREATE TABLE provider_endpoints (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  provider_id uuid NOT NULL REFERENCES providers(id),
   provider_account_id uuid NOT NULL REFERENCES provider_accounts(id),
   provider_model_id text NOT NULL,
   model_type text NOT NULL DEFAULT 'chat',
@@ -124,6 +125,7 @@ CREATE TABLE provider_endpoints (
   first_seen_at timestamptz NOT NULL DEFAULT now(),
   last_seen_at timestamptz NOT NULL DEFAULT now(),
   removed_at timestamptz,
+  UNIQUE (provider_id, provider_model_id, model_type),
   UNIQUE (provider_account_id, provider_model_id, model_type)
 );
 

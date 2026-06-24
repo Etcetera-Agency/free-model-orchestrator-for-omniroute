@@ -26,17 +26,22 @@ class ProviderEndpointRepository:
             connection,
             """
             INSERT INTO provider_endpoints (
-              provider_account_id, provider_model_id, model_type,
+              provider_id, provider_account_id, provider_model_id, model_type,
               canonical_model_id, lifecycle_status, access_status,
               probe_status, capabilities, metadata_hash
             )
-            VALUES (
-              %(provider_account_id)s, %(provider_model_id)s, %(model_type)s,
+            SELECT
+              provider_id, %(provider_account_id)s, %(provider_model_id)s, %(model_type)s,
               %(canonical_model_id)s, %(lifecycle_status)s, %(access_status)s,
               %(probe_status)s, %(capabilities)s, %(metadata_hash)s
-            )
-            ON CONFLICT (provider_account_id, provider_model_id, model_type)
+            FROM provider_accounts
+            WHERE id = %(provider_account_id)s
+            ON CONFLICT (provider_id, provider_model_id, model_type)
             DO UPDATE SET
+              -- AICODE-NOTE: provider/model identity is unique across account
+              -- rows; updates move the endpoint to the latest account instead
+              -- of creating duplicate live candidates for the same model.
+              provider_account_id = EXCLUDED.provider_account_id,
               canonical_model_id = EXCLUDED.canonical_model_id,
               lifecycle_status = EXCLUDED.lifecycle_status,
               access_status = EXCLUDED.access_status,

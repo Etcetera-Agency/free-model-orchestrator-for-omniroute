@@ -19,6 +19,13 @@ embed schema SQL outside repository classes.
   read loads it
 - **THEN** the loaded record equals the written record including status fields
 
+#### Scenario: Provider endpoint upsert overwrites provider/model identity
+- **WHEN** the same provider model is written again through a different account
+  row for the provider
+- **THEN** the existing `provider_endpoints` row is updated
+- **AND** no duplicate row exists for `(provider_id, provider_model_id,
+  model_type)`
+
 #### Scenario: Stages do not embed schema SQL
 - **WHEN** a pipeline stage persists state
 - **THEN** it calls a repository function and does not issue table SQL directly
