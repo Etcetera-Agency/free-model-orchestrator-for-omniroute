@@ -109,15 +109,18 @@ The CLI SHALL expose operations for metadata sync and full orchestration. The
 `sync-metadata` command SHALL fetch both models.dev and Artificial Analysis
 metadata using configured URLs/defaults, require a configured Artificial Analysis
 API key for AA requests, report structured external dependency failures,
-redact API keys from command output, and support `--dry-run` without applying database mutations. The
-`full` command SHALL run metadata sync before discovery, matching, scoring,
-allocation, diff, and apply.
+redact API keys from command output, route through the composed production
+pipeline when a pipeline runner is present, and support `--dry-run` without
+applying database mutations. The `full` command SHALL run metadata sync before
+discovery, matching, scoring, allocation, diff, and apply.
 
 #### Scenario: sync-metadata fetches external metadata
 - GIVEN valid external metadata endpoints
 - WHEN `sync-metadata` runs
 - THEN models.dev catalog sync runs
 - AND Artificial Analysis metadata sync runs with x-api-key authentication
+- AND production runtime dispatch executes the composed external-metadata-sync
+  stage rather than returning a no-op success
 
 #### Scenario: sync-metadata missing AA API key
 - GIVEN no Artificial Analysis API key is configured

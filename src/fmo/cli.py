@@ -72,6 +72,7 @@ PIPELINE_COMMANDS = {
     "scan-providers",
     "research-quotas",
     "classify-access",
+    "sync-metadata",
     "match-models",
     "probe-models",
     "sync-telemetry",

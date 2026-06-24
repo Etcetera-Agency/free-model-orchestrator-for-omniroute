@@ -1341,12 +1341,23 @@ def test_sync_metadata_stage_persists_candidates_and_aa_snapshot(postgres_url):
             ORDER BY category
             """
         ).fetchall()
+        aa_metrics = transaction.execute(
+            """
+            SELECT cm.canonical_slug, aa.intelligence_index, aa.median_output_tokens_per_second, aa.index_version
+            FROM artificial_analysis_model_metrics aa
+            JOIN canonical_models cm ON cm.id = aa.canonical_model_id
+            """
+        ).fetchone()
     assert cli_result.exit_code == 0
     assert [(row["provider_id"], row["provider_model_id"]) for row in stored] == [("models-dev", "free-chat")]
     assert [(row["category"], float(row["normalized_score"])) for row in quality] == [
         ("intelligence_index", 71.0),
         ("median_output_tokens_per_second", 34.0),
     ]
+    assert aa_metrics["canonical_slug"] == "free-chat"
+    assert float(aa_metrics["intelligence_index"]) == 71.0
+    assert float(aa_metrics["median_output_tokens_per_second"]) == 34.0
+    assert aa_metrics["index_version"] == "4.1"
 
 
 @pytest.mark.spec("persistence::Dry-run persists nothing")

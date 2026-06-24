@@ -1,5 +1,15 @@
 # Completion Review
 
+- Deploy fix: `sync-metadata` now routes through the composed production
+  external-metadata stage instead of returning a no-op success when a runtime
+  pipeline runner is present. The metadata repository also persists Artificial
+  Analysis snapshot rows into `artificial_analysis_model_metrics`, so role
+  scoring can read canonical AA metrics instead of only provider-quality
+  observations. This addresses live `quality_gate:unverifiable` rows caused by
+  an empty scorer metrics table after a successful-looking metadata command.
+  Code Simplifier review kept the CLI dispatch and persistence changes explicit.
+  Verification: focused CLI/runtime tests, ruff on touched files,
+  `git diff --check`, and OpenSpec strict validation.
 - Deploy fix: context eligibility now treats `minimum_context_window = 0` as no
   hard context requirement, so live seed endpoints with unknown context are not
   rejected from no-minimum roles. Unknown context still fails closed for roles

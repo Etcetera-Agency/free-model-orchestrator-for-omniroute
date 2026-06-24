@@ -1,6 +1,6 @@
 import pytest
 
-from fmo.cli import EXIT_CODES, parse_args, run_cli
+from fmo.cli import EXIT_CODES, CliResult, parse_args, run_cli
 from fmo.external_metadata import ExternalMetadataError
 from fmo.web_cookie import (
     check_session_health,
@@ -121,6 +121,21 @@ def test_cli_sync_metadata_and_full_call_metadata_sync_before_pipeline():
     assert sync.exit_code == 0
     assert full.exit_code == 0
     assert calls == [("metadata", False), ("metadata", False)]
+
+
+@pytest.mark.spec("cli-and-operations::sync-metadata fetches external metadata")
+def test_cli_sync_metadata_uses_pipeline_runner_when_available():
+    calls = []
+
+    def pipeline_runner(command, args):
+        calls.append((command, args.dry_run))
+        return CliResult(exit_code=0, changed=True)
+
+    result = run_cli(["sync-metadata", "--dry-run"], preconditions_ok=True, pipeline_runner=pipeline_runner)
+
+    assert result.exit_code == 0
+    assert result.changed is True
+    assert calls == [("sync-metadata", True)]
 
 
 @pytest.mark.spec("cli-and-operations::sync-metadata dry run")
