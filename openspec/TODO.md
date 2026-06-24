@@ -26,15 +26,20 @@
   currently routable provider model ids: the catalog entries return mostly HTTP
   404, with several timeout/http=0 failures. The previously seed-backed
   `fmo-grid-aux-text` and `fmo-grid-int-med` combos also returned HTTP 503 after
-  the sweep, so Nvidia should be treated as unavailable until OmniRoute routing
-  or stored model ids are repaired and a new sweep records passed probes.
+  the sweep. Control sweeps against other providers succeeded
+  (`codestral/codestral-latest`, `groq/allam-2-7b`, and `groq/groq/compound`
+  passed), so Nvidia should be treated as provider-down or route-mismatched
+  until OmniRoute routing/stored model ids are repaired and a new sweep records
+  passed probes.
 ## Resolved
 
 - Nvidia provider sweep tooling — deployed 2026-06-24. FMO `be61cf7` adds the
   explicit `sweep-provider-models` operator command with provider, limit,
   offset, delay, timeout, dry-run, force, JSON, and live flushed
   `probe_start`/`probe_done` progress logs. Live Nvidia testing exercised the
-  command and persisted failed probe evidence across the stored Nvidia catalog.
+  command and persisted failed probe evidence across the stored Nvidia catalog;
+  control runs against `codestral` and `groq` proved the same command can record
+  live passing provider models.
 - Live combo rebalance readiness — deployed 2026-06-24. The live server is on
   FMO `f0cf757`; provider/model endpoint duplicates are removed, target Nvidia
   aliases bind to canonical AA slugs, active quota rules exist, two endpoints
