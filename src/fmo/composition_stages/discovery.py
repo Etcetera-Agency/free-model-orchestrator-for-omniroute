@@ -242,6 +242,7 @@ def _model_matching_stage(_dependencies: StageDependencies, context: PipelineCon
             status = "auto_use" if result.auto_use else "review_required"
             canonical_id = None
             if result.auto_use:
+                previous_canonical_id = endpoint["canonical_model_id"]
                 slug = result.canonical_slug or canonical_slug(endpoint["provider_model_id"])
                 model = context.repository.canonical_models.upsert(transaction, canonical_slug=slug)
                 canonical_slugs.add(slug)
@@ -251,6 +252,7 @@ def _model_matching_stage(_dependencies: StageDependencies, context: PipelineCon
                     "UPDATE provider_endpoints SET canonical_model_id = %(model_id)s WHERE id = %(endpoint_id)s",
                     {"model_id": canonical_id, "endpoint_id": endpoint["id"]},
                 )
+                _delete_stale_canonical_alias(transaction, previous_canonical_id, canonical_id)
             transaction.execute(
                 """
                 INSERT INTO model_match_candidates (
@@ -275,6 +277,29 @@ def _model_matching_stage(_dependencies: StageDependencies, context: PipelineCon
             status="validation_failed", reason="no_model_matches", details={"adapter": "model-matching", "effect": None}
         )
     return _effect_result("model-matching", changed=matched > 0)
+
+
+def _delete_stale_canonical_alias(transaction: Any, previous_canonical_id: Any | None, canonical_id: Any | None) -> None:
+    if previous_canonical_id is None or canonical_id is None or previous_canonical_id == canonical_id:
+        return
+    refs = transaction.execute(
+        """
+        SELECT
+          (SELECT count(*) FROM provider_endpoints WHERE canonical_model_id = %(previous_id)s) AS endpoint_refs,
+          (SELECT count(*) FROM artificial_analysis_model_metrics WHERE canonical_model_id = %(previous_id)s) AS aa_refs
+        """,
+        {"previous_id": previous_canonical_id},
+    ).fetchone()
+    if refs["endpoint_refs"] or refs["aa_refs"]:
+        return
+    # AICODE-NOTE: Rematching can strand provider-specific canonical aliases
+    # that only old match-audit rows reference; remove them so canonical_models
+    # stays de-duplicated around AA-backed slugs.
+    transaction.execute(
+        "UPDATE model_match_candidates SET canonical_model_id = NULL WHERE canonical_model_id = %(previous_id)s",
+        {"previous_id": previous_canonical_id},
+    )
+    transaction.execute("DELETE FROM canonical_models WHERE id = %(previous_id)s", {"previous_id": previous_canonical_id})
 
 
 def _detect_free_model_changes(transaction: Any, client: Any) -> FreeModelChanges:

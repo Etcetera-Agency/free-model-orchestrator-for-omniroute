@@ -8,7 +8,9 @@
   canonical families, but model matching had created separate provider slugs,
   leaving passed Nvidia seeds without scorer metrics. Follow-up fix makes
   AA-backed canonical slugs win alias collisions against stale provider-specific
-  canonical rows left by previous matching.
+  canonical rows left by previous matching and removes unreferenced stale aliases
+  during rematch so updates overwrite canonical binding instead of accumulating
+  duplicates.
 - Deploy fix: `sync-metadata` now routes through the composed production
   external-metadata stage instead of returning a no-op success when a runtime
   pipeline runner is present. The metadata repository also persists Artificial

@@ -43,7 +43,15 @@ def test_model_matching_stage_uses_existing_canonical_alias(postgres_url):
     repository = Repository(Database(postgres_url))
     endpoint = seed_endpoint(repository, model_id="nvidia/google/gemma-3n-e2b-it", provider_id="nvidia")
     with repository.database.transaction() as transaction:
-        repository.canonical_models.upsert(transaction, canonical_slug="gemma-3n-e2b-it")
+        stale = repository.canonical_models.upsert(transaction, canonical_slug="gemma-3n-e2b-it")
+        transaction.execute(
+            """
+            UPDATE provider_endpoints
+            SET canonical_model_id = %(canonical_id)s
+            WHERE id = %(endpoint_id)s
+            """,
+            {"canonical_id": stale["id"], "endpoint_id": endpoint["id"]},
+        )
         expected = repository.canonical_models.upsert(transaction, canonical_slug="gemma-3n-e2b")
         transaction.execute(
             """
@@ -60,9 +68,13 @@ def test_model_matching_stage_uses_existing_canonical_alias(postgres_url):
     with repository.database.transaction() as transaction:
         stored = repository.provider_endpoints.get(transaction, endpoint["id"])
         canonical = repository.canonical_models.get(transaction, stored["canonical_model_id"])
+        stale_count = transaction.execute(
+            "SELECT count(*) AS total FROM canonical_models WHERE canonical_slug = 'gemma-3n-e2b-it'"
+        ).fetchone()["total"]
     assert result.exit_code == 0
     assert stored["canonical_model_id"] == expected["id"]
     assert canonical["canonical_slug"] == "gemma-3n-e2b"
+    assert stale_count == 0
 
 
 @pytest.mark.spec("cli-and-operations::Registry command uses registry sync")
