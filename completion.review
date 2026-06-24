@@ -1,5 +1,14 @@
 # Completion Review
 
+- Deploy fix: request-window hard-stop apply safety now survives the
+  `quota-sync` liveness overlay. Live `full --dry-run` refreshed Nvidia evidence
+  to `remaining_source=live_observed`, `percent_remaining=0`, and
+  `locked_out=true` from a future reset, even though the researched RPM
+  hard-stop rule still had request capacity above the safety buffer. The apply
+  gate now treats minute/hour request-window rules as request capacity and does
+  not require daily/monthly liveness to pass for that case. Verification:
+  focused apply/bootstrap tests, ruff on touched files, and OpenSpec strict
+  validation.
 - Deploy fix: apply now evaluates only the newest diff snapshot per role, so
   stale legacy `fmo-fmo-*` diff rows from the earlier combo-id bug no longer
   appear as unmanaged combos during `full --dry-run`. The bootstrap precondition

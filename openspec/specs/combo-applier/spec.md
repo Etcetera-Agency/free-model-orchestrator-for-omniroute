@@ -233,11 +233,13 @@ or locked-out input yields the corresponding value `False`, the stage returns
 - **WHEN** a confirmed-free endpoint has a researched active hard-stop quota rule
   for requests per minute or hour
 - AND the endpoint has assumed request remaining above the safety buffer
-- AND it is not locked out
 - **THEN** the stage derives `quota_safe` as `True` without requiring a daily or
   monthly live budget
 - AND a future reset timestamp for that request window does not fail the gate
   while remaining capacity is still above the buffer
+- AND a live liveness overlay with zero percent remaining or a future reset does
+  not fail that request-window gate while researched request capacity remains
+  above the buffer
 
 #### Scenario: Zero safety buffer does not satisfy the apply gate
 - **WHEN** an endpoint's daily-budget record carries no safety buffer and its

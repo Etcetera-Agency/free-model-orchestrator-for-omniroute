@@ -351,7 +351,7 @@ def _endpoint_quota_row_is_safe(
         row["status"] == "confirmed"
         and row["hard_stop_capable"] is True
         and (has_known_daily_budget or has_request_window_budget)
-        and evidence.get("locked_out") is not True
+        and (has_request_window_budget or evidence.get("locked_out") is not True)
         and remaining_amount(row["effective_remaining"]) > safety_buffer
         and (has_request_window_budget or row["reset_at"] is None or row["reset_at"] <= now)
         and row["classified_at"] >= oldest_allowed
@@ -362,7 +362,7 @@ def _endpoint_quota_row_is_safe(
 def _request_window_rule_is_safe(row: Any, *, evidence: dict[str, Any]) -> bool:
     limits = row["quota_rule_limits"] if isinstance(row["quota_rule_limits"], dict) else {}
     return (
-        evidence.get("remaining_source") == "assumed"
+        evidence.get("remaining_source") in {"assumed", "live_observed"}
         and evidence.get("quota_rule") is True
         and evidence.get("daily_budget_source") == "research"
         and evidence.get("hard_stop") is True

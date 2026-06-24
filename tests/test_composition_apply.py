@@ -485,10 +485,12 @@ def test_apply_stage_allows_researched_request_window_hard_stop(postgres_url):
                 effective_remaining = '{"requests": 40}'::jsonb,
                 reset_at = now() + interval '1 minute',
                 evidence = '{
-                  "remaining_source": "assumed",
+                  "remaining_source": "live_observed",
                   "daily_budget_source": "research",
                   "quota_rule": true,
                   "hard_stop": true,
+                  "percent_remaining": 0,
+                  "locked_out": true,
                   "safety_buffer": 1
                 }'::jsonb
             """,
