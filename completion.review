@@ -11,9 +11,13 @@
   sweep showed bad catalog entries can hang until the default 30s client timeout,
   so the command includes explicit per-request timeout control and live flushed
   `probe_start`/`probe_done` logs that identify which model was requested and
-  what status came back. Verification: provider sweep, CLI, and composition
-  runtime tests; ruff on touched files; `git diff --check`; and OpenSpec strict
-  validation.
+  what status came back. Live Nvidia testing on the deployed command found zero
+  currently routable stored Nvidia model ids; catalog entries return mostly HTTP
+  404 with several timeout/http=0 failures, and the old seed-backed FMO combos
+  returned HTTP 503 afterward. OpenSpec TODO now tracks Nvidia routing/catalog
+  repair instead of a generic sweep task. Verification: provider sweep, CLI, and
+  composition runtime tests; ruff on touched files; `git diff --check`; and
+  OpenSpec strict validation.
 - Deploy fix: apply smoke now sends `stream=true` and treats non-empty SSE/text
   responses from the shared OmniRoute client as a smoke pass. Live real `apply`
   showed `fmo-grid-aux-text` returns HTTP 400 without streaming but succeeds

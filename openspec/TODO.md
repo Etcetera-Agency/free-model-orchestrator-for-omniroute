@@ -20,22 +20,31 @@
   `provider='gemini-grounded-search'` returns HTTP 429 even for `hello world`;
   FMO now has a fallback, but the intended grounded-search provider still needs
   platform-side setup/repair.
-- Sweep Nvidia provider models with bounded probing and record which catalog
-  entries actually work. Live Nvidia wildcard quota confirms many endpoints, but
-  most probed catalog entries return 404; the main rebalance run now probes
-  current combo seeds first, while a separate sweep should test Nvidia models in
-  batches, persist working endpoints, and exclude unavailable ones from future
-  candidate pools.
+- Repair Nvidia provider routing/catalog mismatch. The explicit
+  `sweep-provider-models --provider nvidia` live run on 2026-06-24 tested the
+  stored Nvidia catalog through the shared streaming chat route and found zero
+  currently routable provider model ids: the catalog entries return mostly HTTP
+  404, with several timeout/http=0 failures. The previously seed-backed
+  `fmo-grid-aux-text` and `fmo-grid-int-med` combos also returned HTTP 503 after
+  the sweep, so Nvidia should be treated as unavailable until OmniRoute routing
+  or stored model ids are repaired and a new sweep records passed probes.
 ## Resolved
 
+- Nvidia provider sweep tooling — deployed 2026-06-24. FMO `be61cf7` adds the
+  explicit `sweep-provider-models` operator command with provider, limit,
+  offset, delay, timeout, dry-run, force, JSON, and live flushed
+  `probe_start`/`probe_done` progress logs. Live Nvidia testing exercised the
+  command and persisted failed probe evidence across the stored Nvidia catalog.
 - Live combo rebalance readiness — deployed 2026-06-24. The live server is on
   FMO `f0cf757`; provider/model endpoint duplicates are removed, target Nvidia
   aliases bind to canonical AA slugs, active quota rules exist, two endpoints
   have passed probes, allocation produces non-duplicated targets for
   `fmo-grid-aux-text` and `fmo-grid-int-med`, real `apply` exits successfully
   with streaming combo smoke, degraded empty-target combos are skipped without
-  destructive writes, and final `full --dry-run` exits successfully with
-  `unmanaged_combos=[]`.
+  destructive writes, and final `full --dry-run` exited successfully with
+  `unmanaged_combos=[]`. Later Nvidia provider sweep evidence supersedes the
+  old seed probe state; current Nvidia availability is tracked in the deferred
+  repair item above.
 - `update-aa-index-migration-inspector` — archived 2026-06-23. AA migration
   now renders the external prompt file with deterministic migration context,
   leaves model selection to the shared resolver, normalizes proposals to typed
