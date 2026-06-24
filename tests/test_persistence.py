@@ -305,6 +305,39 @@ def test_idempotent_repository_writes_do_not_duplicate(repository):
         assert repository.probes.count_by_request_hash(transaction, "same-key") == 1
 
 
+@pytest.mark.spec("persistence::Re-run does not duplicate")
+def test_combo_snapshot_rerun_refreshes_existing_snapshot_recency(repository):
+    with repository.database.transaction() as transaction:
+        first = repository.combo_snapshots.upsert(
+            transaction,
+            role_id="routing_fast",
+            omniroute_combo_id="fmo-routing_fast",
+            state_hash="same-diff",
+            state_json={"after": []},
+            phase="diff",
+            run_id="run-1",
+        )
+        transaction.execute(
+            "UPDATE combo_snapshots SET created_at = now() - interval '1 hour' WHERE id = %(id)s",
+            {"id": first["id"]},
+        )
+        second = repository.combo_snapshots.upsert(
+            transaction,
+            role_id="routing_fast",
+            omniroute_combo_id="fmo-routing_fast",
+            state_hash="same-diff",
+            state_json={"after": []},
+            phase="diff",
+            run_id="run-2",
+        )
+        count = transaction.execute("SELECT count(*) AS total FROM combo_snapshots").fetchone()["total"]
+
+    assert second["id"] == first["id"]
+    assert second["created_at"] > first["created_at"]
+    assert second["run_id"] == "run-2"
+    assert count == 1
+
+
 @pytest.mark.spec("data-model::Role carries a maximum quality bound")
 def test_role_quality_band_upper_bound_round_trips(repository):
     with repository.database.transaction() as transaction:

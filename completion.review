@@ -434,3 +434,6 @@
 - Global allocation now respects role-scoped score rows before reserving a
   primary, so an endpoint eligible for one role cannot make an unrelated role
   appear planned with an empty combo.
+- Combo diff snapshot re-runs now refresh the existing content-identical row's
+  recency and run id instead of leaving an older empty diff hidden behind a newer
+  superseded diff.

@@ -54,6 +54,12 @@ idempotency behind repository methods.
 - **WHEN** a stage write with an unchanged idempotency key runs twice
 - **THEN** exactly one row exists for that key
 
+#### Scenario: Re-run refreshes current combo snapshot recency
+- **WHEN** a combo diff snapshot is written again with unchanged state
+- **THEN** no duplicate snapshot row is created
+- AND the existing row's recency and run id are refreshed so latest-state
+  queries select it over older superseded diffs
+
 #### Scenario: Discovery repository writes remain idempotent
 - **WHEN** the same provider catalog or free registry payload is persisted twice
   through the repository

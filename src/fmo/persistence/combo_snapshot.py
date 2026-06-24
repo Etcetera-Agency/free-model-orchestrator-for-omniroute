@@ -30,7 +30,18 @@ class ComboSnapshotRepository:
             {"role_id": role_id, "state_hash": state_hash, "phase": phase},
         )
         if existing:
-            return existing
+            return _one(
+                connection,
+                """
+                UPDATE combo_snapshots
+                SET created_at = now(),
+                    omniroute_combo_id = COALESCE(%(omniroute_combo_id)s, omniroute_combo_id),
+                    run_id = COALESCE(%(run_id)s, run_id)
+                WHERE id = %(id)s
+                RETURNING *
+                """,
+                {"id": existing["id"], "omniroute_combo_id": omniroute_combo_id, "run_id": run_id},
+            )
         return _one(
             connection,
             """
