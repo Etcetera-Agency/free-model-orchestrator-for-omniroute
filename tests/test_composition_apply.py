@@ -328,7 +328,19 @@ def test_smoke_combo_accepts_openai_chat_completion_without_body_status_code():
 
     smoke_call = client.calls[-1]
     assert smoke_call[0] == "/v1/chat/completions"
+    assert smoke_call[1]["stream"] is True
     assert "status_code" not in OPENAI_CHAT_COMPLETION_BODY
+
+
+@pytest.mark.spec("combo-applier::Smoke pass derived from OpenAI-compatible body")
+def test_smoke_combo_accepts_non_empty_sse_text_response():
+    class TextSmokeClient:
+        def post(self, path, payload):
+            assert path == "/v1/chat/completions"
+            assert payload["stream"] is True
+            return {"status_code": 200, "content": 'data: {"choices":[{"delta":{"content":"ok"}}]}\n\ndata: [DONE]'}
+
+    assert _smoke_combo(TextSmokeClient(), "fmo-routing_fast") is True
 
 
 @pytest.mark.spec("combo-applier::Empty completion is a smoke failure")

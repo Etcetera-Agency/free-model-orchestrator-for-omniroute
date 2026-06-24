@@ -145,9 +145,11 @@ applied diff.
 The smoke decision SHALL be derived from the OmniRoute-compatible response, not
 from a fabricated body-level field. A smoke POST that completes without raising
 (HTTP 2xx, enforced by the OmniRoute client) and returns a non-empty assistant
-message (`choices[0].message.content`) SHALL be treated as a smoke pass. A smoke
-POST that raises `OmniRouteRequestError` (non-2xx HTTP) or returns an empty or
-missing assistant message SHALL be treated as a smoke failure that triggers
+message (`choices[0].message.content`) or non-empty streamed text/SSE content
+SHALL be treated as a smoke pass. The smoke request SHALL set `stream=true` so
+providers that require streaming use their live-compatible route. A smoke POST
+that raises `OmniRouteRequestError` (non-2xx HTTP) or returns an empty or missing
+assistant/text content SHALL be treated as a smoke failure that triggers
 rollback. The smoke decision SHALL NOT read a top-level `status_code` field from
 the response body.
 
@@ -166,6 +168,12 @@ the response body.
   `choices[0].message.content`
 - WHEN the smoke decision is computed
 - THEN the smoke passes without reading any body-level `status_code` field
+
+#### Scenario: Smoke pass derived from non-empty SSE text
+- GIVEN a smoke POST returns HTTP 2xx with non-empty streamed text content
+- WHEN the smoke decision is computed
+- THEN the smoke passes
+- AND the smoke request includes `stream=true`
 
 #### Scenario: Empty completion is a smoke failure
 - GIVEN a smoke POST returns HTTP 2xx but the assistant message content is empty

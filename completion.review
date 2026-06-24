@@ -1,5 +1,11 @@
 # Completion Review
 
+- Deploy fix: apply smoke now sends `stream=true` and treats non-empty SSE/text
+  responses from the shared OmniRoute client as a smoke pass. Live real `apply`
+  showed `fmo-grid-aux-text` returns HTTP 400 without streaming but succeeds
+  with streaming, and combo smoke responses may be text/event-stream rather than
+  JSON `choices`. Verification: focused apply/bootstrap tests, ruff on touched
+  files, `git diff --check`, and OpenSpec strict validation.
 - Deploy fix: apply now treats an empty desired target list as a degraded
   no-target skip, not as an instruction to delete every combo member. Live real
   `apply` hit this when `fmo-grid-aux-struct` had a degraded/no-primary plan and

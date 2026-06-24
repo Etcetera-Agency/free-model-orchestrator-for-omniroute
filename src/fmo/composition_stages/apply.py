@@ -411,13 +411,17 @@ def _desired_endpoints_have_current_probe_success(transaction: Any, endpoint_ids
 
 
 def _smoke_combo(client: Any, combo_id: str) -> bool:
+    # AICODE-NOTE: Live combo smoke must use streaming; some OmniRoute providers
+    # return HTTP 400 on the non-stream route and SSE/text on the stream route.
     try:
         response = client.post(
             "/v1/chat/completions",
-            {"model": combo_id, "messages": [{"role": "user", "content": "Return ok"}]},
+            {"model": combo_id, "messages": [{"role": "user", "content": "Return ok"}], "stream": True},
         )
     except OmniRouteRequestError:
         return False
+    if isinstance(response, dict) and isinstance(response.get("content"), str):
+        return bool(response["content"].strip())
     choices = response.get("choices", []) if isinstance(response, dict) else []
     if not choices or not isinstance(choices[0], dict):
         return False
