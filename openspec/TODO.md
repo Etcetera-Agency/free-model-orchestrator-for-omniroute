@@ -5,16 +5,11 @@
 - Server-side default combo grid bootstrap — separate deploy task. Regenerate
   seed models with the live FMO matcher, back up `GET /api/combos`, then create
   the default one-seed combos from `docs/combo-grid-bootstrap.md` on OmniRoute.
-- Verify post-deploy combo rebalance readiness on the live FMO server. The
-  identity fix makes live `fmo-grid-*` combos visible and avoids `fmo-fmo-*`, but
-  current production state still has zero confirmed endpoints, zero probes, and
-  empty allocation targets, so `apply --dry-run` remains blocked by apply
-  preconditions.
 - Continue post-deploy quota/access verification after the `/v1/search` query
   length fix. The previous `research-quotas --dry-run` `http_error` was caused
   by 716-character quota queries exceeding OmniRoute's 500-character schema
-  limit; after deploy, confirm quota rules are written, then clear downstream
-  `classify-access` / probe blockers until endpoints become eligible.
+  limit; active quota rules and eligible endpoints are now present, but provider
+  coverage still needs broadening beyond the current Nvidia seed path.
 - Add group-pattern quota topology support for providers whose free tier varies
   by model family/group (for example Antigravity-style pools). Current live fix
   fails such provider/account answers closed instead of widening them to
@@ -33,6 +28,13 @@
   candidate pools.
 ## Resolved
 
+- Live combo rebalance readiness — deployed 2026-06-24. The live server is on
+  FMO `7a8d077`; provider/model endpoint duplicates are removed, target Nvidia
+  aliases bind to canonical AA slugs, active quota rules exist, two endpoints
+  have passed probes, allocation produces non-duplicated targets for
+  `fmo-grid-aux-text` and `fmo-grid-int-med`, and `full --dry-run` exits 0.
+  Follow-up commit excludes superseded `fmo-fmo-*` diff snapshots by selecting
+  the latest diff per role before apply.
 - `update-aa-index-migration-inspector` — archived 2026-06-23. AA migration
   now renders the external prompt file with deterministic migration context,
   leaves model selection to the shared resolver, normalizes proposals to typed

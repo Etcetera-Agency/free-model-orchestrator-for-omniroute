@@ -103,15 +103,7 @@ def _apply_stage(dependencies: StageDependencies, context: PipelineContext) -> S
     if dependencies.omniroute_client is None:
         return StageResult(status="external_dependency_failed", reason="omniroute_client_required")
     with context.repository.database.transaction() as transaction:
-        diffs = transaction.execute(
-            """
-            SELECT DISTINCT ON (omniroute_combo_id) id, role_id, omniroute_combo_id, state_json
-            FROM combo_snapshots
-            WHERE phase = 'diff'
-              AND omniroute_combo_id LIKE 'fmo-%'
-            ORDER BY omniroute_combo_id, created_at DESC
-            """
-        ).fetchall()
+        diffs = _latest_diff_snapshots(transaction)
         minimum_safety_buffer = (
             dependencies.config.apply_min_safety_buffer
             if dependencies.config is not None
@@ -207,6 +199,18 @@ def _apply_stage(dependencies: StageDependencies, context: PipelineContext) -> S
         changed=result.changed,
         details={**result.details, "combo_test_called": combo_test_called, "unmanaged_combos": unmanaged_combos},
     )
+
+
+def _latest_diff_snapshots(transaction: Any) -> list[Any]:
+    return transaction.execute(
+        """
+        SELECT DISTINCT ON (role_id) id, role_id, omniroute_combo_id, state_json
+        FROM combo_snapshots
+        WHERE phase = 'diff'
+          AND omniroute_combo_id LIKE 'fmo-%'
+        ORDER BY role_id, created_at DESC
+        """
+    ).fetchall()
 
 
 def _persist_applied_snapshot(context: PipelineContext, diff: Any, before: list[Any], desired: list[Any]) -> None:

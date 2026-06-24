@@ -85,12 +85,12 @@ def _requires_apply_preconditions(argv: Sequence[str]) -> bool:
 def _apply_preconditions_ok(config: StartupConfig) -> bool:
     if config.database_url is None:
         return False
-    from fmo.composition_stages.apply import _derive_apply_stage_safety
+    from fmo.composition_stages.apply import _derive_apply_stage_safety, _latest_diff_snapshots
 
     try:
         repository = Repository(Database(config.database_url))
         with repository.database.transaction() as transaction:
-            diffs = _latest_apply_diffs(transaction)
+            diffs = _latest_diff_snapshots(transaction)
             safety = _derive_apply_stage_safety(
                 transaction,
                 diffs,
@@ -113,15 +113,3 @@ def _apply_preconditions_ok(config: StartupConfig) -> bool:
 def _database_available(transaction: Any) -> bool:
     transaction.execute("SELECT 1")
     return True
-
-
-def _latest_apply_diffs(transaction: Any) -> list[Any]:
-    return transaction.execute(
-        """
-        SELECT DISTINCT ON (omniroute_combo_id) id, role_id, omniroute_combo_id, state_json
-        FROM combo_snapshots
-        WHERE phase = 'diff'
-          AND omniroute_combo_id LIKE 'fmo-%'
-        ORDER BY omniroute_combo_id, created_at DESC
-        """
-    ).fetchall()

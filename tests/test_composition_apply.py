@@ -636,6 +636,41 @@ def test_apply_stage_skips_absent_combo_without_create_or_delete(postgres_url):
     assert result.stage_results[0]["details"]["effect"] == "idempotent_no_change"
 
 
+@pytest.mark.spec("combo-applier::Latest diff per role is authoritative")
+def test_apply_stage_ignores_superseded_legacy_combo_diff_for_same_role(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    seed_apply_ready_diff(
+        repository,
+        role_id="fmo-grid-int-med",
+        combo_id="fmo-fmo-grid-int-med",
+        before=[],
+        after_model_id="legacy-free",
+    )
+    with repository.database.transaction() as transaction:
+        transaction.execute(
+            """
+            UPDATE combo_snapshots
+            SET created_at = now() - interval '1 day'
+            WHERE omniroute_combo_id = 'fmo-fmo-grid-int-med'
+            """
+        )
+    seed_apply_ready_diff(
+        repository,
+        role_id="fmo-grid-int-med",
+        combo_id="fmo-grid-int-med",
+        before=["old-endpoint"],
+        after_model_id="current-free",
+    )
+    client = PipelineOpsClient()
+    client.combos["fmo-grid-int-med"] = ["old-endpoint"]
+
+    result = run_runtime_command(repository, client, "apply", dry_run=True)
+
+    assert result.exit_code == 0
+    assert result.stage_results[0]["details"]["unmanaged_combos"] == []
+
+
 @pytest.mark.spec("combo-applier::Absent combo is skipped without failing the run")
 @pytest.mark.spec("combo-applier::Combos are never deleted")
 @pytest.mark.spec("combo-applier::Production apply smoke-tests applied combos")

@@ -1,5 +1,12 @@
 # Completion Review
 
+- Deploy fix: apply now evaluates only the newest diff snapshot per role, so
+  stale legacy `fmo-fmo-*` diff rows from the earlier combo-id bug no longer
+  appear as unmanaged combos during `full --dry-run`. The bootstrap precondition
+  path reuses the same latest-diff selector. Code Simplifier review kept the
+  selector as one small apply-stage helper shared by bootstrap. Verification:
+  focused apply/bootstrap tests, ruff on touched files, and OpenSpec strict
+  validation.
 - Deploy fix: provider endpoints now use provider/model/type identity, not
   provider-account/model/type identity, so catalog updates overwrite a single
   endpoint row even when OmniRoute exposes several account/pool rows for the

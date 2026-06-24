@@ -320,6 +320,14 @@ remain in force for combos that exist.
 - THEN the existing combo is rebalanced and smoke-tested
 - AND the absent combo is skipped, and the run is not failed by the skip
 
+#### Scenario: Latest diff per role is authoritative
+- GIVEN an older diff snapshot exists for a previous managed combo id of the
+  same role
+- AND a newer diff snapshot exists for the current managed combo id
+- WHEN apply runs
+- THEN only the newest diff for that role is evaluated
+- AND the older combo id is not reported as an unmanaged combo
+
 #### Scenario: Combos are never deleted
 - GIVEN any apply outcome (success, drift, or rollback)
 - WHEN apply runs
