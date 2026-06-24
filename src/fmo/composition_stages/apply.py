@@ -139,12 +139,16 @@ def _apply_stage(dependencies: StageDependencies, context: PipelineContext) -> S
     combo_test_called = False
     applied = []
     unmanaged_combos = []
+    skipped_empty_combos = []
     dry_run = bool(context.config.get("dry_run", False))
     for diff in diffs:
         combo_id = diff["omniroute_combo_id"]
         diff_before = list(diff["state_json"].get("before", []))
         desired = list(diff["state_json"].get("after", []))
         if not combo_id.startswith("fmo-"):
+            continue
+        if not desired:
+            skipped_empty_combos.append(combo_id)
             continue
         # AICODE-NOTE: Live OmniRoute combo set is source of truth for whether
         # apply may rebalance; absent desired combos are operator-managed setup.
@@ -158,7 +162,11 @@ def _apply_stage(dependencies: StageDependencies, context: PipelineContext) -> S
             return StageResult(
                 status="unsafe_to_apply",
                 reason="combo_drift_detected",
-                details={"combo_test_called": combo_test_called, "unmanaged_combos": unmanaged_combos},
+                details={
+                    "combo_test_called": combo_test_called,
+                    "unmanaged_combos": unmanaged_combos,
+                    "skipped_empty_combos": skipped_empty_combos,
+                },
             )
         if dry_run:
             continue
@@ -197,6 +205,7 @@ def _apply_stage(dependencies: StageDependencies, context: PipelineContext) -> S
                 "combo_test_called": False,
                 "effect": "idempotent_no_change",
                 "unmanaged_combos": unmanaged_combos,
+                "skipped_empty_combos": skipped_empty_combos,
             },
         )
     result = _effect_result("apply", changed=bool(applied))
@@ -204,7 +213,12 @@ def _apply_stage(dependencies: StageDependencies, context: PipelineContext) -> S
         status=result.status,
         idempotency_key=result.idempotency_key,
         changed=result.changed,
-        details={**result.details, "combo_test_called": combo_test_called, "unmanaged_combos": unmanaged_combos},
+        details={
+            **result.details,
+            "combo_test_called": combo_test_called,
+            "unmanaged_combos": unmanaged_combos,
+            "skipped_empty_combos": skipped_empty_combos,
+        },
     )
 
 

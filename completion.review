@@ -1,5 +1,12 @@
 # Completion Review
 
+- Deploy fix: apply now treats an empty desired target list as a degraded
+  no-target skip, not as an instruction to delete every combo member. Live real
+  `apply` hit this when `fmo-grid-aux-struct` had a degraded/no-primary plan and
+  an existing seed combo; applying `[]` made smoke fail and rolled back. Empty
+  target diffs are now reported as `skipped_empty_combos` with no PUT or smoke.
+  Verification: focused apply/bootstrap tests, ruff on touched files, and
+  OpenSpec strict validation.
 - Deploy fix: apply now writes live combos through the UUID returned by
   `GET /api/combos` while still using the managed `name` for diff/drift/smoke
   identity. Live real `apply` proved the bridge returns UUID `id` plus

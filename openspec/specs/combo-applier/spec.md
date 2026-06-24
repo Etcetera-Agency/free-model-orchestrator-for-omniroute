@@ -323,6 +323,13 @@ remain in force for combos that exist.
 - THEN the existing combo is rebalanced and smoke-tested
 - AND the absent combo is skipped, and the run is not failed by the skip
 
+#### Scenario: Empty target diff is skipped without deleting combo members
+- GIVEN a latest diff for an existing managed combo has an empty desired target
+  list
+- WHEN apply runs
+- THEN the combo is skipped and reported as an empty-target skip
+- AND no write is sent that would delete every existing combo member
+
 #### Scenario: Latest diff per role is authoritative
 - GIVEN an older diff snapshot exists for a previous managed combo id of the
   same role

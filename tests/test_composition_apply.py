@@ -674,6 +674,46 @@ def test_apply_stage_skips_absent_combo_without_create_or_delete(postgres_url):
     assert result.stage_results[0]["details"]["effect"] == "idempotent_no_change"
 
 
+@pytest.mark.spec("combo-applier::Empty target diff is skipped without deleting combo members")
+def test_apply_stage_skips_empty_target_diff_without_mutating_existing_combo(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    with repository.database.transaction() as transaction:
+        repository.roles.upsert(
+            transaction,
+            role_id="fmo-grid-aux-struct",
+            requirements={"capabilities": []},
+            expected_load={"requests": 1},
+            criticality=1,
+        )
+        repository.combo_snapshots.upsert(
+            transaction,
+            role_id="fmo-grid-aux-struct",
+            omniroute_combo_id="fmo-grid-aux-struct",
+            state_hash="fmo-grid-aux-struct:empty",
+            state_json={
+                "before": ["old-endpoint"],
+                "after": [],
+                "before_endpoint_ids": ["old-endpoint"],
+                "after_endpoint_ids": [],
+                "add": [],
+                "remove": ["old-endpoint"],
+            },
+            phase="diff",
+            run_id=None,
+        )
+    client = PipelineOpsClient()
+    client.combos["fmo-grid-aux-struct"] = ["old-endpoint"]
+
+    result = run_composed_stage(repository, "apply", client=client)
+
+    assert result.exit_code == 0
+    assert client.combos["fmo-grid-aux-struct"] == ["old-endpoint"]
+    assert not any(call[0] == "/api/combos/fmo-grid-aux-struct" for call in client.calls)
+    assert not any(call[0] == "/v1/chat/completions" and call[1]["model"] == "fmo-grid-aux-struct" for call in client.calls)
+    assert result.stage_results[0]["details"]["skipped_empty_combos"] == ["fmo-grid-aux-struct"]
+
+
 @pytest.mark.spec("combo-applier::Latest diff per role is authoritative")
 def test_apply_stage_ignores_superseded_legacy_combo_diff_for_same_role(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
