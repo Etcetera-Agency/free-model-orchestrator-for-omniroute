@@ -27,6 +27,7 @@ from fmo.persistence import Database, Repository
 from fmo.pipeline import CANONICAL_STAGE_NAMES, PipelineRunner, PipelineRunResult, Stage
 from fmo.profile_normalization import ProfileNormalizationResult
 from fmo.profile_normalization import normalize_profiles as normalize_profile_configs
+from fmo.provider_sweep import ProviderSweepResult, sweep_provider_models
 from fmo.scheduler import Scheduler
 
 
@@ -112,6 +113,18 @@ class ComposedRuntime:
             exit_code=result.exit_code,
             changed=result.changed,
             output=_profile_normalization_output(result),
+        )
+
+    def sweep_provider_models(self, args: argparse.Namespace) -> ProviderSweepResult:
+        return sweep_provider_models(
+            self.repository,
+            self.omniroute_client,
+            provider=args.provider,
+            limit=args.limit,
+            offset=args.offset,
+            force=args.force,
+            dry_run=args.dry_run,
+            delay_seconds=args.delay_seconds,
         )
 
 

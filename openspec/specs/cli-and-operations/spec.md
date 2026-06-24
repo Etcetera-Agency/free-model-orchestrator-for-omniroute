@@ -11,10 +11,12 @@ discover-accounts, scan-providers, research-quotas, classify-access,
 sync-metadata, match-models, probe-models, sync-telemetry, sync-quotas,
 sync-hermes-inventory, reconcile-roles, score-roles, forecast-demand, allocate,
 diff, apply, rollback, full), the `serve` scheduler entrypoint, the `aa-index`
-migration subcommands, the `normalize-profiles` command, and diagnostics
+migration subcommands, the `normalize-profiles` command, the
+`sweep-provider-models` operator command, and diagnostics
 (`explain-endpoint`, `explain-role`, `show-*`).
 Common flags include `--dry-run`, `--provider`, `--account`, `--endpoint`,
-`--role`, `--run-id`, `--force`, `--json`, `--verbose`.
+`--role`, `--run-id`, `--force`, `--json`, `--verbose`, `--limit`, `--offset`,
+and `--delay-seconds`.
 
 Each per-stage command SHALL execute its corresponding pipeline stage through the
 pipeline runner and return that stage's real outcome and exit code; commands
@@ -62,6 +64,12 @@ read persisted state.
 - **WHEN** `explain-endpoint` runs for an endpoint id
 - **THEN** it reads persisted state and prints why the endpoint was
   selected/rejected and its real score components
+
+#### Scenario: Sweep provider models
+- **WHEN** `sweep-provider-models --provider nvidia` runs
+- **THEN** the runtime probes stored Nvidia endpoints with the configured limit,
+  offset, delay, dry-run, force, and JSON options
+- **AND** the command prints a per-model pass/fail/skip report
 
 ### Requirement: Deterministic exit codes
 

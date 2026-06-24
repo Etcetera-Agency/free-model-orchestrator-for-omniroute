@@ -1,0 +1,200 @@
+from __future__ import annotations
+
+import json
+import time
+from dataclasses import dataclass, field
+from typing import Any
+
+from fmo.idempotency import hash_parts, utcnow
+from fmo.omniroute import OmniRouteRequestError
+from fmo.persistence import Repository
+from fmo.probes import handle_probe_error, probe_endpoint, probe_suites
+
+SWEEP_SUITE_VERSION = "provider-sweep-v1-stream"
+
+
+@dataclass(frozen=True)
+class ProviderSweepItem:
+    endpoint_id: str
+    provider_model_id: str
+    status: str
+    http_status: int | None
+    reason: str | None = None
+
+
+@dataclass(frozen=True)
+class ProviderSweepResult:
+    provider: str
+    dry_run: bool
+    scanned: int
+    probed: int
+    passed: int
+    failed: int
+    skipped: int
+    items: list[ProviderSweepItem] = field(default_factory=list)
+
+    @property
+    def changed(self) -> bool:
+        return self.probed > 0 and not self.dry_run
+
+
+def sweep_provider_models(
+    repository: Repository,
+    client: Any,
+    *,
+    provider: str,
+    limit: int = 0,
+    offset: int = 0,
+    force: bool = False,
+    dry_run: bool = False,
+    delay_seconds: float = 0.0,
+    sleep=time.sleep,
+) -> ProviderSweepResult:
+    if not provider:
+        raise ValueError("provider_required")
+    rows = _provider_endpoint_rows(repository, provider=provider, limit=limit, offset=offset)
+    items: list[ProviderSweepItem] = []
+    probed = 0
+    passed = 0
+    failed = 0
+    skipped = 0
+    for row in rows:
+        if not force and row["probe_status"] == "passed":
+            skipped += 1
+            items.append(
+                ProviderSweepItem(
+                    endpoint_id=str(row["id"]),
+                    provider_model_id=row["provider_model_id"],
+                    status="skipped_passed",
+                    http_status=None,
+                    reason="already_passed",
+                )
+            )
+            continue
+        if dry_run:
+            skipped += 1
+            items.append(
+                ProviderSweepItem(
+                    endpoint_id=str(row["id"]),
+                    provider_model_id=row["provider_model_id"],
+                    status="would_probe",
+                    http_status=None,
+                )
+            )
+            continue
+        if probed and delay_seconds > 0:
+            sleep(delay_seconds)
+        outcome = _probe_one(repository, client, provider=provider, row=row)
+        probed += 1
+        passed += int(outcome.status == "passed")
+        failed += int(outcome.status == "failed")
+        items.append(outcome)
+    return ProviderSweepResult(
+        provider=provider,
+        dry_run=dry_run,
+        scanned=len(rows),
+        probed=probed,
+        passed=passed,
+        failed=failed,
+        skipped=skipped,
+        items=items,
+    )
+
+
+def format_provider_sweep_result(result: ProviderSweepResult, *, as_json: bool = False) -> str:
+    if as_json:
+        return json.dumps(
+            {
+                "provider": result.provider,
+                "dry_run": result.dry_run,
+                "scanned": result.scanned,
+                "probed": result.probed,
+                "passed": result.passed,
+                "failed": result.failed,
+                "skipped": result.skipped,
+                "items": [item.__dict__ for item in result.items],
+            },
+            sort_keys=True,
+        )
+    lines = [
+        (
+            f"provider={result.provider} dry_run={result.dry_run} scanned={result.scanned} "
+            f"probed={result.probed} passed={result.passed} failed={result.failed} skipped={result.skipped}"
+        )
+    ]
+    for item in result.items:
+        suffix = f" reason={item.reason}" if item.reason else ""
+        lines.append(f"{item.status}\t{item.provider_model_id}\thttp={item.http_status}{suffix}")
+    return "\n".join(lines)
+
+
+def _provider_endpoint_rows(repository: Repository, *, provider: str, limit: int, offset: int) -> list[dict[str, Any]]:
+    limit_sql = "" if limit <= 0 else "LIMIT %(limit)s"
+    with repository.database.transaction() as transaction:
+        return [
+            dict(row)
+            for row in transaction.execute(
+                f"""
+                SELECT pe.id, pe.provider_model_id, pe.capabilities, pe.probe_status, p.omniroute_provider_id
+                FROM provider_endpoints pe
+                JOIN providers p ON p.id = pe.provider_id
+                WHERE p.omniroute_provider_id = %(provider)s
+                  AND pe.removed_at IS NULL
+                ORDER BY pe.provider_model_id
+                {limit_sql}
+                OFFSET %(offset)s
+                """,
+                {"provider": provider, "limit": limit, "offset": offset},
+            ).fetchall()
+        ]
+
+
+def _probe_one(repository: Repository, client: Any, *, provider: str, row: dict[str, Any]) -> ProviderSweepItem:
+    capabilities = dict(row["capabilities"] or {})
+    started_at = utcnow()
+    http_status = 200
+    details = {
+        "provider_sweep": True,
+        "suites": list(probe_suites(capabilities)),
+        "previous_probe_status": row["probe_status"],
+    }
+    try:
+        result = probe_endpoint(client, provider=provider, model=row["provider_model_id"], capabilities=capabilities)
+        passed = result.passed
+        details["suites"] = list(result.suites)
+        if not result.passed:
+            http_status = 500
+            details["error_reason"] = "empty_or_denied_content"
+    except OmniRouteRequestError as exc:
+        http_status = exc.status_code
+        passed = False
+        action, reason = handle_probe_error(exc.status_code)
+        details.update({"error_action": action, "error_reason": reason})
+    finished_at = utcnow()
+    request_hash = hash_parts(str(row["id"]), finished_at.isoformat(), SWEEP_SUITE_VERSION, "basic")
+    with repository.database.transaction() as transaction:
+        # AICODE-NOTE: Provider sweeps intentionally probe a provider catalog;
+        # the normal pipeline probe stage stays seed-bounded for live safety.
+        probe = repository.probes.record(
+            transaction,
+            endpoint_id=row["id"],
+            suite_version=SWEEP_SUITE_VERSION,
+            probe_type="provider_sweep",
+            request_hash=request_hash,
+            passed=passed,
+            http_status=http_status,
+            started_at=started_at,
+            finished_at=finished_at,
+            details=details,
+        )
+        transaction.execute(
+            "UPDATE provider_endpoints SET probe_status = %(status)s WHERE id = %(endpoint_id)s",
+            {"status": "passed" if probe["passed"] else "failed", "endpoint_id": row["id"]},
+        )
+    return ProviderSweepItem(
+        endpoint_id=str(row["id"]),
+        provider_model_id=row["provider_model_id"],
+        status="passed" if passed else "failed",
+        http_status=http_status,
+        reason=details.get("error_reason"),
+    )

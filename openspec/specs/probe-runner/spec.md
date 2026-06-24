@@ -9,6 +9,9 @@ The system SHALL probe only confirmed-free endpoints with reserved capacity.
 When a provider/account wildcard quota rule confirms many endpoints and live
 one-member FMO combos exist, the probing stage SHALL probe those current combo
 seed models first instead of probing the entire provider pool in one run.
+The explicit operator sweep command MAY probe stored endpoints for one provider
+with limit, offset, delay, dry-run, and force controls; this SHALL NOT widen the
+default pipeline probing stage.
 
 #### Scenario: No reserved capacity
 - GIVEN an endpoint does not have reserved capacity
@@ -22,6 +25,14 @@ seed models first instead of probing the entire provider pool in one run.
 - THEN the seed endpoint is probed
 - AND sibling endpoints from the same provider pool are left unprobed for later
   candidate expansion
+
+#### Scenario: Operator sweep probes provider catalog explicitly
+- GIVEN a provider has stored endpoint rows
+- WHEN an operator runs `sweep-provider-models --provider <provider>`
+- THEN the command probes the selected provider endpoints through the same
+  streaming basic-text probe route
+- AND endpoint `probe_status` is updated from the stored probe result
+- AND the default `probe-models` stage remains seed-bounded
 ### Requirement: Isolated probe request
 
 The system SHALL pass a probe only when the response status is `200` and content

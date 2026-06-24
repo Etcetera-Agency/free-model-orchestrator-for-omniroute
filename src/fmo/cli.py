@@ -12,6 +12,7 @@ from fmo.config import StartupConfig
 from fmo.external_metadata import ExternalMetadataError
 from fmo.idempotency import utcnow
 from fmo.metadata_sync import sync_external_metadata
+from fmo.provider_sweep import format_provider_sweep_result
 
 COMMANDS = [
     "sync-free-registry",
@@ -37,6 +38,7 @@ COMMANDS = [
     "explain-endpoint",
     "explain-role",
     "normalize-profiles",
+    "sweep-provider-models",
 ]
 
 EXIT_CODES = {
@@ -64,6 +66,7 @@ DiagnosticsReader = Callable[[str, str], str]
 SchedulerRunner = Callable[[str], CliResult]
 AaIndexHandler = Callable[[str, argparse.Namespace], CliResult]
 ProfileNormalizer = Callable[[argparse.Namespace], CliResult]
+ProviderSweeper = Callable[[argparse.Namespace], object]
 
 
 PIPELINE_COMMANDS = {
@@ -110,12 +113,15 @@ def run_cli(
     scheduler_runner: SchedulerRunner | None = None,
     aa_index_handler: AaIndexHandler | None = None,
     profile_normalizer: ProfileNormalizer | None = None,
+    provider_sweeper: ProviderSweeper | None = None,
 ) -> CliResult:
     args = parse_args(argv)
     if args.command == "aa-index":
         return _run_aa_index(args, aa_index_handler)
     if args.command == "normalize-profiles":
         return _run_profile_normalization(args, profile_normalizer)
+    if args.command == "sweep-provider-models":
+        return _run_provider_sweep(args, provider_sweeper)
     if args.command == "apply" and not preconditions_ok:
         return CliResult(exit_code=EXIT_CODES["unsafe_to_apply"], changed=False)
     if args.command == "serve":
@@ -151,7 +157,7 @@ def main(
 
 def _dispatch_cli(argv: list[str], preconditions_ok: bool, config: StartupConfig) -> int:
     runtime = compose_runtime(config)
-    return run_cli(
+    result = run_cli(
         argv,
         preconditions_ok=preconditions_ok,
         pipeline_runner=cast(PipelineRunner, runtime.run_command),
@@ -159,7 +165,11 @@ def _dispatch_cli(argv: list[str], preconditions_ok: bool, config: StartupConfig
         scheduler_runner=cast(SchedulerRunner, runtime.run_scheduler_once),
         aa_index_handler=cast(AaIndexHandler, runtime.run_aa_index),
         profile_normalizer=cast(ProfileNormalizer, runtime.normalize_profiles),
-    ).exit_code
+        provider_sweeper=runtime.sweep_provider_models,
+    )
+    if result.output:
+        print(result.output)
+    return result.exit_code
 
 
 def _run_aa_index(args: argparse.Namespace, handler: AaIndexHandler | None) -> CliResult:
@@ -176,6 +186,19 @@ def _run_profile_normalization(args: argparse.Namespace, normalizer: ProfileNorm
             exit_code=EXIT_CODES["validation_failed"], changed=False, error_reason="profile_normalizer_required"
         )
     return normalizer(args)
+
+
+def _run_provider_sweep(args: argparse.Namespace, sweeper: ProviderSweeper | None) -> CliResult:
+    if not args.provider:
+        return CliResult(exit_code=EXIT_CODES["validation_failed"], changed=False, error_reason="provider_required")
+    if sweeper is None:
+        return CliResult(exit_code=EXIT_CODES["success"], changed=False)
+    result = sweeper(args)
+    return CliResult(
+        exit_code=EXIT_CODES["success"],
+        changed=bool(getattr(result, "changed", False)),
+        output=format_provider_sweep_result(result, as_json=args.json),
+    )
 
 
 def _run_diagnostics(args: argparse.Namespace, diagnostics_reader: DiagnosticsReader | None) -> CliResult:
@@ -217,3 +240,6 @@ def _add_common_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--run-once", action="store_true")
+    parser.add_argument("--limit", type=int, default=0)
+    parser.add_argument("--offset", type=int, default=0)
+    parser.add_argument("--delay-seconds", type=float, default=0.0)
