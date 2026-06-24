@@ -212,7 +212,7 @@ def _model_matching_stage(_dependencies: StageDependencies, context: PipelineCon
     with context.repository.database.transaction() as transaction:
         endpoints = transaction.execute(
             """
-            SELECT pe.id, pe.provider_model_id
+            SELECT pe.id, pe.provider_model_id, pe.canonical_model_id
             FROM provider_endpoints pe
             WHERE pe.removed_at IS NULL
             ORDER BY pe.provider_model_id
