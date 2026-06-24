@@ -16,6 +16,18 @@ unmatched. All attempts SHALL be stored in `model_match_candidates`;
 - WHEN matching runs
 - THEN that canonical model is matched at exact-slug confidence
 
+#### Scenario: Provider punctuation and tuning aliases
+- GIVEN Artificial Analysis canonical slug `minimax-m2-7`
+- AND provider model id `nvidia/minimaxai/minimax-m2.7`
+- WHEN matching runs
+- THEN the endpoint is matched to canonical slug `minimax-m2-7`
+- AND it is auto-used at exact-slug confidence
+- GIVEN Artificial Analysis canonical slug `gemma-3n-e2b`
+- AND provider model id `nvidia/google/gemma-3n-e2b-it`
+- WHEN matching runs
+- THEN the endpoint is matched to canonical slug `gemma-3n-e2b`
+- AND it is auto-used at exact-slug confidence
+
 ### Requirement: Forbidden automatic merges
 
 The system SHALL NOT automatically merge base vs instruct, normal vs thinking,
@@ -49,4 +61,3 @@ invalidate role scores and allocation.
 - GIVEN canonical context 128K and provider context 32K for an endpoint
 - WHEN effective context is computed
 - THEN the endpoint's effective context is 32K
-

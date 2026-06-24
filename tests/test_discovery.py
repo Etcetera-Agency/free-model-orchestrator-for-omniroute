@@ -455,9 +455,15 @@ def test_matcher_order_forbidden_merges_confidence_and_context_override():
     exact = match_model("openai/gpt-4.1", canonical_slugs={"gpt-4.1"}, provider_catalog_ids=set())
     low = match_model("gpt-4.1-preview", canonical_slugs={"gpt-4.1"}, provider_catalog_ids=set())
     provider = match_model("anthropic/claude", canonical_slugs=set(), provider_catalog_ids={"anthropic/claude"})
+    dotted = match_model("nvidia/minimaxai/minimax-m2.7", canonical_slugs={"minimax-m2-7"}, provider_catalog_ids=set())
+    tuned = match_model("nvidia/google/gemma-3n-e2b-it", canonical_slugs={"gemma-3n-e2b"}, provider_catalog_ids=set())
 
     assert exact.method == MatchMethod.EXACT_SLUG
     assert exact.auto_use is True
     assert low.review_required is True
     assert provider.confidence == 0.98
+    assert dotted.canonical_slug == "minimax-m2-7"
+    assert dotted.auto_use is True
+    assert tuned.canonical_slug == "gemma-3n-e2b"
+    assert tuned.auto_use is True
     assert effective_context(canonical_context=128_000, provider_context=32_000) == 32_000

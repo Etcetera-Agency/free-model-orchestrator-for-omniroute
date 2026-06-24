@@ -37,6 +37,24 @@ def test_model_matching_stage_writes_endpoint_binding(postgres_url):
     assert match_count == 1
 
 
+@pytest.mark.spec("model-matcher::Provider punctuation and tuning aliases")
+def test_model_matching_stage_uses_existing_canonical_alias(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    endpoint = seed_endpoint(repository, model_id="nvidia/google/gemma-3n-e2b-it", provider_id="nvidia")
+    with repository.database.transaction() as transaction:
+        expected = repository.canonical_models.upsert(transaction, canonical_slug="gemma-3n-e2b")
+
+    result = run_composed_stage(repository, "model-matching")
+
+    with repository.database.transaction() as transaction:
+        stored = repository.provider_endpoints.get(transaction, endpoint["id"])
+        canonical = repository.canonical_models.get(transaction, stored["canonical_model_id"])
+    assert result.exit_code == 0
+    assert stored["canonical_model_id"] == expected["id"]
+    assert canonical["canonical_slug"] == "gemma-3n-e2b"
+
+
 @pytest.mark.spec("cli-and-operations::Registry command uses registry sync")
 def test_sync_free_registry_command_uses_registry_adapter_and_persists(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))

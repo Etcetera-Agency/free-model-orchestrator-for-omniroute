@@ -15,6 +15,7 @@ class MatchResult:
     confidence: float
     auto_use: bool
     review_required: bool
+    canonical_slug: str | None = None
 
 
 FORBIDDEN_VARIANTS = ("preview", "thinking", "instruct", "base", "mini")
@@ -26,13 +27,15 @@ def match_model(
     canonical_slugs: set[str],
     provider_catalog_ids: set[str],
 ) -> MatchResult:
-    normalized = _normalize(provider_model_id)
-    if provider_model_id in provider_catalog_ids:
-        return _result(MatchMethod.EXACT_PROVIDER_CATALOG, 0.98)
-    if normalized in canonical_slugs:
-        return _result(MatchMethod.EXACT_SLUG, 0.95)
-    if any(token in normalized.split("-") for token in FORBIDDEN_VARIANTS):
+    normalized_candidates = _normalized_candidates(provider_model_id)
+    primary_normalized = normalized_candidates[0]
+    for candidate in normalized_candidates:
+        if candidate in canonical_slugs:
+            return _result(MatchMethod.EXACT_SLUG, 0.95, canonical_slug=candidate)
+    if any(token in primary_normalized.split("-") for token in FORBIDDEN_VARIANTS):
         return _result(MatchMethod.REVIEW_REQUIRED, 0.85)
+    if provider_model_id in provider_catalog_ids:
+        return _result(MatchMethod.EXACT_PROVIDER_CATALOG, 0.98, canonical_slug=primary_normalized)
     return _result(MatchMethod.UNMATCHED, 0.0)
 
 
@@ -43,14 +46,29 @@ def effective_context(*, canonical_context: int | None, provider_context: int | 
     return min(values)
 
 
-def _result(method: MatchMethod, confidence: float) -> MatchResult:
+def _result(method: MatchMethod, confidence: float, *, canonical_slug: str | None = None) -> MatchResult:
     return MatchResult(
         method=method,
         confidence=confidence,
         auto_use=confidence >= 0.90,
         review_required=confidence < 0.90,
+        canonical_slug=canonical_slug,
     )
 
 
 def _normalize(model_id: str) -> str:
     return model_id.lower().split("/")[-1].replace("_", "-")
+
+
+def _normalized_candidates(model_id: str) -> list[str]:
+    normalized = _normalize(model_id)
+    candidates = [normalized]
+    dotted = normalized.replace(".", "-")
+    if dotted not in candidates:
+        candidates.append(dotted)
+    for candidate in tuple(candidates):
+        if candidate.endswith("-it"):
+            stripped = candidate.removesuffix("-it")
+            if stripped not in candidates:
+                candidates.append(stripped)
+    return candidates

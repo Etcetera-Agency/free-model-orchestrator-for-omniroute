@@ -1,5 +1,12 @@
 # Completion Review
 
+- Deploy fix: model matching now prefers existing canonical AA slugs before the
+  provider-catalog fallback and carries the matched canonical slug into the
+  endpoint binding. Provider punctuation/tuning aliases such as
+  `minimax-m2.7` -> `minimax-m2-7` and `gemma-3n-e2b-it` -> `gemma-3n-e2b` are
+  accepted as exact-slug matches. Live evidence showed AA did contain both
+  canonical families, but model matching had created separate provider slugs,
+  leaving passed Nvidia seeds without scorer metrics.
 - Deploy fix: `sync-metadata` now routes through the composed production
   external-metadata stage instead of returning a no-op success when a runtime
   pipeline runner is present. The metadata repository also persists Artificial

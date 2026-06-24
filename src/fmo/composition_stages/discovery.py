@@ -233,7 +233,7 @@ def _model_matching_stage(_dependencies: StageDependencies, context: PipelineCon
             status = "auto_use" if result.auto_use else "review_required"
             canonical_id = None
             if result.auto_use:
-                slug = canonical_slug(endpoint["provider_model_id"])
+                slug = result.canonical_slug or canonical_slug(endpoint["provider_model_id"])
                 model = context.repository.canonical_models.upsert(transaction, canonical_slug=slug)
                 canonical_slugs.add(slug)
                 canonical_id = model["id"]
