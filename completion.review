@@ -431,3 +431,6 @@
 - Allocation now filters scored endpoints per role before combo construction
   and deduplicates endpoint ids inside each priority combo, preventing a single
   live endpoint from being emitted twice for one combo.
+- Global allocation now respects role-scoped score rows before reserving a
+  primary, so an endpoint eligible for one role cannot make an unrelated role
+  appear planned with an empty combo.

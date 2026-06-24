@@ -60,6 +60,17 @@ def test_global_allocation_shared_capacity_and_heavy_role_separation():
     assert plan.pool_usage["pool-a"] <= 100
 
 
+@pytest.mark.spec("allocator::Shared endpoint across roles")
+def test_global_allocation_respects_role_scoped_endpoint_rows():
+    plan = allocate_globally(
+        roles=["role-a", "role-b"],
+        endpoints=[{"id": "endpoint-a", "role_id": "role-a", "pool": "pool-a", "score": 10, "capacity": 100}],
+        demand={"role-a": 10, "role-b": 10},
+    )
+
+    assert set(plan.allocations) == {"role-a"}
+
+
 @pytest.mark.spec("allocator::Combo output")
 @pytest.mark.spec("allocator::Combo orders weakest-eligible first")
 def test_priority_combo_no_weights_oversubscription_and_degraded_modes():

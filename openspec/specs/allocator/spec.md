@@ -18,6 +18,7 @@ combo rather than emitted.
 - GIVEN one endpoint eligible for three roles
 - WHEN allocation runs
 - THEN its quota is not promised in full to all three roles simultaneously
+- AND a score row for one role is not reused as eligibility for another role
 
 #### Scenario: Fallback members reserve their pool capacity
 - GIVEN a role whose combo would include a primary and a fallback from the same

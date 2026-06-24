@@ -38,6 +38,8 @@ def allocate_globally(roles: list[str], endpoints: list[dict], demand: dict[str,
     allocations: dict[str, RoleAllocation] = {}
     for role in roles:
         for endpoint in sorted(endpoints, key=lambda item: item["score"], reverse=True):
+            if endpoint.get("role_id") not in (None, role):
+                continue
             pool = endpoint["pool"]
             if role in HEAVY_ROLES and pool in heavy_primary_pools:
                 continue
