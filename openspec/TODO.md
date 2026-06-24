@@ -23,21 +23,28 @@
 - Investigate Nvidia per-model timeouts through OmniRoute's model-test route.
   On 2026-06-24, live `POST /api/models/test` with the active Nvidia
   connection timed out after 20s for `nvidia/z-ai/glm-5.1` and
-  `nvidia/minimaxai/minimax-m2.7`. This supersedes the earlier direct chat-route
-  sweep evidence: per-model availability must be judged through
+  `nvidia/minimaxai/minimax-m2.7`; after FMO `e3ecf74` deployed, the
+  model-test-backed `sweep-provider-models` command reproduced the same timeout
+  for both models at offsets 125 and 45. This supersedes the earlier direct
+  chat-route sweep evidence: per-model availability must be judged through
   `/api/models/test` or `/api/models/test-all`, not the connection-level
   `POST /api/providers/{connectionId}/test` and not an FMO-only raw chat probe.
-  After the model-test-backed sweep deploys, rerun Nvidia with limit/offset and
-  record which models pass, timeout, or rate-limit.
+  Control `codestral/codestral-latest` passed through the same corrected sweep,
+  so next work should inspect Nvidia provider execution/rate-limit/proxy logs or
+  run OmniRoute `/api/models/test-all` on Nvidia batches to separate upstream
+  outage, queue timeout, and per-model failures.
 ## Resolved
 
 - Nvidia/provider model sweep tooling — deployed 2026-06-24, then corrected to
-  use OmniRoute's per-model test API. FMO `be61cf7` added the explicit
-  `sweep-provider-models` operator command with provider, limit, offset, delay,
-  timeout, dry-run, force, JSON, and live flushed progress logs. The follow-up
-  correction changes the command from an FMO-only raw chat probe to
-  `/api/models/test`, passing stored provider/model/connection identity so sweep
-  evidence matches OmniRoute UI/test-all behavior.
+  use OmniRoute's per-model test API in FMO `e3ecf74`. FMO `be61cf7` added the
+  explicit `sweep-provider-models` operator command with provider, limit,
+  offset, delay, timeout, dry-run, force, JSON, and live flushed progress logs.
+  The follow-up correction changes the command from an FMO-only raw chat probe
+  to `/api/models/test`, passing stored provider/model/connection identity so
+  sweep evidence matches OmniRoute UI/test-all behavior. Live verification after
+  the corrected deploy: `codestral/codestral-latest` passed; the two
+  user-flagged Nvidia models timed out through the same corrected model-test
+  path.
 - Live combo rebalance readiness — deployed 2026-06-24. The live server is on
   FMO `f0cf757`; provider/model endpoint duplicates are removed, target Nvidia
   aliases bind to canonical AA slugs, active quota rules exist, two endpoints

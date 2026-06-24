@@ -14,12 +14,15 @@
   OmniRoute `/api/models/test` and live flushed `model_test_start` /
   `model_test_done` logs identify which model hangs or fails. Direct live checks
   through `/api/models/test` timed out after 20s for
-  `nvidia/z-ai/glm-5.1` and `nvidia/minimaxai/minimax-m2.7`, while OmniRoute's
-  provider connection test still returns `valid:true` for bogus model payloads,
-  proving it is provider-key preflight only. OpenSpec TODO now tracks Nvidia
-  model-test timeout investigation and a post-deploy Nvidia rerun. Verification:
-  provider sweep and CLI tests; ruff on touched files; `git diff --check`; and
-  OpenSpec strict validation.
+  `nvidia/z-ai/glm-5.1` and `nvidia/minimaxai/minimax-m2.7`, and the
+  post-deploy corrected sweep reproduced the same 20s timeout for both models.
+  The corrected sweep also passed `codestral/codestral-latest`, so the command
+  path is valid. OmniRoute's provider connection test still returns
+  `valid:true` for bogus model payloads, proving it is provider-key preflight
+  only. OpenSpec TODO now tracks Nvidia model-test timeout investigation through
+  OmniRoute logs or `/api/models/test-all` batches. Verification: provider
+  sweep and CLI tests; ruff on touched files; `git diff --check`; and OpenSpec
+  strict validation.
 - Deploy fix: apply smoke now sends `stream=true` and treats non-empty SSE/text
   responses from the shared OmniRoute client as a smoke pass. Live real `apply`
   showed `fmo-grid-aux-text` returns HTTP 400 without streaming but succeeds
