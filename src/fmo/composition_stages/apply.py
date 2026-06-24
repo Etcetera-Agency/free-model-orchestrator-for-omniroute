@@ -133,7 +133,8 @@ def _apply_stage(dependencies: StageDependencies, context: PipelineContext) -> S
     except ValueError as exc:
         return StageResult(status="unsafe_to_apply", reason=str(exc))
 
-    current = _read_current_combos(dependencies.omniroute_client)
+    current_states = _read_current_combo_states(dependencies.omniroute_client)
+    current = {combo_id: list(state["models"]) for combo_id, state in current_states.items()}
     applier = ComboApplier(current={combo_id: list(models) for combo_id, models in current.items()})
     combo_test_called = False
     applied = []
@@ -147,10 +148,12 @@ def _apply_stage(dependencies: StageDependencies, context: PipelineContext) -> S
             continue
         # AICODE-NOTE: Live OmniRoute combo set is source of truth for whether
         # apply may rebalance; absent desired combos are operator-managed setup.
-        if combo_id not in current:
+        if combo_id not in current_states:
             unmanaged_combos.append(combo_id)
             continue
-        live_baseline = list(current[combo_id])
+        live_state = current_states[combo_id]
+        live_baseline = list(live_state["models"])
+        write_id = str(live_state["write_id"])
         if live_baseline != diff_before:
             return StageResult(
                 status="unsafe_to_apply",
@@ -163,7 +166,7 @@ def _apply_stage(dependencies: StageDependencies, context: PipelineContext) -> S
         # AICODE-NOTE: desired is already structured OmniRoute model steps;
         # after_endpoint_ids carries the stable FMO audit/safety keys.
         dependencies.omniroute_client.put(
-            f"/api/combos/{combo_id}",
+            f"/api/combos/{write_id}",
             {"models": desired},
             idempotency_key=expected_hash,
         )
@@ -171,7 +174,11 @@ def _apply_stage(dependencies: StageDependencies, context: PipelineContext) -> S
         combo_test_called = True
         applier.apply(combo_id, desired, expected_hash=expected_hash, smoke_ok=smoke_ok)
         if not smoke_ok:
-            if not _rollback_apply_mutations(dependencies.omniroute_client, applied, failed=(combo_id, live_baseline)):
+            if not _rollback_apply_mutations(
+                dependencies.omniroute_client,
+                applied,
+                failed=(combo_id, write_id, live_baseline),
+            ):
                 return StageResult(
                     status="rollback_failed", reason="rollback_failed", details={"combo_test_called": True}
                 )
@@ -180,7 +187,7 @@ def _apply_stage(dependencies: StageDependencies, context: PipelineContext) -> S
                 status="apply_failed_rolled_back", reason="smoke_failed", details={"combo_test_called": True}
             )
         _persist_applied_snapshot(context, diff, live_baseline, desired)
-        applied.append((diff, live_baseline, desired))
+        applied.append((diff, live_baseline, desired, write_id))
     if dry_run:
         return StageResult(
             status="success",
@@ -228,17 +235,19 @@ def _persist_applied_snapshot(context: PipelineContext, diff: Any, before: list[
 
 def _rollback_apply_mutations(
     client: Any,
-    applied: Sequence[tuple[Any, list[Any], list[Any]]],
+    applied: Sequence[tuple[Any, list[Any], list[Any], str]],
     *,
-    failed: tuple[str, list[Any]],
+    failed: tuple[str, str, list[Any]],
 ) -> bool:
-    rollback_targets = [(failed[0], failed[1])]
-    rollback_targets.extend((diff["omniroute_combo_id"], before) for diff, before, _desired in reversed(applied))
+    rollback_targets = [(failed[0], failed[1], failed[2])]
+    rollback_targets.extend(
+        (diff["omniroute_combo_id"], write_id, before) for diff, before, _desired, write_id in reversed(applied)
+    )
     rollback_failed = False
-    for combo_id, before in rollback_targets:
+    for combo_id, write_id, before in rollback_targets:
         try:
             client.put(
-                f"/api/combos/{combo_id}",
+                f"/api/combos/{write_id}",
                 {"models": before},
                 idempotency_key=_combo_models_idempotency_key(combo_id, before),
             )
@@ -249,7 +258,7 @@ def _rollback_apply_mutations(
 
 def _delete_applied_snapshots_for_run(
     context: PipelineContext,
-    applied: Sequence[tuple[Any, list[Any], list[Any]]],
+    applied: Sequence[tuple[Any, list[Any], list[Any], str]],
 ) -> None:
     if not applied:
         return
@@ -405,29 +414,40 @@ def _smoke_combo(client: Any, combo_id: str) -> bool:
 
 
 def _read_current_combos(client: Any | None) -> dict[str, list[Any]]:
+    return {combo_id: list(state["models"]) for combo_id, state in _read_current_combo_states(client).items()}
+
+
+def _read_current_combo_states(client: Any | None) -> dict[str, dict[str, Any]]:
     if client is None or not hasattr(client, "get"):
         return {}
     payload = client.get("/api/combos")
     combos = payload.get("combos", []) if isinstance(payload, dict) else []
-    current: dict[str, list[Any]] = {}
+    current: dict[str, dict[str, Any]] = {}
     for combo in combos:
         if not isinstance(combo, dict):
             continue
         combo_key = _live_combo_key(combo)
         if combo_key is None:
             continue
-        current[combo_key] = [_normalize_combo_member(model) for model in combo.get("models", [])]
+        current[combo_key] = {
+            "write_id": _live_combo_write_id(combo, combo_key),
+            "models": [_normalize_combo_member(model) for model in combo.get("models", [])],
+        }
     return current
 
 
 def _live_combo_key(combo: dict[str, Any]) -> str | None:
     # AICODE-NOTE: Live OmniRoute uses UUID `id` plus human `name`; the bridge
-    # accepts managed writes by name, so FMO must key existence by `name`.
+    # lists managed combos by name, while writes may require the UUID `id`.
     for field in ("name", "id"):
         value = str(combo.get(field) or "")
         if value.startswith("fmo-"):
             return value
     return None
+
+
+def _live_combo_write_id(combo: dict[str, Any], combo_key: str) -> str:
+    return str(combo.get("id") or combo_key)
 
 
 def _managed_combo_id(role_id: str) -> str:

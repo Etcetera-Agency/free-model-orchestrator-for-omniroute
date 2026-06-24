@@ -8,8 +8,8 @@ TBD - created by archiving change add-allocation. Update Purpose after archive.
 The system SHALL manage only OmniRoute combos whose name carries the configured
 managed prefix (`fmo-`) and SHALL NOT modify combos outside that prefix. When
 OmniRoute returns a generated UUID `id` plus a human combo `name`, the system
-SHALL use the prefixed `name` as the managed combo key for diff/apply and for
-`PUT /api/combos/{id}` route construction.
+SHALL use the prefixed `name` as the managed combo key for diff/apply, and SHALL
+use the live `id` as the management write route id when that id is present.
 
 #### Scenario: Foreign combo
 - GIVEN an OmniRoute combo without the `fmo-` prefix
@@ -20,6 +20,7 @@ SHALL use the prefixed `name` as the managed combo key for diff/apply and for
 - GIVEN OmniRoute returns a combo with UUID `id` and `name = fmo-grid-int-med`
 - WHEN the applier reads the live combo set
 - THEN it treats `fmo-grid-int-med` as the managed combo key
+- AND it writes that combo through the live UUID route id
 - AND it does not synthesize `fmo-fmo-grid-int-med`
 
 ### Requirement: Transactional apply with smoke test

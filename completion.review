@@ -1,5 +1,11 @@
 # Completion Review
 
+- Deploy fix: apply now writes live combos through the UUID returned by
+  `GET /api/combos` while still using the managed `name` for diff/drift/smoke
+  identity. Live real `apply` proved the bridge returns UUID `id` plus
+  `name=fmo-*`, but `PUT /api/combos/{name}` returns 404 whereas
+  `PUT /api/combos/{uuid}` succeeds. Verification: focused apply/bootstrap
+  tests, ruff on touched files, and OpenSpec strict validation.
 - Deploy fix: request-window hard-stop apply safety now survives the
   `quota-sync` liveness overlay. Live `full --dry-run` refreshed Nvidia evidence
   to `remaining_source=live_observed`, `percent_remaining=0`, and

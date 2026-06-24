@@ -48,6 +48,42 @@ def test_read_current_combos_uses_live_name_when_id_is_uuid():
 
 
 @pytest.mark.spec("combo-applier::Live UUID combo id with managed name")
+def test_apply_stage_writes_live_uuid_for_named_combo(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    seed_apply_ready_diff(
+        repository,
+        role_id="fmo-grid-int-med",
+        combo_id="fmo-grid-int-med",
+        before=["old-endpoint"],
+        after_model_id="free-present",
+    )
+
+    class LiveUuidClient(PipelineOpsClient):
+        def get(self, path):
+            if path == "/api/combos":
+                return {
+                    "combos": [
+                        {
+                            "id": "15f4a7b8-c658-4a7e-82d6-cbf52a61d64d",
+                            "name": "fmo-grid-int-med",
+                            "models": ["old-endpoint"],
+                        }
+                    ]
+                }
+            return super().get(path)
+
+    client = LiveUuidClient()
+
+    result = run_composed_stage(repository, "apply", client=client)
+
+    assert result.exit_code == 0
+    assert any(call[0] == "/api/combos/15f4a7b8-c658-4a7e-82d6-cbf52a61d64d" for call in client.calls)
+    assert not any(call[0] == "/api/combos/fmo-grid-int-med" for call in client.calls)
+    assert any(call[0] == "/v1/chat/completions" and call[1]["model"] == "fmo-grid-int-med" for call in client.calls)
+
+
+@pytest.mark.spec("combo-applier::Live UUID combo id with managed name")
 def test_managed_combo_id_does_not_double_prefix_live_combo_roles():
     assert _managed_combo_id("routing_fast") == "fmo-routing_fast"
     assert _managed_combo_id("fmo-grid-int-med") == "fmo-grid-int-med"
