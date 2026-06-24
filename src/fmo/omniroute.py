@@ -36,6 +36,14 @@ class OmniRouteRequestError(RuntimeError):
         super().__init__(f"OmniRoute {method} {path} failed with HTTP {status_code}")
 
 
+@dataclass(frozen=True)
+class OmniRouteHttpResponse:
+    status_code: int
+    body: dict
+    text: str
+    headers: dict[str, str]
+
+
 class OmniRouteClient:
     def __init__(
         self,
@@ -66,6 +74,37 @@ class OmniRouteClient:
         idempotency_key: str | None = None,
     ) -> dict:
         return self._request("POST", path, payload, headers=headers, idempotency_key=idempotency_key)
+
+    def post_response(
+        self,
+        path: str,
+        payload: dict,
+        *,
+        headers: dict[str, str] | None = None,
+        idempotency_key: str | None = None,
+    ) -> OmniRouteHttpResponse:
+        try:
+            response = self.transport.request(
+                "POST",
+                urljoin(self.base_url, path.lstrip("/")),
+                headers=self._headers(headers=headers, idempotency_key=idempotency_key),
+                json=payload,
+                timeout=self.timeout,
+            )
+        except httpx.TransportError as exc:
+            raise OmniRouteRequestError("POST", path, 0) from exc
+        body: dict
+        try:
+            parsed = response.json()
+            body = parsed if isinstance(parsed, dict) else {"value": parsed}
+        except ValueError:
+            body = {}
+        return OmniRouteHttpResponse(
+            status_code=response.status_code,
+            body=body,
+            text=response.text,
+            headers=dict(response.headers),
+        )
 
     def put(
         self,

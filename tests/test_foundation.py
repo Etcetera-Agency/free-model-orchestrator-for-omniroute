@@ -222,6 +222,23 @@ def test_omniroute_client_post_preserves_call_site_headers_with_management_heade
     assert headers["X-Request-Id"]
 
 
+@pytest.mark.spec("omniroute-client::POST can return non-2xx JSON")
+def test_omniroute_client_post_response_preserves_non_2xx_body():
+    transport = FakeTransport([FakeResponse(500, {"status": "error", "error": "Timeout (20s)"})])
+    client = OmniRouteClient(base_url="https://omniroute.test/api", api_key="manage-key", transport=transport)
+
+    response = client.post_response(
+        "/api/models/test",
+        {"providerId": "nvidia", "modelId": "nvidia/z-ai/glm-5.1"},
+        headers={"X-OmniRoute-No-Cache": "true"},
+    )
+
+    assert response.status_code == 500
+    assert response.body == {"status": "error", "error": "Timeout (20s)"}
+    assert transport.requests[0]["headers"]["Authorization"] == "Bearer manage-key"
+    assert transport.requests[0]["headers"]["X-OmniRoute-No-Cache"] == "true"
+
+
 @pytest.mark.spec("omniroute-client::POST returns text content for non-JSON success")
 def test_omniroute_client_post_returns_text_content_for_non_json_success():
     transport = FakeTransport([TextResponse(200, headers={"content-type": "text/event-stream"})])

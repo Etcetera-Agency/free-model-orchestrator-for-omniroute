@@ -9,9 +9,9 @@ from typing import Any
 from fmo.idempotency import hash_parts, utcnow
 from fmo.omniroute import OmniRouteRequestError
 from fmo.persistence import Repository
-from fmo.probes import handle_probe_error, probe_endpoint, probe_suites
+from fmo.probes import handle_probe_error, probe_suites
 
-SWEEP_SUITE_VERSION = "provider-sweep-v1-stream"
+SWEEP_SUITE_VERSION = "provider-sweep-v2-model-test"
 
 
 @dataclass(frozen=True)
@@ -92,11 +92,11 @@ def sweep_provider_models(
             if probed and delay_seconds > 0:
                 sleep(delay_seconds)
             if log is not None:
-                log(f"probe_start model={row['provider_model_id']}")
+                log(f"model_test_start model={row['provider_model_id']}")
             outcome = _probe_one(repository, client, provider=provider, row=row)
             if log is not None:
                 log(
-                    f"probe_done model={outcome.provider_model_id} status={outcome.status} "
+                    f"model_test_done model={outcome.provider_model_id} status={outcome.status} "
                     f"http={outcome.http_status} reason={outcome.reason or '-'}"
                 )
             probed += 1
@@ -152,9 +152,11 @@ def _provider_endpoint_rows(repository: Repository, *, provider: str, limit: int
             dict(row)
             for row in transaction.execute(
                 f"""
-                SELECT pe.id, pe.provider_model_id, pe.capabilities, pe.probe_status, p.omniroute_provider_id
+                SELECT pe.id, pe.provider_model_id, pe.capabilities, pe.probe_status,
+                       p.omniroute_provider_id, pa.omniroute_connection_id
                 FROM provider_endpoints pe
                 JOIN providers p ON p.id = pe.provider_id
+                JOIN provider_accounts pa ON pa.id = pe.provider_account_id
                 WHERE p.omniroute_provider_id = %(provider)s
                   AND pe.removed_at IS NULL
                 ORDER BY pe.provider_model_id
@@ -172,16 +174,34 @@ def _probe_one(repository: Repository, client: Any, *, provider: str, row: dict[
     http_status = 200
     details = {
         "provider_sweep": True,
+        "omniroute_model_test": True,
         "suites": list(probe_suites(capabilities)),
         "previous_probe_status": row["probe_status"],
+        "connection_id": row["omniroute_connection_id"],
     }
     try:
-        result = probe_endpoint(client, provider=provider, model=row["provider_model_id"], capabilities=capabilities)
-        passed = result.passed
-        details["suites"] = list(result.suites)
-        if not result.passed:
-            http_status = 500
-            details["error_reason"] = "empty_or_denied_content"
+        response = _run_model_test(
+            client,
+            provider=provider,
+            model=row["provider_model_id"],
+            connection_id=row["omniroute_connection_id"],
+        )
+        http_status = response["http_status"]
+        body = response["body"]
+        passed = http_status < 400 and body.get("status") == "ok"
+        details.update(
+            {
+                "response_status": body.get("status"),
+                "status_code": body.get("statusCode"),
+                "rate_limited": body.get("rateLimited") is True,
+                "retry_after": body.get("retryAfter"),
+                "is_timeout": body.get("isTimeout") is True,
+            }
+        )
+        if body.get("responseText"):
+            details["response_text_sample"] = str(body["responseText"])[:160]
+        if not passed:
+            details["error_reason"] = _model_test_reason(http_status, body)
     except OmniRouteRequestError as exc:
         http_status = exc.status_code
         passed = False
@@ -215,3 +235,28 @@ def _probe_one(repository: Repository, client: Any, *, provider: str, row: dict[
         http_status=http_status,
         reason=details.get("error_reason"),
     )
+
+
+def _run_model_test(client: Any, *, provider: str, model: str, connection_id: str | None) -> dict[str, Any]:
+    payload: dict[str, Any] = {"providerId": provider, "modelId": model}
+    if connection_id:
+        payload["connectionId"] = connection_id
+    response = client.post_response(
+        "/api/models/test",
+        payload,
+        headers={"X-OmniRoute-No-Cache": "true"},
+    )
+    return {"http_status": response.status_code, "body": response.body}
+
+
+def _model_test_reason(http_status: int, body: dict[str, Any]) -> str:
+    if body.get("isTimeout") is True:
+        return "timeout"
+    if body.get("rateLimited") is True or http_status == 429:
+        return "rate_limited"
+    error = str(body.get("error") or "").strip()
+    if error:
+        return error[:160]
+    action, reason = handle_probe_error(http_status)
+    del action
+    return reason

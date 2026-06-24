@@ -3,27 +3,23 @@
 - Feature: added explicit `sweep-provider-models` operator command for provider
   catalog probing. It walks stored endpoints for one provider with
   `--limit`, `--offset`, `--delay-seconds`, `--timeout-seconds`, `--dry-run`,
-  `--force`, and `--json`, uses the same streaming/no-cache probe route as
-  production probes, records `endpoint_probes`, updates endpoint `probe_status`,
-  and prints a per-model pass/fail/skip report. Live specs document that this
-  command is the intentional full-provider sweep path, while the default
-  `probe-models` stage remains seed-bounded for live safety. Initial live Nvidia
-  sweep showed bad catalog entries can hang until the default 30s client timeout,
-  so the command includes explicit per-request timeout control and live flushed
-  `probe_start`/`probe_done` logs that identify which model was requested and
-  what status came back. Live Nvidia testing on the deployed command found zero
-  currently routable stored Nvidia model ids; catalog entries return mostly HTTP
-  404 with several timeout/http=0 failures, and the old seed-backed FMO combos
-  returned HTTP 503 afterward. OmniRoute's provider connection test returns
-  `valid:true` for the Nvidia connection but also returns true for bogus model
-  payloads, so it is a provider-key preflight rather than per-model proof.
-  Control live sweeps against other providers succeeded
-  (`codestral/codestral-latest`, `groq/allam-2-7b`, and `groq/groq/compound`
-  passed), so the current failure is Nvidia model-route/execution specific
-  rather than a broken sweep command. OpenSpec TODO now tracks Nvidia model
-  routing repair instead of a generic sweep task. Verification: provider sweep,
-  CLI, and composition runtime tests; ruff on touched files; `git diff --check`;
-  and OpenSpec strict validation.
+  `--force`, and `--json`, now calls OmniRoute's `/api/models/test` model-test
+  route with stored provider/model/connection identity, records
+  `endpoint_probes`, updates endpoint `probe_status`, and prints a per-model
+  pass/fail/skip report. Live specs document that this command is the
+  intentional full-provider sweep path, while the default `probe-models` stage
+  remains seed-bounded for live safety. The first deployed sweep used an
+  FMO-only raw chat probe; that was the wrong truth source for OmniRoute UI
+  model availability. The corrected command records model-test evidence matching
+  OmniRoute `/api/models/test` and live flushed `model_test_start` /
+  `model_test_done` logs identify which model hangs or fails. Direct live checks
+  through `/api/models/test` timed out after 20s for
+  `nvidia/z-ai/glm-5.1` and `nvidia/minimaxai/minimax-m2.7`, while OmniRoute's
+  provider connection test still returns `valid:true` for bogus model payloads,
+  proving it is provider-key preflight only. OpenSpec TODO now tracks Nvidia
+  model-test timeout investigation and a post-deploy Nvidia rerun. Verification:
+  provider sweep and CLI tests; ruff on touched files; `git diff --check`; and
+  OpenSpec strict validation.
 - Deploy fix: apply smoke now sends `stream=true` and treats non-empty SSE/text
   responses from the shared OmniRoute client as a smoke pass. Live real `apply`
   showed `fmo-grid-aux-text` returns HTTP 400 without streaming but succeeds

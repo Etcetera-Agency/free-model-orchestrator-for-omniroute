@@ -67,8 +67,9 @@ read persisted state.
 
 #### Scenario: Sweep provider models
 - **WHEN** `sweep-provider-models --provider nvidia` runs
-- **THEN** the runtime probes stored Nvidia endpoints with the configured limit,
-  offset, delay, timeout, dry-run, force, and JSON options
+- **THEN** the runtime tests stored Nvidia endpoints through OmniRoute's
+  `/api/models/test` model-test route with the configured limit, offset, delay,
+  timeout, dry-run, force, and JSON options
 - **AND** the command prints live flushed progress before and after each model
   request so operators can see which provider model is hanging or failing
 - **AND** the command prints a per-model pass/fail/skip report

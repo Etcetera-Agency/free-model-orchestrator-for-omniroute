@@ -29,8 +29,9 @@ widen the default pipeline probing stage.
 #### Scenario: Operator sweep probes provider catalog explicitly
 - GIVEN a provider has stored endpoint rows
 - WHEN an operator runs `sweep-provider-models --provider <provider>`
-- THEN the command probes the selected provider endpoints through the same
-  streaming basic-text probe route
+- THEN the command probes the selected provider endpoints through OmniRoute's
+  `/api/models/test` endpoint with the stored provider id, model id, and
+  connection id
 - AND endpoint `probe_status` is updated from the stored probe result
 - AND the default `probe-models` stage remains seed-bounded
 ### Requirement: Isolated probe request

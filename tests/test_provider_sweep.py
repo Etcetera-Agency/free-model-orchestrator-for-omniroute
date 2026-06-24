@@ -6,9 +6,14 @@ import json
 import pytest
 
 from fmo.cli import EXIT_CODES, run_cli
-from fmo.omniroute import OmniRouteRequestError
 from fmo.provider_sweep import ProviderSweepResult, format_provider_sweep_result, sweep_provider_models
 from tests._composition_support import Database, MigrationRunner, Path, Repository, seed_endpoint
+
+
+class SweepResponse:
+    def __init__(self, status_code: int, body: dict):
+        self.status_code = status_code
+        self.body = body
 
 
 class SweepClient:
@@ -17,12 +22,15 @@ class SweepClient:
         self.calls = []
         self.timeout = 30.0
 
-    def post(self, path, payload, headers=None, idempotency_key=None):
+    def post_response(self, path, payload, headers=None, idempotency_key=None):
         self.calls.append((path, payload, headers, idempotency_key))
-        status = self.statuses.get(payload["model"], 200)
-        if status >= 400:
-            raise OmniRouteRequestError("POST", path, status)
-        return {"status_code": status, "content": "ok"}
+        status = self.statuses.get(payload["modelId"], 200)
+        body = (
+            {"status": "ok", "latencyMs": 12, "responseText": "OK"}
+            if status < 400
+            else {"status": "error", "latencyMs": 20, "error": "not found", "statusCode": status}
+        )
+        return SweepResponse(status, body)
 
 
 @pytest.mark.spec("probe-runner::Operator sweep probes provider catalog explicitly")
@@ -65,16 +73,19 @@ def test_provider_sweep_probes_provider_endpoints_and_updates_status(postgres_ur
         ("other/works", "not_run"),
     ]
     assert {probe["endpoint_id"] for probe in probes} == {first["id"], second["id"]}
-    assert {probe["suite_version"] for probe in probes} == {"provider-sweep-v1-stream"}
+    assert {probe["suite_version"] for probe in probes} == {"provider-sweep-v2-model-test"}
     assert {probe["probe_type"] for probe in probes} == {"provider_sweep"}
-    assert [call[1]["stream"] for call in client.calls] == [True, True]
+    assert [call[0] for call in client.calls] == ["/api/models/test", "/api/models/test"]
+    assert [call[1]["providerId"] for call in client.calls] == ["nvidia", "nvidia"]
+    assert [call[1]["modelId"] for call in client.calls] == ["nvidia/fails", "nvidia/works"]
+    assert [call[1]["connectionId"] for call in client.calls] == ["nvidia-b", "nvidia-a"]
     assert [call[2] for call in client.calls] == [{"X-OmniRoute-No-Cache": "true"}] * 2
     assert client.timeout == 30.0
     assert logs == [
-        "probe_start model=nvidia/fails",
-        "probe_done model=nvidia/fails status=failed http=404 reason=unknown",
-        "probe_start model=nvidia/works",
-        "probe_done model=nvidia/works status=passed http=200 reason=-",
+        "model_test_start model=nvidia/fails",
+        "model_test_done model=nvidia/fails status=failed http=404 reason=not found",
+        "model_test_start model=nvidia/works",
+        "model_test_done model=nvidia/works status=passed http=200 reason=-",
     ]
 
 

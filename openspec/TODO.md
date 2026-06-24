@@ -20,30 +20,24 @@
   `provider='gemini-grounded-search'` returns HTTP 429 even for `hello world`;
   FMO now has a fallback, but the intended grounded-search provider still needs
   platform-side setup/repair.
-- Repair Nvidia model routing/execution mismatch. The explicit
-  `sweep-provider-models --provider nvidia` live run on 2026-06-24 tested the
-  stored Nvidia catalog through the shared streaming chat route and found zero
-  currently routable provider model ids: the catalog entries return mostly HTTP
-  404, with several timeout/http=0 failures. The previously seed-backed
-  `fmo-grid-aux-text` and `fmo-grid-int-med` combos also returned HTTP 503 after
-  the sweep. OmniRoute's provider connection test
-  `POST /api/providers/{connectionId}/test` returns `valid:true` for the Nvidia
-  connection, but that endpoint is connection-level and returns true even for a
-  bogus `model` payload; it does not prove per-model routability. Control sweeps
-  against other providers succeeded
-  (`codestral/codestral-latest`, `groq/allam-2-7b`, and `groq/groq/compound`
-  passed), so Nvidia should be treated as model-route/execution mismatched until
-  OmniRoute model routing/stored model ids are repaired and a new sweep records
-  passed probes.
+- Investigate Nvidia per-model timeouts through OmniRoute's model-test route.
+  On 2026-06-24, live `POST /api/models/test` with the active Nvidia
+  connection timed out after 20s for `nvidia/z-ai/glm-5.1` and
+  `nvidia/minimaxai/minimax-m2.7`. This supersedes the earlier direct chat-route
+  sweep evidence: per-model availability must be judged through
+  `/api/models/test` or `/api/models/test-all`, not the connection-level
+  `POST /api/providers/{connectionId}/test` and not an FMO-only raw chat probe.
+  After the model-test-backed sweep deploys, rerun Nvidia with limit/offset and
+  record which models pass, timeout, or rate-limit.
 ## Resolved
 
-- Nvidia provider sweep tooling — deployed 2026-06-24. FMO `be61cf7` adds the
-  explicit `sweep-provider-models` operator command with provider, limit,
-  offset, delay, timeout, dry-run, force, JSON, and live flushed
-  `probe_start`/`probe_done` progress logs. Live Nvidia testing exercised the
-  command and persisted failed probe evidence across the stored Nvidia catalog;
-  control runs against `codestral` and `groq` proved the same command can record
-  live passing provider models.
+- Nvidia/provider model sweep tooling — deployed 2026-06-24, then corrected to
+  use OmniRoute's per-model test API. FMO `be61cf7` added the explicit
+  `sweep-provider-models` operator command with provider, limit, offset, delay,
+  timeout, dry-run, force, JSON, and live flushed progress logs. The follow-up
+  correction changes the command from an FMO-only raw chat probe to
+  `/api/models/test`, passing stored provider/model/connection identity so sweep
+  evidence matches OmniRoute UI/test-all behavior.
 - Live combo rebalance readiness — deployed 2026-06-24. The live server is on
   FMO `f0cf757`; provider/model endpoint duplicates are removed, target Nvidia
   aliases bind to canonical AA slugs, active quota rules exist, two endpoints
