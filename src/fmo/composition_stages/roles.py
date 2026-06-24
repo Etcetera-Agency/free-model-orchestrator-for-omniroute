@@ -253,7 +253,7 @@ def _seed_endpoint_for_member(transaction: Any, member: Any) -> Any | None:
 def _quality_band_candidates(transaction: Any, metric: str) -> list[dict[str, Any]]:
     rows = transaction.execute(
         f"""
-        SELECT aa.{metric} AS quality, eas.effective_remaining, eas.status, eas.hard_stop_capable
+        SELECT aa.{metric} AS quality, pe.probe_status, eas.effective_remaining, eas.status, eas.hard_stop_capable
         FROM provider_endpoints pe
         JOIN artificial_analysis_model_metrics aa ON aa.canonical_model_id = pe.canonical_model_id
         LEFT JOIN endpoint_access_states eas ON eas.endpoint_id = pe.id
@@ -264,7 +264,12 @@ def _quality_band_candidates(transaction: Any, metric: str) -> list[dict[str, An
         {
             "quality": float(row["quality"]),
             "capacity": remaining_amount(row["effective_remaining"]) if row["effective_remaining"] is not None else 0,
-            "confirmed_free": row["status"] == "confirmed" and bool(row["hard_stop_capable"]),
+            # AICODE-NOTE: Band widening capacity must reflect routable free
+            # endpoints; failed probes can anchor from live combo history but
+            # cannot contribute capacity that would narrow the band.
+            "confirmed_free": row["probe_status"] == "passed"
+            and row["status"] == "confirmed"
+            and bool(row["hard_stop_capable"]),
         }
         for row in rows
     ]

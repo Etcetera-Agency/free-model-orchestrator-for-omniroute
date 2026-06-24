@@ -55,6 +55,14 @@ anchor only and SHALL NOT be added as a routable member.
 - AND a live role id that already includes the managed `fmo-` prefix is updated
   directly, without stripping the prefix first
 
+#### Scenario: Band capacity uses only probe-passed endpoints
+- GIVEN a live seed anchor and two otherwise confirmed-free candidates
+- AND one nearby candidate has a failed probe
+- AND a farther candidate has a passed probe and enough capacity
+- WHEN the role quality band is derived from the seed
+- THEN the failed-probe candidate does not contribute capacity
+- AND the band widens to include the passed candidate instead
+
 #### Scenario: Re-seeding re-anchors the band
 - GIVEN a combo whose members are reduced back to a single model
 - WHEN the combo is rebalanced

@@ -742,6 +742,38 @@ def test_role_scoring_stage_sets_quality_band_from_live_structured_seed(postgres
     assert float(role["minimum_quality_value"]) <= 60 <= float(role["maximum_quality_value"])
 
 
+@pytest.mark.spec("quality-gate::Band capacity uses only probe-passed endpoints")
+def test_role_scoring_stage_ignores_failed_probe_capacity_when_setting_quality_band(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    seed = seed_confirmed_llm_candidate(repository, model_id="seed-mid", intelligence_index=60, remaining=0)
+    failed = seed_confirmed_llm_candidate(repository, model_id="failed-nearby", intelligence_index=55, remaining=100)
+    seed_confirmed_llm_candidate(repository, model_id="passed-high", intelligence_index=80, remaining=100)
+    with repository.database.transaction() as transaction:
+        transaction.execute(
+            "UPDATE provider_endpoints SET probe_status = 'failed' WHERE id = %(endpoint_id)s",
+            {"endpoint_id": failed["id"]},
+        )
+        repository.roles.upsert(
+            transaction,
+            role_id="routing_fast",
+            requirements={"capabilities": []},
+            expected_load={"requests": 1},
+            criticality=1,
+        )
+    client = PipelineOpsClient()
+    client.combos["fmo-routing_fast"] = [str(seed["id"])]
+
+    run_composed_stage(repository, "role-scoring", client=client)
+
+    with repository.database.transaction() as transaction:
+        role = transaction.execute(
+            "SELECT minimum_quality_value, maximum_quality_value FROM roles WHERE id = 'routing_fast'"
+        ).fetchone()
+    assert float(role["minimum_quality_value"]) == 60
+    assert float(role["maximum_quality_value"]) == 80
+
+
 @pytest.mark.spec("quality-gate::Structured seed step anchors the band")
 def test_role_scoring_stage_keeps_prefixed_grid_role_id_for_live_seed(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))

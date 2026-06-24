@@ -425,3 +425,6 @@
   rematch, so AA-backed canonical aliases overwrite stale provider-specific
   aliases and stale canonical rows are deleted instead of duplicated, including
   orphan alias rows left by earlier rematches.
+- Live quality-band seeding now counts capacity only from probe-passed
+  confirmed-free endpoints, so failed Nvidia candidates cannot narrow a seed
+  band and exclude the actually routable free models.
