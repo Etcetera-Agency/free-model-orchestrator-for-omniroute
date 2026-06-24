@@ -28,7 +28,7 @@ def match_model(
     provider_catalog_ids: set[str],
     preferred_canonical_slugs: set[str] | None = None,
 ) -> MatchResult:
-    normalized_candidates = _normalized_candidates(provider_model_id)
+    normalized_candidates = canonical_slug_candidates(provider_model_id)
     primary_normalized = normalized_candidates[0]
     preferred = preferred_canonical_slugs or set()
     for candidate in normalized_candidates:
@@ -65,7 +65,7 @@ def _normalize(model_id: str) -> str:
     return model_id.lower().split("/")[-1].replace("_", "-")
 
 
-def _normalized_candidates(model_id: str) -> list[str]:
+def canonical_slug_candidates(model_id: str) -> list[str]:
     normalized = _normalize(model_id)
     candidates = [normalized]
     dotted = normalized.replace(".", "-")

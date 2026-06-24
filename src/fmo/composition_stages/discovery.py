@@ -8,7 +8,7 @@ from psycopg.types.json import Jsonb
 from fmo.accounts import AccountFetchError
 from fmo.external_metadata import ExternalMetadataError
 from fmo.idempotency import canonical_slug
-from fmo.matcher import match_model
+from fmo.matcher import canonical_slug_candidates, match_model
 from fmo.metadata_sync import MetadataSyncResult
 from fmo.model_registration import register_new_free_models
 from fmo.pipeline import PipelineContext, StageResult
@@ -253,6 +253,11 @@ def _model_matching_stage(_dependencies: StageDependencies, context: PipelineCon
                     {"model_id": canonical_id, "endpoint_id": endpoint["id"]},
                 )
                 _delete_stale_canonical_alias(transaction, previous_canonical_id, canonical_id)
+                _delete_unreferenced_canonical_aliases(
+                    transaction,
+                    canonical_id=canonical_id,
+                    candidate_slugs=canonical_slug_candidates(endpoint["provider_model_id"]),
+                )
             transaction.execute(
                 """
                 INSERT INTO model_match_candidates (
@@ -300,6 +305,27 @@ def _delete_stale_canonical_alias(transaction: Any, previous_canonical_id: Any |
         {"previous_id": previous_canonical_id},
     )
     transaction.execute("DELETE FROM canonical_models WHERE id = %(previous_id)s", {"previous_id": previous_canonical_id})
+
+
+def _delete_unreferenced_canonical_aliases(
+    transaction: Any,
+    *,
+    canonical_id: Any | None,
+    candidate_slugs: list[str],
+) -> None:
+    if canonical_id is None:
+        return
+    stale_rows = transaction.execute(
+        """
+        SELECT id
+        FROM canonical_models
+        WHERE canonical_slug = ANY(%(candidate_slugs)s)
+          AND id != %(canonical_id)s
+        """,
+        {"candidate_slugs": candidate_slugs, "canonical_id": canonical_id},
+    ).fetchall()
+    for row in stale_rows:
+        _delete_stale_canonical_alias(transaction, row["id"], canonical_id)
 
 
 def _detect_free_model_changes(transaction: Any, client: Any) -> FreeModelChanges:

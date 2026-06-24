@@ -423,4 +423,5 @@
   the structural runtime-doc tests.
 - Live matcher cleanup now loads the previous endpoint canonical binding before
   rematch, so AA-backed canonical aliases overwrite stale provider-specific
-  aliases and the stale canonical row is deleted instead of duplicated.
+  aliases and stale canonical rows are deleted instead of duplicated, including
+  orphan alias rows left by earlier rematches.
