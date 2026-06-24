@@ -7,8 +7,11 @@
   scoring can read canonical AA metrics instead of only provider-quality
   observations. This addresses live `quality_gate:unverifiable` rows caused by
   an empty scorer metrics table after a successful-looking metadata command.
+  Follow-up fix switches production metadata sync to the AA free-tier endpoint
+  required by the live spec; live pro endpoint returned `http_error` after the
+  key was installed.
   Code Simplifier review kept the CLI dispatch and persistence changes explicit.
-  Verification: focused CLI/runtime tests, ruff on touched files,
+  Verification: focused metadata/CLI/runtime tests, ruff on touched files,
   `git diff --check`, and OpenSpec strict validation.
 - Deploy fix: context eligibility now treats `minimum_context_window = 0` as no
   hard context requirement, so live seed endpoints with unknown context are not
