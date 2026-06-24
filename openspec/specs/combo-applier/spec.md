@@ -226,6 +226,8 @@ or locked-out input yields the corresponding value `False`, the stage returns
 - AND it is not locked out
 - **THEN** the stage derives `quota_safe` as `True` without requiring a daily or
   monthly live budget
+- AND a future reset timestamp for that request window does not fail the gate
+  while remaining capacity is still above the buffer
 
 #### Scenario: Zero safety buffer does not satisfy the apply gate
 - **WHEN** an endpoint's daily-budget record carries no safety buffer and its

@@ -483,6 +483,7 @@ def test_apply_stage_allows_researched_request_window_hard_stop(postgres_url):
             UPDATE endpoint_access_states
             SET quota_rule_id = %(rule_id)s,
                 effective_remaining = '{"requests": 40}'::jsonb,
+                reset_at = now() + interval '1 minute',
                 evidence = '{
                   "remaining_source": "assumed",
                   "daily_budget_source": "research",

@@ -349,7 +349,7 @@ def _endpoint_quota_row_is_safe(
         and (has_known_daily_budget or has_request_window_budget)
         and evidence.get("locked_out") is not True
         and remaining_amount(row["effective_remaining"]) > safety_buffer
-        and (row["reset_at"] is None or row["reset_at"] <= now)
+        and (has_request_window_budget or row["reset_at"] is None or row["reset_at"] <= now)
         and row["classified_at"] >= oldest_allowed
         and (row["valid_until"] is None or row["valid_until"] > now)
     )

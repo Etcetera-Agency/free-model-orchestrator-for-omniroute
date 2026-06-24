@@ -439,4 +439,5 @@
   superseded diff.
 - Apply quota safety now accepts researched hard-stop request-window providers
   such as Nvidia RPM-only free tiers when request remaining is above the safety
-  buffer, while plain assumed quota without such a rule still fails closed.
+  buffer, treating future reset timestamps as the next rate-window reset rather
+  than lockout while plain assumed quota without such a rule still fails closed.
