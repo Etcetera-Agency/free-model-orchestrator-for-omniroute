@@ -1,5 +1,11 @@
 # Completion Review
 
+- Deploy fix: context eligibility now treats `minimum_context_window = 0` as no
+  hard context requirement, so live seed endpoints with unknown context are not
+  rejected from no-minimum roles. Unknown context still fails closed for roles
+  with a real positive minimum unless manual override is set. Code Simplifier
+  review found the change already minimal. Verification: focused scoring tests,
+  ruff on touched files, `git diff --check`, and OpenSpec strict validation.
 - Deploy fix: quota research now retries `/v1/search` without a pinned provider
   when `gemini-grounded-search` returns 429, and falls back from `answer.text` to
   result titles/snippets. This matches live OmniRoute: default search succeeds

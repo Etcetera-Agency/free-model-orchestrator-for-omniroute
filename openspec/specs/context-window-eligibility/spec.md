@@ -42,3 +42,8 @@ a minimum, unless an explicit manual override is set.
 - WHEN eligibility runs for a role with a minimum
 - THEN the endpoint is excluded
 
+#### Scenario: Unknown context, no minimum
+- GIVEN an endpoint with `context_status = unknown`
+- AND a role with `minimum_context_window = 0`
+- WHEN eligibility runs
+- THEN the endpoint is not excluded by the context gate

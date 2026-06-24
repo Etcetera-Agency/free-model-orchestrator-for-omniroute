@@ -20,6 +20,8 @@ def context_eligible(
     minimum_context: int,
     manual_override: bool = False,
 ) -> ContextDecision:
+    if minimum_context <= 0:
+        return ContextDecision(eligible=True)
     if effective_context is None:
         return ContextDecision(eligible=manual_override)
     return ContextDecision(eligible=effective_context >= minimum_context, bonus=0)

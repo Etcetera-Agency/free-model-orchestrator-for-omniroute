@@ -204,6 +204,7 @@ def test_latency_score_source_unknown_when_every_source_missing():
 
 
 @pytest.mark.spec("context-window-eligibility::Unknown context, no override")
+@pytest.mark.spec("context-window-eligibility::Unknown context, no minimum")
 @pytest.mark.spec("context-window-eligibility::Far above minimum")
 @pytest.mark.spec("context-window-eligibility::Provider smaller than canonical")
 def test_context_hard_filter_unknown_override_and_no_bonus():
@@ -214,6 +215,7 @@ def test_context_hard_filter_unknown_override_and_no_bonus():
     override = context_eligible(effective_context=None, minimum_context=64_000, manual_override=True)
     assert far_above.bonus == 0
     assert unknown.eligible is False
+    assert context_eligible(effective_context=None, minimum_context=0).eligible is True
     assert override.eligible is True
 
 
