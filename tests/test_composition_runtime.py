@@ -343,10 +343,11 @@ def test_role_scoring_stage_persists_per_role_scores(postgres_url):
     result = run_composed_stage(repository, "role-scoring", client=client)
 
     with repository.database.transaction() as transaction:
-        score = transaction.execute("SELECT role_id, eligibility, total_score FROM role_scores").fetchone()
+        score = transaction.execute("SELECT role_id, score_version, eligibility, total_score FROM role_scores").fetchone()
     assert result.exit_code == 0
     assert result.stage_results[0]["details"]["effect"] == "repository_write"
     assert score["role_id"] == "routing_fast"
+    assert score["score_version"] == "production-v2-context"
     assert score["eligibility"] is True
     assert float(score["total_score"]) > 0
 
@@ -593,6 +594,28 @@ def test_role_scoring_stage_rejects_unknown_context_unless_role_overrides(postgr
         }
     assert scores["strict_context"] == (False, ["context"])
     assert scores["override_context"][0] is True
+
+
+@pytest.mark.spec("context-window-eligibility::Unknown context, no minimum")
+def test_role_scoring_stage_allows_unknown_context_without_minimum(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    seed_confirmed_llm_candidate(repository, model_id="unknown-context", intelligence_index=80, context_window=None)
+    with repository.database.transaction() as transaction:
+        repository.roles.upsert(
+            transaction,
+            role_id="no_context_minimum",
+            requirements={"capabilities": [], "minimum_context_window": 0},
+            expected_load={"requests": 1},
+            criticality=1,
+        )
+
+    run_composed_stage(repository, "role-scoring")
+
+    with repository.database.transaction() as transaction:
+        score = transaction.execute("SELECT eligibility, rejection_reasons FROM role_scores").fetchone()
+    assert score["eligibility"] is True
+    assert score["rejection_reasons"] == []
 
 
 @pytest.mark.spec("role-scorer::Below quality gate rejected in scoring")

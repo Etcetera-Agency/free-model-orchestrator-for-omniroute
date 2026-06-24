@@ -21,6 +21,9 @@ AA_SCORE_PERCENTILES = {
     "coding_index": (0.0, 100.0),
     "agentic_index": (0.0, 100.0),
 }
+# AICODE-NOTE: Role scores are immutable by version/hash; bump this whenever
+# scoring or eligibility semantics change without changing persisted inputs.
+ROLE_SCORE_VERSION = "production-v2-context"
 
 
 def _role_lifecycle_stage(_dependencies: StageDependencies, context: PipelineContext) -> StageResult:
@@ -142,7 +145,7 @@ def _role_scoring_stage(_dependencies: StageDependencies, context: PipelineConte
                     transaction,
                     role_id=role["id"],
                     endpoint_id=endpoint["id"],
-                    score_version="production-v1",
+                    score_version=ROLE_SCORE_VERSION,
                     total_score=score.total,
                     component_scores=score.components,
                     eligibility=eligibility.eligible,

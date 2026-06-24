@@ -124,12 +124,21 @@ sources are missing, latency source SHALL be unknown.
 ### Requirement: Immutable, hash-keyed scores
 
 The system SHALL store each score immutably with an `input_state_hash` and SHALL
-skip recomputation when the hash is unchanged.
+skip recomputation when the hash is unchanged. The score version SHALL change
+when production scoring or eligibility semantics change without changing the
+persisted input hash, so live runs can write new immutable scores instead of
+reusing stale eligibility decisions.
 
 #### Scenario: Unchanged inputs
 - GIVEN an endpoint whose scoring inputs are unchanged
 - WHEN scoring runs
 - THEN no new score is computed
+
+#### Scenario: Scoring semantics changed
+- GIVEN the scorer eligibility logic changed
+- AND persisted endpoint/role inputs did not change
+- WHEN scoring runs with the new score version
+- THEN new immutable role scores are written for the new semantics
 
 ### Requirement: Artificial Analysis fetch errors
 
@@ -238,4 +247,3 @@ of substituting a full `1.0`.
 - WHEN its score is computed
 - THEN the unknown AA subscore applies the uncertainty penalty
 - AND the endpoint is not awarded a full `benchmark_fit` of 1.0
-
