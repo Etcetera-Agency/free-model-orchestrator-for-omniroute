@@ -238,6 +238,23 @@ def test_priority_combo_drops_member_without_pool_capacity():
     assert pool_usage == {"pool-a": 10, "pool-b": 10}
 
 
+@pytest.mark.spec("allocator::Combo output")
+def test_priority_combo_deduplicates_endpoint_ids():
+    combo = build_priority_combo(
+        "routing_fast",
+        [
+            {"id": "same-endpoint", "pool": "pool-a", "score": 1, "capacity": 100},
+            {"id": "same-endpoint", "pool": "pool-a", "score": 1, "capacity": 100},
+        ],
+        per_pool_cap=2,
+        demand=10,
+        pool_usage={},
+        reserved_endpoint_id=None,
+    )
+
+    assert combo.endpoints == ["same-endpoint"]
+
+
 @pytest.mark.spec("allocator::Duplicate canonical model avoided when alternative exists")
 @pytest.mark.spec("allocator::Family concentration reported")
 def test_priority_combo_prefers_distinct_canonical_model_and_reports_family_concentration():

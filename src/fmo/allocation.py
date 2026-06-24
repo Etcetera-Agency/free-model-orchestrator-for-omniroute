@@ -67,6 +67,7 @@ def build_priority_combo(
     minimum_context: int = 0,
 ) -> Combo:
     ordered = []
+    used_endpoint_ids = set()
     used_pools = set()
     used_canonical_models = set()
     scored_endpoints = [endpoint for endpoint in endpoints if not endpoint.get("is_router")]
@@ -74,6 +75,8 @@ def build_priority_combo(
     duplicate_skips = []
     blocked_by_quota = []
     for index, endpoint in enumerate(ordered_scored):
+        if endpoint["id"] in used_endpoint_ids:
+            continue
         pool = endpoint.get("pool")
         if role_id in HEAVY_ROLES and pool is not None and pool in used_pools:
             continue
@@ -99,6 +102,7 @@ def build_priority_combo(
                 duplicate_skips.append(_endpoint_identity(endpoint, reason="duplicate_canonical_model"))
                 continue
         ordered.append(endpoint["id"])
+        used_endpoint_ids.add(endpoint["id"])
         if canonical_model_id:
             used_canonical_models.add(canonical_model_id)
         if pool is not None:
@@ -112,8 +116,11 @@ def build_priority_combo(
     routers = sorted(routers, key=lambda item: router_order.get(str(item["id"]).lower(), len(router_order)))
     required = required_capabilities or set()
     for endpoint in routers:
+        if endpoint["id"] in used_endpoint_ids:
+            continue
         if _router_tail_eligible(endpoint, required_capabilities=required, minimum_context=minimum_context):
             ordered.append(endpoint["id"])
+            used_endpoint_ids.add(endpoint["id"])
     accepted = [endpoint for endpoint in endpoints if endpoint["id"] in ordered]
     return Combo(
         role_id=role_id,

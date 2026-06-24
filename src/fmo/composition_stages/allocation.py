@@ -126,6 +126,7 @@ def _allocation_stage(_dependencies: StageDependencies, context: PipelineContext
         endpoints = [
             {
                 "id": str(row["endpoint_id"]),
+                "role_id": str(row["role_id"]),
                 "pool": str(row["quota_pool_id"]),
                 "score": float(row["total_score"]),
                 "capacity": pool_remaining.get(str(row["quota_pool_id"]), remaining_amount(row["effective_remaining"])),
@@ -154,7 +155,7 @@ def _allocation_stage(_dependencies: StageDependencies, context: PipelineContext
             if role["id"] in recalibration_roles:
                 continue
             allocation = plan.allocations.get(role["id"])
-            role_scores = endpoints if allocation is not None else []
+            role_scores = [endpoint for endpoint in endpoints if endpoint["role_id"] == role["id"]]
             pool_usage = dict(plan.pool_usage)
             targets = []
             if allocation is not None:

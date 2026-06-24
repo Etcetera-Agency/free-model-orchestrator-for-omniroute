@@ -143,6 +143,38 @@ def test_allocation_stage_persists_plan_and_constraint_report(postgres_url):
     ] == pytest.approx(39.6)
 
 
+@pytest.mark.spec("allocator::Combo output")
+@pytest.mark.spec("pipeline-orchestration::Allocation persists one combo plan per role")
+def test_allocation_stage_filters_score_rows_per_role_before_building_combo(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    repository = Repository(Database(postgres_url))
+    client = PipelineOpsClient()
+    prepare_scored_endpoint(repository, client=client)
+    with repository.database.transaction() as transaction:
+        repository.roles.upsert(
+            transaction,
+            role_id="routing_slow",
+            requirements={"capabilities": []},
+            expected_load={"requests": 1},
+            criticality=1,
+        )
+    run_composed_stage(repository, "role-scoring", client=client)
+    run_composed_stage(repository, "demand-forecast", client=client)
+
+    run_composed_stage(repository, "allocation", client=client)
+
+    with repository.database.transaction() as transaction:
+        plans = transaction.execute(
+            """
+            SELECT role_id, targets
+            FROM allocation_plans
+            ORDER BY role_id
+            """
+        ).fetchall()
+    assert {plan["role_id"] for plan in plans} == {"routing_fast", "routing_slow"}
+    assert all(len(plan["targets"]) == 1 for plan in plans)
+
+
 @pytest.mark.spec("pipeline-orchestration::Diff is computed without mutating OmniRoute")
 @pytest.mark.spec("smart-combo-reviewer::Reviewer output is recorded")
 @pytest.mark.spec("smart-combo-reviewer::Applied diff is independent of the reviewer")

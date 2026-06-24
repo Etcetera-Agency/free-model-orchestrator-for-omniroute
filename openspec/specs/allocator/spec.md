@@ -88,6 +88,7 @@ SHALL remain the hard blocker and SHALL NOT be relaxed for diversity.
 - GIVEN an allocated role
 - WHEN its combo is emitted
 - THEN it is an ordered priority list with no weights
+- AND the same endpoint id appears at most once in that role's combo
 
 #### Scenario: Combo orders weakest-eligible first
 - GIVEN three band-eligible scored endpoints with AA metrics low < mid < high

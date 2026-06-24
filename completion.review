@@ -428,3 +428,6 @@
 - Live quality-band seeding now counts capacity only from probe-passed
   confirmed-free endpoints, so failed Nvidia candidates cannot narrow a seed
   band and exclude the actually routable free models.
+- Allocation now filters scored endpoints per role before combo construction
+  and deduplicates endpoint ids inside each priority combo, preventing a single
+  live endpoint from being emitted twice for one combo.
