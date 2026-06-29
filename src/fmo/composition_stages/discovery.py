@@ -235,13 +235,11 @@ def _model_matching_stage(_dependencies: StageDependencies, context: PipelineCon
         ).fetchall()
         canonical_slugs = {row["canonical_slug"] for row in canonical_rows}
         preferred_canonical_slugs = {row["canonical_slug"] for row in canonical_rows if row["has_aa_metrics"]}
-        provider_catalog_ids = {row["provider_model_id"] for row in endpoints}
         matched = 0
         for endpoint in endpoints:
             result = match_model(
                 endpoint["provider_model_id"],
                 canonical_slugs=canonical_slugs,
-                provider_catalog_ids=provider_catalog_ids,
                 preferred_canonical_slugs=preferred_canonical_slugs,
             )
             status = "auto_use" if result.auto_use else "review_required"

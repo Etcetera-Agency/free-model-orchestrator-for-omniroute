@@ -38,8 +38,9 @@ def test_custom_tokens_per_request_factor():
 
 @pytest.mark.spec("quota-manager::Request rate gates normalize to daily request ceilings")
 def test_sub_day_request_windows_normalize_to_daily_ceiling():
-    assert to_requests_per_day("requests", "minute", 15) == 21_600
-    assert to_requests_per_day("requests", "hour", 15) == 360
+    # minute/hour are extrapolated to a daily ceiling and discounted 20%.
+    assert to_requests_per_day("requests", "minute", 15) == 17_280
+    assert to_requests_per_day("requests", "hour", 15) == 288
 
 
 @pytest.mark.parametrize("window", ["minute", "hour"])
@@ -81,7 +82,7 @@ def test_binding_capacity_includes_request_rate_gates():
 
 @pytest.mark.spec("quota-manager::Request rate gates normalize to daily request ceilings")
 def test_binding_capacity_uses_rate_gate_when_no_daily_budget_axis():
-    assert binding_capacity([("requests", "minute", 15)]) == 21_600
+    assert binding_capacity([("requests", "minute", 15)]) == 17_280
     assert binding_capacity([]) is None
 
 

@@ -84,7 +84,7 @@ def test_runtime_refreshes_live_catalog_before_command_stages(postgres_url):
     assert calls == [f"refresh:{config.omniroute_url}", "role-scoring"]
 
 
-@pytest.mark.spec("pipeline-orchestration::Live catalog preflight")
+@pytest.mark.spec("pipeline-orchestration::Refresh failure fails closed")
 def test_runtime_fails_closed_when_live_catalog_refresh_fails(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     config = build_startup_config(valid_env(DATABASE_URL=postgres_url))
@@ -147,8 +147,9 @@ def test_probe_stage_gates_on_confirmed_capacity_and_persists_results(postgres_u
     assert client.get_calls[-2:] == ["/api/providers", "/v1/models"]
 
 
-@pytest.mark.spec("probe-runner::Current combo seeds are probed before wider provider pool")
-def test_probe_stage_limits_provider_wildcard_pool_to_current_combo_seed_when_available(postgres_url):
+@pytest.mark.spec("probe-runner::Cold start uses seed signal")
+@pytest.mark.spec("probe-runner::New candidates admitted into seed-bounded run")
+def test_probe_stage_probes_seed_and_admits_bounded_new_candidate(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     repository = Repository(Database(postgres_url))
     client = PipelineOpsClient()
@@ -166,13 +167,15 @@ def test_probe_stage_limits_provider_wildcard_pool_to_current_combo_seed_when_av
             "SELECT provider_model_id, probe_status FROM provider_endpoints ORDER BY provider_model_id"
         ).fetchall()
     assert result.exit_code == 0
+    # The seed is probed, and the never-probed non-seed candidate is admitted
+    # within the per (provider, connection) budget instead of being starved.
     assert [(row["provider_model_id"], row["probe_status"]) for row in rows] == [
         ("free-chat", "passed"),
-        ("second-free", "not_run"),
+        ("second-free", "passed"),
     ]
 
 
-@pytest.mark.spec("probe-runner::Streaming probe evidence supersedes old same-day failures")
+@pytest.mark.spec("probe-runner::Model-test probe evidence supersedes old same-day failures")
 def test_probe_stage_records_new_stream_probe_after_old_same_day_failure(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     repository = Repository(Database(postgres_url))
@@ -1050,8 +1053,8 @@ def test_role_scoring_stage_keeps_prefixed_grid_role_id_for_live_seed(postgres_u
     assert float(role["minimum_quality_value"]) <= 70 <= float(role["maximum_quality_value"])
 
 
-@pytest.mark.spec("quality-gate::Re-seeding re-anchors the band")
-def test_role_scoring_stage_reanchors_when_combo_is_stripped_to_single_member(postgres_url):
+@pytest.mark.spec("quality-gate::Established band is not re-anchored by a later seed")
+def test_role_scoring_keeps_established_band_when_combo_is_reseeded(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     repository = Repository(Database(postgres_url))
     first = seed_confirmed_llm_candidate(repository, model_id="seed-low", intelligence_index=50)
@@ -1067,15 +1070,23 @@ def test_role_scoring_stage_reanchors_when_combo_is_stripped_to_single_member(po
     client = PipelineOpsClient()
     client.combos["fmo-routing_fast"] = [str(first["id"])]
     run_composed_stage(repository, "role-scoring", client=client)
-    client.combos["fmo-routing_fast"] = [str(second["id"])]
-    run_composed_stage(repository, "role-scoring", client=client)
-
     with repository.database.transaction() as transaction:
-        role = transaction.execute(
+        band1 = transaction.execute(
             "SELECT minimum_quality_value, maximum_quality_value FROM roles WHERE id = 'routing_fast'"
         ).fetchone()
-    assert float(role["minimum_quality_value"]) <= 75 <= float(role["maximum_quality_value"])
-    assert float(role["minimum_quality_value"]) > 50
+    # Re-seed with a higher-quality single model; the established band must be kept.
+    client.combos["fmo-routing_fast"] = [str(second["id"])]
+    run_composed_stage(repository, "role-scoring", client=client)
+    with repository.database.transaction() as transaction:
+        band2 = transaction.execute(
+            "SELECT minimum_quality_value, maximum_quality_value FROM roles WHERE id = 'routing_fast'"
+        ).fetchone()
+
+    # Cold-start anchored the band on seed-low (~50); a later higher seed does not
+    # re-anchor it — the role now runs by the established band, not the seed.
+    assert float(band1["minimum_quality_value"]) <= 50
+    assert float(band2["minimum_quality_value"]) == float(band1["minimum_quality_value"])
+    assert float(band2["maximum_quality_value"]) == float(band1["maximum_quality_value"])
 
 
 @pytest.mark.spec("quality-gate::Paid seed anchors but is not a member")

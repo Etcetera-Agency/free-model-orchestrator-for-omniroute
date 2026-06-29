@@ -125,8 +125,7 @@ CREATE TABLE provider_endpoints (
   first_seen_at timestamptz NOT NULL DEFAULT now(),
   last_seen_at timestamptz NOT NULL DEFAULT now(),
   removed_at timestamptz,
-  UNIQUE (provider_id, provider_model_id, model_type),
-  UNIQUE (provider_account_id, provider_model_id, model_type)
+  UNIQUE (provider_id, provider_model_id, model_type)
 );
 
 CREATE TABLE quota_source_snapshots (
@@ -327,6 +326,16 @@ CREATE TABLE combo_snapshots (
   phase text NOT NULL,
   run_id uuid REFERENCES sync_runs(id),
   created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE published_generations (
+  generation text NOT NULL,
+  payload_hash text NOT NULL,
+  payload_json jsonb NOT NULL,
+  status text NOT NULL,
+  acked_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (generation, payload_hash)
 );
 
 CREATE TABLE change_log (

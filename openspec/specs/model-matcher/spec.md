@@ -32,27 +32,41 @@ unmatched. All attempts SHALL be stored in `model_match_candidates`;
 - AND the endpoint binding is overwritten to the AA-backed canonical row without
   retaining an unreferenced duplicate canonical alias
 
-### Requirement: Forbidden automatic merges
+### Requirement: Variant-specific canonical, never merged
 
 The system SHALL NOT automatically merge base vs instruct, normal vs thinking,
 low vs high reasoning, preview vs stable, different dated snapshots, or mini vs
-full.
+full. Because Artificial Analysis scores these variants as distinct models, the
+system SHALL achieve non-merge by binding each provider model id to a canonical
+slug that preserves its variant suffix: a known canonical or AA-backed slug wins,
+otherwise a new variant-specific canonical is created from the full normalized
+slug. The system SHALL NOT strip variant suffixes (`-thinking`, `-reasoning`,
+`-instruct`, `-base`, `-mini`, dated snapshots) when forming a canonical slug.
 
 #### Scenario: Base vs instruct
 - GIVEN a provider exposes both base and instruct variants
+- AND neither variant slug exists as a canonical model yet
 - WHEN matching runs
-- THEN they are not auto-merged into one canonical model
+- THEN each variant is registered as its own canonical model
+- AND they are never collapsed into one canonical model
+
+#### Scenario: Variant-specific canonical
+- GIVEN a provider model id `gpt-4.1-preview`
+- AND only the base canonical slug `gpt-4.1` exists
+- WHEN matching runs
+- THEN a new canonical slug `gpt-4.1-preview` is created and auto-used
+- AND the model is not parked in review and not merged onto `gpt-4.1`
 
 ### Requirement: Confidence gate
 
-The system SHALL assign match confidence (1.00 manual, 0.98 exact provider
-catalog, 0.95 exact slug, 0.85 normalized structured, below 0.85
+The system SHALL assign match confidence (1.00 manual, 0.97 AA-backed exact slug,
+0.95 exact canonical slug, 0.90 new variant-specific canonical, below 0.90
 review_required) and auto-use a match in scoring only at confidence ≥ 0.90.
 
-#### Scenario: Low-confidence match
-- GIVEN a match at confidence 0.85
+#### Scenario: Auto-used match
+- GIVEN a match at confidence ≥ 0.90
 - WHEN scoring requests an endpoint's canonical model
-- THEN the match is flagged review_required and not auto-used
+- THEN the match is auto-used and not flagged review_required
 
 ### Requirement: Provider capabilities override canonical
 

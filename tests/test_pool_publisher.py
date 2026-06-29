@@ -1,0 +1,200 @@
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+from fmo.composition import build_publisher_stages
+from fmo.composition_stages import StageDependencies
+from fmo.db import MigrationRunner
+from fmo.idempotency import stable_hash
+from fmo.omniroute import OmniRouteVersionGate
+from fmo.persistence import Database, Repository
+from fmo.pool_publisher import compose_pool_generation, publish_pool_generation, usage_feedback
+
+
+@pytest.fixture()
+def repository(postgres_url):
+    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
+    return Repository(Database(postgres_url))
+
+
+@pytest.mark.spec("pool-spec-publisher::Compose and publish from inventory")
+@pytest.mark.spec("pool-spec-publisher::Never writes combos")
+@pytest.mark.spec("pool-spec-publisher::Demand from forecast, consumers from inventory")
+@pytest.mark.spec("pool-spec-publisher::No capacity computation")
+@pytest.mark.spec("demand-forecast::Band is declared, not computed")
+@pytest.mark.spec("demand-forecast::Relax is delegated, not applied in FMO")
+def test_compose_pool_generation_uses_role_policy_and_forecast_only():
+    roles = [
+        {
+            "id": "routing_fast",
+            "role_lifecycle_status": "active",
+            "requirements": {
+                "pool_id": "pool-fast",
+                "combo_id": "combo-fast",
+                "capabilities": ["chat"],
+                "min_context_tokens": 8192,
+                "quality_relax": {"when": "underfilled", "max_delta": 12},
+            },
+            "minimum_quality_metric": "coding_index",
+            "minimum_quality_value": 55,
+            "maximum_quality_value": 85,
+            "consumer_count": 3,
+        }
+    ]
+
+    generation = compose_pool_generation(roles, {"routing_fast": 42}, generation="gen-1")
+
+    assert generation == {
+        "contract_version": "fmo-pools/v1",
+        "generation": "gen-1",
+        "pools": [
+            {
+                "pool_id": "pool-fast",
+                "combo_id": "combo-fast",
+                "demand": {"requests_per_day": 42.0, "consumers": 3, "workload_class": "standard"},
+                "constraints": {
+                    "free_only": True,
+                    "capabilities": ["chat"],
+                    "min_context_tokens": 8192,
+                    "quality_band": {
+                        "source": "model_intelligence",
+                        "metric": "score",
+                        "category": "coding",
+                        "min": 55.0,
+                        "max": 85.0,
+                        "relax": {"when": "underfilled", "max_delta": 12},
+                    },
+                },
+                "tail": {"strategy": "auto", "mode": "fallback", "compatibility": "strict"},
+            }
+        ],
+    }
+    assert "models" not in generation["pools"][0]
+    assert "capacity" not in str(generation)
+
+
+@pytest.mark.spec("pool-spec-publisher::Missing context bound fails closed")
+def test_compose_pool_generation_rejects_missing_context_bound():
+    roles = [{"id": "routing_fast", "role_lifecycle_status": "active", "requirements": {}}]
+
+    with pytest.raises(ValueError, match="missing min_context_tokens"):
+        compose_pool_generation(roles, {"routing_fast": 1}, generation="gen-1")
+
+
+@pytest.mark.spec("pool-spec-publisher::Retry is idempotent")
+@pytest.mark.spec("pool-spec-publisher::Changed payload gets new idempotency key")
+@pytest.mark.spec("omniroute-client::Supported version publishes")
+def test_publish_pool_generation_uses_payload_hash_idempotency(repository):
+    client = FakePoolClient(version="1.4.0")
+    gate = OmniRouteVersionGate({"1.4.0"})
+    generation = _generation("gen-1", requests=5)
+    changed = _generation("gen-1", requests=6)
+
+    first = publish_pool_generation(repository, client, generation, run_id=None, version_gate=gate)
+    second = publish_pool_generation(repository, client, generation, run_id=None, version_gate=gate)
+    third = publish_pool_generation(repository, client, changed, run_id=None, version_gate=gate)
+
+    assert first.payload_hash == stable_hash(generation)
+    assert second.payload_hash == first.payload_hash
+    assert third.payload_hash == stable_hash(changed)
+    assert third.payload_hash != first.payload_hash
+    assert [request["path"] for request in client.requests] == [
+        "/api/version",
+        "/api/fmo/pools",
+        "/api/version",
+        "/api/fmo/pools",
+        "/api/version",
+        "/api/fmo/pools",
+    ]
+    assert client.requests[1]["idempotency_key"] == first.payload_hash
+    assert client.requests[3]["idempotency_key"] == first.payload_hash
+    assert client.requests[5]["idempotency_key"] == third.payload_hash
+    with repository.database.transaction() as transaction:
+        same_payload = repository.published_generations.get(transaction, "gen-1", first.payload_hash)
+        changed_payload = repository.published_generations.get(transaction, "gen-1", third.payload_hash)
+    assert same_payload is not None
+    assert changed_payload is not None
+
+
+@pytest.mark.spec("omniroute-client::Unsupported contract version refuses publish")
+def test_publish_pool_generation_rejects_unsupported_contract(repository):
+    client = FakePoolClient(version="9.9.9")
+    gate = OmniRouteVersionGate({"1.4.0"})
+
+    with pytest.raises(ValueError, match="unsupported pool contract"):
+        publish_pool_generation(repository, client, _generation("gen-1", requests=5), run_id=None, version_gate=gate)
+
+    assert [request["path"] for request in client.requests] == ["/api/version"]
+
+
+@pytest.mark.spec("pool-spec-publisher::Feedback adjusts next demand")
+def test_usage_feedback_reads_fmo_usage_endpoint():
+    client = FakePoolClient(version="1.4.0", usage={"pools": [{"pool_id": "pool-fast", "requests": 9}]})
+
+    assert usage_feedback(client) == {"pools": [{"pool_id": "pool-fast", "requests": 9}]}
+    assert client.requests == [{"method": "GET", "path": "/api/fmo/usage"}]
+
+
+def test_build_publisher_stages_keeps_pipeline_runner_contract():
+    stages = build_publisher_stages(dependencies=StageDependencies(repository=None, omniroute_client=None))
+
+    assert [stage.name for stage in stages] == [
+        "hermes-inventory",
+        "role-lifecycle",
+        "demand-forecast",
+        "compose",
+        "publish",
+        "usage-feedback",
+    ]
+
+
+def _generation(generation: str, *, requests: float) -> dict:
+    return {
+        "contract_version": "fmo-pools/v1",
+        "generation": generation,
+        "pools": [
+            {
+                "pool_id": "pool-fast",
+                "combo_id": "combo-fast",
+                "demand": {"requests_per_day": requests, "consumers": 1, "workload_class": "standard"},
+                "constraints": {
+                    "free_only": True,
+                    "capabilities": ["chat"],
+                    "min_context_tokens": 8192,
+                    "quality_band": {
+                        "source": "model_intelligence",
+                        "metric": "score",
+                        "category": "intelligence",
+                        "min": 50,
+                        "max": 90,
+                        "relax": {"when": "underfilled", "max_delta": 10},
+                    },
+                },
+                "tail": {"strategy": "auto", "mode": "fallback", "compatibility": "strict"},
+            }
+        ],
+    }
+
+
+class FakePoolClient:
+    def __init__(self, *, version: str, usage: dict | None = None):
+        self.version = version
+        self.usage = usage or {"pools": []}
+        self.requests: list[dict[str, Any]] = []
+
+    def get(self, path: str) -> dict[str, Any]:
+        self.requests.append({"method": "GET", "path": path})
+        if path == "/api/version":
+            return {"version": self.version}
+        if path == "/api/fmo/usage":
+            return self.usage
+        raise AssertionError(path)
+
+    def put(self, path: str, payload: dict[str, Any], *, idempotency_key: str | None = None) -> dict[str, str]:
+        self.requests.append(
+            {"method": "PUT", "path": path, "payload": payload, "idempotency_key": idempotency_key}
+        )
+        if path != "/api/fmo/pools":
+            raise AssertionError(path)
+        return {"status": "accepted"}

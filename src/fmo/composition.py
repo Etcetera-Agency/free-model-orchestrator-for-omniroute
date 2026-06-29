@@ -24,9 +24,10 @@ from fmo.composition_stages import (
 from fmo.config import StartupConfig
 from fmo.llm_runtime import LlmProviderConfig, SharedInstructorRuntime, build_instructor_runtime
 from fmo.metadata_sync import sync_external_metadata
-from fmo.omniroute import OmniRouteClient
+from fmo.omniroute import OmniRouteClient, OmniRouteVersionGate
 from fmo.persistence import Database, Repository
 from fmo.pipeline import CANONICAL_STAGE_NAMES, PipelineContext, PipelineRunner, PipelineRunResult, Stage, StageResult
+from fmo.pool_publisher import compose_pool_generation, publish_pool_generation, usage_feedback
 from fmo.profile_normalization import ProfileNormalizationResult
 from fmo.profile_normalization import normalize_profiles as normalize_profile_configs
 from fmo.provider_sweep import ProviderSweepResult, sweep_provider_models
@@ -257,6 +258,137 @@ def build_canonical_stages(
         "audit": Stage("audit", _adapter_stage("audit", deps, stage_adapters)),
     }
     return [stage_by_name[name] for name in CANONICAL_STAGE_NAMES]
+
+
+def build_publisher_stages(
+    *,
+    dependencies: StageDependencies,
+    known_contract_versions: set[str] | None = None,
+) -> list[Stage]:
+    stage_adapters = StageAdapters()
+    version_gate = OmniRouteVersionGate(known_contract_versions or {"1.4.0"})
+    return [
+        Stage("hermes-inventory", _adapter_stage("hermes-inventory", dependencies, stage_adapters)),
+        Stage("role-lifecycle", _adapter_stage("role-lifecycle", dependencies, stage_adapters)),
+        Stage("demand-forecast", _adapter_stage("demand-forecast", dependencies, stage_adapters)),
+        Stage("compose", _compose_pool_stage),
+        Stage(
+            "publish",
+            lambda context: _publish_pool_stage(context, dependencies=dependencies, version_gate=version_gate),
+        ),
+        Stage("usage-feedback", lambda context: _usage_feedback_stage(context, dependencies=dependencies)),
+    ]
+
+
+def _compose_pool_stage(context: PipelineContext) -> StageResult:
+    try:
+        generation = _compose_pool_generation_from_repository(context)
+    except ValueError as exc:
+        return StageResult(status="validation_failed", reason=str(exc), details={"effect": "idempotent_no_change"})
+    context.config["pool_generation"] = generation
+    return StageResult(
+        status="success",
+        changed=True,
+        details={"effect": "repository_write", "pool_count": len(generation["pools"])},
+    )
+
+
+def _publish_pool_stage(
+    context: PipelineContext,
+    *,
+    dependencies: StageDependencies,
+    version_gate: OmniRouteVersionGate,
+) -> StageResult:
+    if dependencies.omniroute_client is None:
+        return StageResult(
+            status="external_dependency_failed",
+            reason="omniroute_client_required",
+            details={"effect": "idempotent_no_change"},
+        )
+    generation = context.config.get("pool_generation")
+    if not isinstance(generation, dict):
+        return StageResult(
+            status="validation_failed",
+            reason="pool_generation_required",
+            details={"effect": "idempotent_no_change"},
+        )
+    try:
+        result = publish_pool_generation(
+            context.repository,
+            dependencies.omniroute_client,
+            generation,
+            run_id=context.run_id,
+            version_gate=version_gate,
+        )
+    except Exception as exc:
+        return StageResult(
+            status="external_dependency_failed",
+            reason=f"pool_publish:{exc}",
+            details={"effect": "idempotent_no_change"},
+        )
+    return StageResult(
+        status="success",
+        idempotency_key=result.payload_hash,
+        changed=True,
+        details={"effect": "omniroute_call", "payload_hash": result.payload_hash, "status": result.status},
+    )
+
+
+def _usage_feedback_stage(context: PipelineContext, *, dependencies: StageDependencies) -> StageResult:
+    if dependencies.omniroute_client is None:
+        return StageResult(
+            status="external_dependency_failed",
+            reason="omniroute_client_required",
+            details={"effect": "idempotent_no_change"},
+        )
+    try:
+        feedback = usage_feedback(dependencies.omniroute_client)
+    except Exception as exc:
+        return StageResult(
+            status="external_dependency_failed",
+            reason=f"usage_feedback:{exc}",
+            details={"effect": "idempotent_no_change"},
+        )
+    context.config["usage_feedback"] = feedback
+    return StageResult(
+        status="success",
+        changed=bool(feedback),
+        details={"effect": "omniroute_call", "pool_count": len(feedback.get("pools", []))},
+    )
+
+
+def _compose_pool_generation_from_repository(context: PipelineContext) -> dict:
+    with context.repository.database.transaction() as transaction:
+        roles = [
+            dict(row)
+            for row in transaction.execute(
+                """
+                SELECT r.id, r.requirements, r.role_lifecycle_status,
+                       r.minimum_quality_metric, r.minimum_quality_value,
+                       r.maximum_quality_metric, r.maximum_quality_value,
+                       COALESCE(consumers.consumer_count, 0) AS consumer_count
+                FROM roles r
+                LEFT JOIN (
+                  SELECT role_id, count(*) AS consumer_count
+                  FROM role_consumers
+                  WHERE active = true
+                  GROUP BY role_id
+                ) consumers ON consumers.role_id = r.id
+                ORDER BY r.id
+                """
+            ).fetchall()
+        ]
+        demand = {
+            row["role_id"]: float(row["protected_requests"])
+            for row in transaction.execute(
+                """
+                SELECT DISTINCT ON (role_id) role_id, protected_requests
+                FROM role_demand_forecasts
+                ORDER BY role_id, created_at DESC
+                """
+            ).fetchall()
+        }
+    return compose_pool_generation(roles, demand, generation=context.config.get("generation"))
 
 
 def stages_for_command(command: str, stages: Sequence[Stage]) -> list[Stage]:

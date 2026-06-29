@@ -124,7 +124,7 @@ def test_summary_extracts_request_and_token_axes_when_both_present():
     ]
 
 
-@pytest.mark.spec("quota-research::Requests-per-minute only activates rate capacity")
+@pytest.mark.spec("quota-research::Requests-per-minute only activates")
 def test_summary_request_rate_only_activates_rate_capacity_rule():
     transport = _SearchTransport(
         body={
@@ -148,7 +148,7 @@ def test_summary_request_rate_only_activates_rate_capacity_rule():
     assert result.rule.claim.window == "minute"
 
 
-@pytest.mark.spec("quota-research::Requests-per-minute only activates rate capacity")
+@pytest.mark.spec("quota-research::Requests-per-minute only activates")
 def test_summary_rpm_abbreviation_activates_rate_capacity_rule():
     claim = extract_summary_claim(_snapshot("NVIDIA NIM free tier allows 40 RPM with hard stop."))
 

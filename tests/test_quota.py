@@ -264,7 +264,7 @@ def test_endpoint_binding_capacity_includes_calibrated_token_axis():
     assert capacity == 10
 
 
-@pytest.mark.spec("quota-manager::Sub-day request axis excluded")
+@pytest.mark.spec("quota-manager::Binding capacity uses tightest budget axis")
 def test_endpoint_binding_capacity_excludes_sub_day_request_axis():
     research = _quota_rule(
         QuotaClaim("requests", 15, "minute", ["research"], True),

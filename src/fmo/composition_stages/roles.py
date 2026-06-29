@@ -166,8 +166,9 @@ def _seed_quality_bands(transaction: Any, client: Any) -> None:
     for combo_id, members in current.items():
         if not combo_id.startswith("fmo-") or len(members) != 1:
             continue
-        # AICODE-NOTE: A live one-member combo is the operator seed signal; a
-        # multi-member combo keeps its persisted band to avoid drift per run.
+        # AICODE-NOTE: A seed (live one-member combo) is a cold-start anchor only.
+        # Once a role has an established quality band, it runs by that band +
+        # demand forecast and the seed is forgotten — do not re-anchor per run.
         role_id = _role_id_for_combo(transaction, combo_id)
         role = transaction.execute(
             """
@@ -177,6 +178,8 @@ def _seed_quality_bands(transaction: Any, client: Any) -> None:
             """,
             {"role_id": role_id},
         ).fetchone()
+        if role is not None and role["minimum_quality_value"] is not None:
+            continue
         seed = _seed_endpoint_for_member(transaction, members[0])
         if seed is None:
             continue
@@ -184,11 +187,9 @@ def _seed_quality_bands(transaction: Any, client: Any) -> None:
         metrics = latest_metrics.get(seed["canonical_model_id"])
         if not metrics or metric not in metrics["metrics"]:
             continue
-        anchor = (
-            float(role["minimum_quality_value"])
-            if role and role["minimum_quality_value"] is not None
-            else float(metrics["metrics"][metric])
-        )
+        # The band is empty here (established bands skip above), so the seed
+        # model's own quality is the cold-start anchor.
+        anchor = float(metrics["metrics"][metric])
         candidates = _quality_band_candidates(transaction, metric)
         protected = _latest_protected_requests(transaction, role_id)
         band = quality_band_for_demand(

@@ -2,6 +2,11 @@
 
 ## Deferred follow-up
 
+- Implement active pool migration changes after approval: publish
+  `fmo-pools/v1` with payload-hash idempotency first, then remove FMO
+  quota/matching/probing/allocation/apply modules only after OmniRoute shadow
+  solve, atomic apply, and single-writer cutover are verified.
+
 - Server-side default combo grid bootstrap — separate deploy task. Regenerate
   seed models with the live FMO matcher, back up `GET /api/combos`, then create
   the default one-seed combos from `docs/combo-grid-bootstrap.md` on OmniRoute.

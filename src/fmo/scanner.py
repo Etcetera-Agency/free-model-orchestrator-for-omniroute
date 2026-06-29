@@ -247,7 +247,12 @@ def scan_live_omniroute_catalogs(
         for account_id in account_ids:
             for model in catalog["models"]:
                 scanner.upsert_endpoint(account_id, model["id"])
-        _mark_missing_provider_models_removed(scanner, provider_id=provider_id, live_models=live_models)
+        _mark_missing_provider_models_removed(
+            scanner,
+            provider_id=provider_id,
+            live_models=live_models,
+            provider_enabled=provider_enabled,
+        )
         results[provider_slug] = CatalogScanResult(
             provider_slug=provider_slug,
             fetch_status="success",
@@ -279,8 +284,17 @@ def _mark_missing_provider_models_removed(
     *,
     provider_id: str,
     live_models: list[dict[str, Any]],
+    provider_enabled: bool,
 ) -> None:
     model_ids = [str(model["id"]) for model in live_models if isinstance(model.get("id"), str)]
+    if provider_enabled and not model_ids:
+        # AICODE-NOTE: An enabled provider returning zero live models is almost
+        # always a transient `/v1/models` glitch, not a real emptying; do not
+        # tombstone the whole provider cache off one empty response. Reappearing
+        # models clear `removed_at` and OmniRoute rate-limits reactively in the
+        # meantime. Disabled providers are tombstoned by
+        # _mark_disabled_provider_models_removed instead.
+        return
     with scanner.repository.database.transaction() as transaction:
         # AICODE-NOTE: OmniRoute `/v1/models` plus active provider connections
         # is the live catalog truth; FMO endpoint rows are only cache.

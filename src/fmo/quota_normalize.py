@@ -6,9 +6,9 @@ demand is natively in requests (calls), so everything is reduced to
 **request-equivalents per day**.
 
 Token budgets are converted with a flat ``tokens_per_request`` factor (default
-2000, configurable). Request rate windows (minute/hour) are converted to a
-conservative request-equivalent daily ceiling; sub-day token windows are not
-used for planning.
+2000, configurable). Request rate windows (minute/hour) are extrapolated to a
+request-equivalent daily ceiling and then discounted, because sustaining the
+peak rate 24/7 is unrealistic; sub-day token windows are not used for planning.
 """
 
 from dataclasses import dataclass
@@ -17,6 +17,10 @@ from typing import Any
 DEFAULT_TOKENS_PER_REQUEST = 2000
 
 _REQUEST_WINDOW_MULTIPLIERS = {"minute": 1440, "hour": 24, "day": 1, "month": 1 / 30}
+# Sub-day request windows are extrapolated up from a peak rate, so discount the
+# daily ceiling to avoid overstating planning capacity for RPM-only providers.
+_EXTRAPOLATED_REQUEST_WINDOWS = {"minute", "hour"}
+_RATE_EXTRAPOLATION_DISCOUNT = 0.8
 _TOKEN_WINDOW_DAYS = {"day": 1, "month": 30}
 _VALID_METRICS = {"requests", "tokens"}
 _QUOTA_METRICS = ("requests", "tokens")
@@ -80,7 +84,10 @@ def to_requests_per_day(
         multiplier = _REQUEST_WINDOW_MULTIPLIERS.get(window)
         if multiplier is None:
             return None
-        return amount * multiplier
+        daily = amount * multiplier
+        if window in _EXTRAPOLATED_REQUEST_WINDOWS:
+            daily *= _RATE_EXTRAPOLATION_DISCOUNT
+        return daily
     window_days = _TOKEN_WINDOW_DAYS.get(window)
     if window_days is None:
         return None

@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     from .lock import LockRepository
     from .probe import ProbeRepository
     from .provider import ProviderRepository
+    from .published_generation import PublishedGenerationRepository
     from .quota_rule import QuotaRuleRepository
     from .registry import FreeRegistryRepository
     from .role import RoleRepository
@@ -71,6 +72,7 @@ class Repository:
     audit: AuditRepository = field(init=False)
     locks: LockRepository = field(init=False)
     external_metadata: ExternalMetadataRepository = field(init=False)
+    published_generations: PublishedGenerationRepository = field(init=False)
 
     def __post_init__(self) -> None:
         from .account import ProviderAccountRepository
@@ -84,6 +86,7 @@ class Repository:
         from .lock import LockRepository
         from .probe import ProbeRepository
         from .provider import ProviderRepository
+        from .published_generation import PublishedGenerationRepository
         from .quota_rule import QuotaRuleRepository
         from .registry import FreeRegistryRepository
         from .role import RoleRepository
@@ -110,6 +113,7 @@ class Repository:
         object.__setattr__(self, "audit", AuditRepository())
         object.__setattr__(self, "locks", LockRepository())
         object.__setattr__(self, "external_metadata", ExternalMetadataRepository())
+        object.__setattr__(self, "published_generations", PublishedGenerationRepository())
 
 
 def _one(connection: Any, sql: str, params: dict[str, Any] | None = None) -> Record:

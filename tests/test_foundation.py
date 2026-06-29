@@ -295,7 +295,6 @@ def test_omniroute_client_leading_slash_path_stays_under_base_path():
     assert transport.requests[0]["url"] == "https://omniroute.test/api/providers"
 
 
-@pytest.mark.spec("omniroute-client::Unknown OmniRoute version")
 def test_unknown_omniroute_version_read_only_forbids_apply():
     known = OmniRouteVersionGate({"1.4.0"})
     assert known.evaluate("1.4.0").can_apply is True

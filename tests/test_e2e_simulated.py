@@ -63,9 +63,7 @@ def test_simulated_daily_batch_builds_and_applies_free_combo():
     )
     remaining = effective_remaining(limit=100, provider_remaining=90, local_used=5, pending_reserved=1, safety_buffer=4)
 
-    match = match_model(
-        "free-provider/free-chat", canonical_slugs={"free-chat"}, provider_catalog_ids={"free-provider/free-chat"}
-    )
+    match = match_model("free-provider/free-chat", canonical_slugs={"free-chat"})
     context = context_eligible(
         effective_context=effective_context_window([128_000, 64_000]),
         minimum_context=32_000,

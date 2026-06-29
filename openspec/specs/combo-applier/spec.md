@@ -202,11 +202,14 @@ SHALL be a configured positive floor, not an implicit `0`. Liveness SHALL come
 from a live quota observation, not from a value assumed at classification time: an
 assumed remaining synthesized at classification without any live observation SHALL
 NOT satisfy `quota_safe`, except when it is tied to a researched active hard-stop
-quota rule whose only known capacity is a sub-day request window (minute/hour)
-and the effective request remaining is above the configured safety buffer. A
-future `resetAt` SHALL mean the endpoint is currently locked out and excluded; a
-null `resetAt` SHALL NOT by itself fail the gate (it is the healthy,
-not-rate-limited state). `probes_passed` SHALL be true only when
+quota rule whose only known capacity is a sub-day request window (minute/hour),
+the effective request remaining is above the configured safety buffer, and any
+current lock-out/reset is imminent — its `resetAt` is within the request-window
+horizon (1 hour). A `resetAt` further in the future (for example a daily/monthly
+liveness lock-out) SHALL still hard-stop apply even for a request-window rule. For
+the daily-budget path a future `resetAt` SHALL mean the endpoint is currently
+locked out and excluded; a null `resetAt` SHALL NOT by itself fail the gate (it is
+the healthy, not-rate-limited state). `probes_passed` SHALL be true only when
 every endpoint in the desired combos has a passing, non-stale probe/smoke result.
 The evaluation SHALL fail closed: any missing, unknown, assumed, stale, exhausted,
 or locked-out input yields the corresponding value `False`, the stage returns
@@ -244,8 +247,15 @@ or locked-out input yields the corresponding value `False`, the stage returns
 - AND the endpoint has assumed request remaining above the safety buffer
 - **THEN** the stage derives `quota_safe` as `True` without requiring a daily or
   monthly live budget
-- AND a future reset timestamp for that request window does not fail the gate
-  while remaining capacity is still above the buffer
+- AND an imminent reset (its `resetAt` within the 1-hour window horizon) does not
+  fail the gate while remaining capacity is still above the buffer
+
+#### Scenario: Far-future reset hard-stops a request-window endpoint
+- **WHEN** a confirmed-free endpoint's only capacity is a request-window hard-stop
+  rule and it is locked out
+- AND its `resetAt` is further than the 1-hour window horizon in the future
+- **THEN** the stage derives `quota_safe` as `False` for that endpoint
+- **AND** the stage returns `unsafe_to_apply` (exit 5) and mutates no combo
 - AND a live liveness overlay with zero percent remaining or a future reset does
   not fail that request-window gate while researched request capacity remains
   above the buffer

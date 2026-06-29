@@ -10,6 +10,7 @@ from .external_metadata import ExternalMetadataRepository
 from .lock import LockRepository
 from .probe import ProbeRepository
 from .provider import ProviderRepository
+from .published_generation import PublishedGenerationRepository
 from .quota_rule import QuotaRuleRepository
 from .registry import FreeRegistryRepository
 from .role import RoleRepository
@@ -34,6 +35,7 @@ __all__ = (
     "ProviderCatalogRepository",
     "ProviderEndpointRepository",
     "ProviderRepository",
+    "PublishedGenerationRepository",
     "QuotaRuleRepository",
     "Repository",
     "RoleConsumerRepository",

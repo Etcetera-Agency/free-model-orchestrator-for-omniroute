@@ -350,7 +350,6 @@ def test_priority_combo_keeps_quota_pool_capacity_as_hard_gate_before_diversity(
     assert combo.diagnostics["quota_pool_rejections"][0]["endpoint_id"] == "diverse-but-full"
 
 
-@pytest.mark.spec("demand-forecast::Quality band widens to cover protected demand")
 def test_quality_band_widens_until_confirmed_free_capacity_covers_demand():
     band = quality_band_for_demand(
         anchor=60,

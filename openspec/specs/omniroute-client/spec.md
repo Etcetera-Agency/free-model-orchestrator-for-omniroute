@@ -17,14 +17,23 @@ responses (never secrets, bearer tokens or cookies).
 
 ### Requirement: Version handshake gates writes
 
-The system SHALL fetch the OmniRoute version at startup and check the
-compatibility matrix. If the version is unknown, the client SHALL allow read-only
-calls and forbid apply.
+The system SHALL fetch the OmniRoute version at startup and check the compatibility
+matrix. The handshake SHALL gate **contract acceptance** for the pool-spec publish
+(`fmo-pools/v1` via `PUT /api/fmo/pools`): when the running OmniRoute version does
+not support the published contract version, the client SHALL refuse to publish and
+SHALL keep read-only calls allowed. Because FMO no longer writes combos, the gate no
+longer governs a combo-apply path.
 
-#### Scenario: Unknown OmniRoute version
-- GIVEN the running OmniRoute version is not in the compatibility matrix
-- WHEN the orchestrator runs
-- THEN read-only calls are allowed and any apply is refused
+#### Scenario: Unsupported contract version refuses publish
+- GIVEN the running OmniRoute version does not support `fmo-pools/v1`
+- WHEN the orchestrator attempts to publish a generation
+- THEN the publish is refused
+- AND read-only calls (including usage feedback) remain allowed
+
+#### Scenario: Supported version publishes
+- GIVEN the running OmniRoute version supports `fmo-pools/v1`
+- WHEN a generation is published
+- THEN the `PUT /api/fmo/pools` request is sent with the idempotency key
 
 ### Requirement: Retry policy
 
@@ -94,6 +103,11 @@ streaming-compatible endpoints can still be probed.
 - GIVEN a POST succeeds with a non-JSON streaming/text response
 - WHEN the shared client handles the response
 - THEN it returns the HTTP status, response text content, and response headers
+
+#### Scenario: POST can return non-2xx JSON
+- GIVEN a POST response helper receives a non-2xx JSON response
+- WHEN the shared client handles the response
+- THEN it returns the HTTP status and parsed JSON body without retrying
 
 ### Requirement: Safe URL construction
 

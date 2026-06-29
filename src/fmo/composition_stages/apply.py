@@ -388,16 +388,29 @@ def _endpoint_quota_row_is_safe(
         and float(percent_remaining) > minimum_percent_remaining
     )
     has_request_window_budget = _request_window_rule_is_safe(row, evidence=evidence)
+    # AICODE-NOTE: A request-window rule only earns the locked_out/reset bypass
+    # when its reset is imminent (within the window horizon). A far-future reset
+    # — e.g. a daily/monthly liveness lock-out — must still hard-stop apply.
+    window_bypass = has_request_window_budget and _request_window_reset_imminent(row, now=now)
     return (
         row["status"] == "confirmed"
         and row["hard_stop_capable"] is True
         and (has_known_daily_budget or has_request_window_budget)
-        and (has_request_window_budget or evidence.get("locked_out") is not True)
+        and (window_bypass or evidence.get("locked_out") is not True)
         and remaining_amount(row["effective_remaining"]) > safety_buffer
-        and (has_request_window_budget or row["reset_at"] is None or row["reset_at"] <= now)
+        and (window_bypass or row["reset_at"] is None or row["reset_at"] <= now)
         and row["classified_at"] >= oldest_allowed
         and (row["valid_until"] is None or row["valid_until"] > now)
     )
+
+
+# Maximum time until reset for a request-window rule to bypass locked_out/reset.
+REQUEST_WINDOW_RESET_HORIZON = timedelta(hours=1)
+
+
+def _request_window_reset_imminent(row: Any, *, now: datetime) -> bool:
+    reset_at = row["reset_at"]
+    return reset_at is None or reset_at <= now + REQUEST_WINDOW_RESET_HORIZON
 
 
 def _request_window_rule_is_safe(row: Any, *, evidence: dict[str, Any]) -> bool:

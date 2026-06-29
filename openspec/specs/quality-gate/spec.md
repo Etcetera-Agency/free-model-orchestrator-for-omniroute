@@ -33,12 +33,13 @@ SHALL set it once. When the combo holds exactly one model, that model's canonica
 AA metric is the anchor and the band is computed and persisted. The seed may be
 represented either by a persisted provider endpoint id or by OmniRoute's
 structured model step (`providerId` + `model`); both shapes SHALL resolve to the
-matching canonical endpoint before deriving the anchor. When the combo already
-holds more than one model and a band is persisted, the system SHALL keep the
-persisted band rather than re-deriving it, so repeated rebalances do not drift.
-Stripping the combo back to a single model SHALL re-anchor the band on the next
-run. A seed that is not confirmed-free SHALL contribute its AA metric as the
-anchor only and SHALL NOT be added as a routable member.
+matching canonical endpoint before deriving the anchor. Once a role has an
+established band (`minimum_quality_value` set), the system SHALL keep it and
+SHALL NOT re-anchor it from a seed — even if the combo is later reduced back to a
+single model — so the role runs by its band and demand forecast and repeated
+rebalances do not drift. Seed anchoring happens only while the band is empty
+(cold start). A seed that is not confirmed-free SHALL contribute its AA metric as
+the anchor only and SHALL NOT be added as a routable member.
 
 #### Scenario: Band bounds are set once from the seed anchor
 - GIVEN a combo seeded with exactly one model
@@ -63,10 +64,11 @@ anchor only and SHALL NOT be added as a routable member.
 - THEN the failed-probe candidate does not contribute capacity
 - AND the band widens to include the passed candidate instead
 
-#### Scenario: Re-seeding re-anchors the band
-- GIVEN a combo whose members are reduced back to a single model
+#### Scenario: Established band is not re-anchored by a later seed
+- GIVEN a role that already has an established quality band
+- AND its combo is later reduced back to a single model
 - WHEN the combo is rebalanced
-- THEN the band is re-derived from the remaining model's AA metric
+- THEN the established band is kept and not re-anchored from the seed
 
 #### Scenario: Paid seed anchors but is not a member
 - GIVEN a combo seeded with a single model that is not confirmed-free

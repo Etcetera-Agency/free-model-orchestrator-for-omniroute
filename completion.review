@@ -1,5 +1,16 @@
 # Completion Review
 
+- Feature: added the additive `fmo-pools/v1` publisher slice. FMO can now build
+  publisher stages (`hermes-inventory`, `role-lifecycle`, `demand-forecast`,
+  `compose`, `publish`, `usage-feedback`), compose pool specs from role policy
+  plus demand forecasts without capacity/model-score reads, fail closed when a
+  pool lacks `min_context_tokens`, publish one payload to `/api/fmo/pools` with
+  payload-hash idempotency, and persist acknowledgements in
+  `published_generations`. Coverage drift from existing dirty spec work was
+  fixed by aligning stale markers and updating `tests/spec_coverage_pending.txt`.
+  Code Simplifier review reused one stage-adapter set and added explicit fake
+  client annotations. Verification: focused publisher/spec-coverage pytest,
+  ruff on touched files, `git diff --check`, and OpenSpec strict validation.
 - Deploy fix: daily probe now delegates live model health to OmniRoute's
   `/api/models/test-all` instead of the removed raw `/v1/chat/completions`
   probe helper. The probe stage uses the current live catalog preflight rows,

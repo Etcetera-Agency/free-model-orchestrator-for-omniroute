@@ -5,3 +5,17 @@
 #
 # Active proposal slices awaiting TDD implementation (see openspec/TODO.md and
 # openspec/changes/<id>/). Each line is dropped when its test lands.
+combo-applier::Smoke pass derived from non-empty SSE text
+data-model::Auxiliary consumer type persists
+data-model::Migration keeps existing databases compatible
+persistence::Re-run refreshes current combo snapshot recency
+pipeline-orchestration::Command refreshes live catalog first
+pipeline-orchestration::Scheduled run refreshes live catalog first
+probe-runner::Batch failures are persisted fail-closed
+probe-runner::No reserved capacity
+probe-runner::Non-200 or empty content
+provider-scanner::Absent provider is disabled before use
+provider-scanner::Disabled provider is tombstoned before use
+provider-scanner::Reappearing model clears tombstone
+quota-manager::Sub-day request axis contributes capacity
+role-scorer::Scoring semantics changed

@@ -90,19 +90,23 @@ load rather than any single referencing slot.
 
 ### Requirement: Quality band widens to cover protected demand
 
-The system SHALL size a combo's quality band from the forecast: starting at the
-seed anchor, the band widens (down to an adequacy floor, and upward without a
-fixed ceiling) until the confirmed-free capacity of in-band endpoints covers the
-role's `protected_requests`. The seed anchor may therefore sit anywhere within
-the resulting band. When in-band confirmed-free capacity cannot cover protected
-demand even at the floor, the role SHALL be marked `degraded` rather than
-admitting below-floor or paid capacity.
+The system SHALL declare a per-pool quality band as a **policy intent**, not a
+capacity-derived range. The band carries `category`, `min`, `max`, and a `relax`
+intent (`when: underfilled`, `max_delta`) expressed against OmniRoute's
+`model_intelligence.score`. The system SHALL NOT read candidate capacity,
+confirmed-free status, or model scores to widen the band, and SHALL NOT mark a role
+`degraded` from a capacity calculation. OmniRoute resolves the band against
+`model_intelligence`, fills the head toward demand, and applies the declared `relax`
+when a pool is underfilled.
 
-#### Scenario: Quality band widens to cover protected demand
-- GIVEN a seed anchor and a `protected_requests` larger than the anchor model's
-  free capacity alone
-- WHEN the band is computed
-- THEN the band widens around the anchor to include enough confirmed-free in-band
-  capacity to cover protected demand
-- AND when even the widest in-band free capacity is insufficient the role is
-  marked `degraded`, not filled with below-floor or paid endpoints
+#### Scenario: Band is declared, not computed
+- GIVEN a role quality policy with `category`, `min`, `max`, and `relax`
+- WHEN the pool spec is composed
+- THEN the quality band is taken from the role policy verbatim
+- AND no confirmed-free capacity or candidate score is read to size it
+
+#### Scenario: Relax is delegated, not applied in FMO
+- GIVEN a declared band with a `relax.max_delta`
+- WHEN the generation is published
+- THEN FMO does not widen the band itself
+- AND OmniRoute applies the relax when the pool is underfilled

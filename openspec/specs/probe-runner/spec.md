@@ -6,25 +6,53 @@ TBD - created by archiving change add-scoring. Update Purpose after archive.
 ### Requirement: Probe only after free confirmation
 
 The system SHALL probe only confirmed-free endpoints with reserved capacity.
-When a provider/account wildcard quota rule confirms many endpoints and live
-one-member FMO combos exist, the probing stage SHALL probe those current combo
-seed models first instead of probing the entire provider pool in one run.
-The explicit operator sweep command MAY probe stored endpoints for one provider
-with limit, offset, delay, timeout, dry-run, and force controls; this SHALL NOT
-widen the default pipeline probing stage.
+Candidate selection SHALL be driven by the role quality bands and demand
+forecast, not by combo seeds, in steady state. When at least one role has an
+established quality band (`minimum_quality_value` set) with positive forecast
+demand (`protected_requests > 0`), the probing stage SHALL probe the confirmed
+endpoints whose canonical quality metric falls within a demanded role's
+`[minimum_quality_value, maximum_quality_value]` band, plus a bounded number of
+never-probed (`probe_status = 'not_run'`) not-yet-placeable candidates per
+(provider, connection) so newly onboarded models still bootstrap; already-failed
+endpoints SHALL NOT be re-blasted by that admission.
+
+A seed (a live one-member FMO combo) is a cold-start signal only. When no role
+has an established band with demand yet, the stage SHALL probe the current combo
+seed models plus the same bounded slice of never-probed candidates; with neither
+bands nor seeds it MAY probe all confirmed endpoints. Once bands exist the seed
+signal SHALL be ignored. The explicit operator sweep command MAY probe stored
+endpoints for one provider with limit, offset, delay, timeout, dry-run, and force
+controls; this SHALL NOT widen the default pipeline probing stage.
 
 #### Scenario: No reserved capacity
 - GIVEN an endpoint does not have reserved capacity
 - WHEN probe eligibility is checked
 - THEN it is not probed
 
-#### Scenario: Current combo seeds are probed before wider provider pool
-- GIVEN a provider/account wildcard quota rule confirms multiple endpoints
-- AND a live one-member FMO combo uses one of those endpoints as seed
+#### Scenario: Steady state probes by quality band and demand
+- GIVEN at least one role has an established quality band with positive forecast
+  demand
+- AND a confirmed endpoint's canonical quality falls within that demanded band
+- WHEN probing runs
+- THEN that in-band endpoint is probed
+- AND a bounded number of not-yet-placeable never-probed candidates per
+  (provider, connection) are also admitted
+- AND the combo seed signal is ignored
+
+#### Scenario: Cold start uses seed signal
+- GIVEN no role has an established quality band with demand yet
+- AND a live one-member FMO combo provides a seed model
 - WHEN probing runs
 - THEN the seed endpoint is probed
-- AND sibling endpoints from the same provider pool are left unprobed for later
-  candidate expansion
+- AND a bounded slice of never-probed non-seed candidates is admitted
+
+#### Scenario: New candidates admitted into seed-bounded run
+- GIVEN a seed-bounded probing run
+- AND there are never-probed (`not_run`) confirmed-free endpoints that are not seeds
+- WHEN probing runs
+- THEN a bounded number of those new candidates per (provider, connection) are
+  admitted and probed alongside the seeds
+- AND already-failed endpoints are not re-admitted by this path
 
 #### Scenario: Operator sweep probes provider catalog explicitly
 - GIVEN a provider has stored endpoint rows
@@ -33,7 +61,8 @@ widen the default pipeline probing stage.
   `/api/models/test` endpoint with the stored provider id, model id, and
   connection id
 - AND endpoint `probe_status` is updated from the stored probe result
-- AND the default `probe-models` stage remains seed-bounded
+- AND the default `probe-models` stage remains driven by bands/forecast (or
+  seeds at cold start), not widened to the whole catalog
 ### Requirement: Isolated probe request
 
 The system SHALL pass a probe only when OmniRoute's model-test result for that

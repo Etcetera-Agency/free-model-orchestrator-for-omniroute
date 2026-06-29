@@ -449,25 +449,37 @@ def test_free_registry_deduplicates_pool_key_and_excludes_web_cookie():
 
 @pytest.mark.spec("model-matcher::Exact slug match")
 @pytest.mark.spec("model-matcher::Base vs instruct")
-@pytest.mark.spec("model-matcher::Low-confidence match")
+@pytest.mark.spec("model-matcher::Variant-specific canonical")
+@pytest.mark.spec("model-matcher::Auto-used match")
 @pytest.mark.spec("model-matcher::Smaller provider context")
-def test_matcher_order_forbidden_merges_confidence_and_context_override():
-    exact = match_model("openai/gpt-4.1", canonical_slugs={"gpt-4.1"}, provider_catalog_ids=set())
-    low = match_model("gpt-4.1-preview", canonical_slugs={"gpt-4.1"}, provider_catalog_ids=set())
-    provider = match_model("anthropic/claude", canonical_slugs=set(), provider_catalog_ids={"anthropic/claude"})
-    dotted = match_model("nvidia/minimaxai/minimax-m2.7", canonical_slugs={"minimax-m2-7"}, provider_catalog_ids=set())
-    tuned = match_model("nvidia/google/gemma-3n-e2b-it", canonical_slugs={"gemma-3n-e2b"}, provider_catalog_ids=set())
+def test_matcher_binds_full_variant_slug_and_context_override():
+    exact = match_model("openai/gpt-4.1", canonical_slugs={"gpt-4.1"})
+    # AA scores -preview as a distinct model, so an unknown variant gets its own
+    # canonical slug rather than being parked in review or merged onto the base.
+    variant = match_model("gpt-4.1-preview", canonical_slugs={"gpt-4.1"})
+    # base and its instruct sibling resolve to different canonical rows.
+    base = match_model("provider/llama-3-8b-base", canonical_slugs=set())
+    instruct = match_model("provider/llama-3-8b-instruct", canonical_slugs=set())
+    new = match_model("anthropic/claude", canonical_slugs=set())
+    dotted = match_model("nvidia/minimaxai/minimax-m2.7", canonical_slugs={"minimax-m2-7"})
+    tuned = match_model("nvidia/google/gemma-3n-e2b-it", canonical_slugs={"gemma-3n-e2b"})
     preferred = match_model(
         "nvidia/google/gemma-3n-e2b-it",
         canonical_slugs={"gemma-3n-e2b", "gemma-3n-e2b-it"},
-        provider_catalog_ids=set(),
         preferred_canonical_slugs={"gemma-3n-e2b"},
     )
 
     assert exact.method == MatchMethod.EXACT_SLUG
     assert exact.auto_use is True
-    assert low.review_required is True
-    assert provider.confidence == 0.98
+    assert variant.method == MatchMethod.NEW_CANONICAL
+    assert variant.canonical_slug == "gpt-4.1-preview"
+    assert variant.auto_use is True
+    assert base.canonical_slug == "llama-3-8b-base"
+    assert instruct.canonical_slug == "llama-3-8b-instruct"
+    assert base.canonical_slug != instruct.canonical_slug
+    assert new.method == MatchMethod.NEW_CANONICAL
+    assert new.canonical_slug == "claude"
+    assert new.auto_use is True
     assert dotted.canonical_slug == "minimax-m2-7"
     assert dotted.auto_use is True
     assert tuned.canonical_slug == "gemma-3n-e2b"
