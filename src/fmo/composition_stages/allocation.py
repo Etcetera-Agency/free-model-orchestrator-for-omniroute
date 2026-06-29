@@ -1,15 +1,15 @@
 from __future__ import annotations
 
+from fmo.access_state import remaining_amount
 from fmo.allocation import allocate_globally, build_priority_combo, validate_plan
 from fmo.config import DEFAULT_AUTO_ROUTER_TAIL, configured_router_entry, is_configured_router
 from fmo.forecast import apply_historical_reserve, cold_start_demand, protected_demand
 from fmo.idempotency import hash_parts
 from fmo.pipeline import PipelineContext, StageResult
-from fmo.quota_normalize import remaining_amount
 
 from ._base import StageDependencies
 from ._helpers import _effect_result
-from .roles import _latest_remaining_by_pool, _roles_needing_quality_recalibration
+from .roles import _roles_needing_quality_recalibration
 
 
 def _demand_forecast_stage(_dependencies: StageDependencies, context: PipelineContext) -> StageResult:
@@ -89,7 +89,7 @@ def _allocation_stage(_dependencies: StageDependencies, context: PipelineContext
             """
             SELECT DISTINCT ON (rs.role_id, rs.endpoint_id)
                    rs.role_id, rs.endpoint_id, rs.total_score,
-                   COALESCE(pa.quota_pool_id, pe.provider_account_id) AS quota_pool_id,
+                   pe.provider_account_id AS quota_pool_id,
                    eas.effective_remaining, pe.provider_model_id, pe.capabilities,
                    pe.effective_context_window, pe.access_status, pe.probe_status,
                    p.omniroute_provider_id, pa.id AS provider_account_id,
@@ -119,7 +119,6 @@ def _allocation_stage(_dependencies: StageDependencies, context: PipelineContext
             ).fetchall()
         }
         recalibration_roles = _roles_needing_quality_recalibration(transaction)
-        pool_remaining = _latest_remaining_by_pool(transaction)
         demand = {
             role["id"]: forecast_demand.get(
                 role["id"], cold_start_demand(schedule=None, bootstrap=None, role_minimum=1, global_minimum=1).value
@@ -132,13 +131,13 @@ def _allocation_stage(_dependencies: StageDependencies, context: PipelineContext
                 "role_id": str(row["role_id"]),
                 "pool": str(row["quota_pool_id"]),
                 "score": float(row["total_score"]),
-                "capacity": pool_remaining.get(str(row["quota_pool_id"]), remaining_amount(row["effective_remaining"])),
+                "capacity": remaining_amount(row["effective_remaining"]),
                 "is_router": is_configured_router(str(row["provider_model_id"])),
                 "input": _configured_router_input(str(row["provider_model_id"])),
                 "effective_context_window": int(row["effective_context_window"] or 0),
                 "access": "free_quota_available" if row["access_status"] == "confirmed" else "unknown_excluded",
                 "basic_probe": row["probe_status"] == "passed",
-                "quota": pool_remaining.get(str(row["quota_pool_id"]), remaining_amount(row["effective_remaining"])),
+                "quota": remaining_amount(row["effective_remaining"]),
                 "breaker": "closed",
                 "provider_model_id": str(row["provider_model_id"]),
                 "provider_id": str(row["omniroute_provider_id"]),
@@ -241,11 +240,3 @@ def _allocation_target(endpoint: dict, *, priority: int) -> dict:
         },
         "score": endpoint["score"],
     }
-
-
-def _capacity_weight(status: str) -> float:
-    if status == "confirmed":
-        return 1.0
-    if status == "inferred":
-        return 0.5
-    return 0.0

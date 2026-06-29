@@ -20,7 +20,6 @@ def build_startup_config(env: Mapping[str, str] | None = None) -> StartupConfig:
         omniroute_api_key=_empty_to_none(values.get("OMNIROUTE_API_KEY")),
         llm_bootstrap_model_id=_empty_to_none(values.get("LLM_BOOTSTRAP_MODEL_ID")),
         llm_bootstrap_confirmed_free=_truthy(values.get("LLM_BOOTSTRAP_MODEL_CONFIRMED_FREE")),
-        llm_quota_research_call_limit=_non_negative_int(values.get("LLM_QUOTA_RESEARCH_CALL_LIMIT"), 1),
         llm_smart_review_call_limit=_non_negative_int(values.get("LLM_SMART_REVIEW_CALL_LIMIT"), 1),
         apply_min_safety_buffer=_positive_float(values.get("APPLY_MIN_SAFETY_BUFFER"), 1.0),
         apply_min_percent_remaining=_positive_float(values.get("APPLY_MIN_PERCENT_REMAINING"), 1.0),

@@ -54,30 +54,28 @@ SHALL NOT prove free access for a specific account.
 ### Requirement: Fail closed
 
 The system SHALL fail closed when evidence is missing, empty or stale.
-During batch access classification, missing quota evidence for one endpoint SHALL
-be stored as endpoint-local `unknown` state with `quota_rule_missing`; it SHALL
-NOT abort classification for other endpoints that have usable quota evidence.
-Access classification SHALL prefer an exact model quota rule when present, and
-otherwise apply an active provider/account wildcard quota rule
-(`model_pattern = '*'`) to endpoints under that same provider account.
+During batch access classification, missing OmniRoute-delegated free-access
+evidence for one endpoint SHALL be stored as endpoint-local `unknown` state with
+`free_access_missing`; it SHALL NOT abort classification for other endpoints
+that have usable free-access evidence. FMO SHALL NOT look up local quota rules
+or wildcard quota rules when classifying endpoint access.
 
 #### Scenario: Empty evidence
 - GIVEN no usable evidence is present
 - WHEN access is classified
 - THEN the endpoint is not classified as usable free access
 
-#### Scenario: Missing endpoint-local quota evidence fails closed
-- GIVEN one endpoint has an active usable quota rule
-- AND another endpoint has no quota rule
+#### Scenario: Missing endpoint-local free evidence fails closed
+- GIVEN one endpoint has usable OmniRoute-delegated free-access evidence
+- AND another endpoint has no delegated free-access evidence
 - WHEN access classification runs over both endpoints
-- THEN the endpoint with the rule is classified normally
-- AND the endpoint without the rule is stored as `unknown` with
-  `quota_rule_missing`
+- THEN the endpoint with delegated evidence is classified normally
+- AND the endpoint without delegated evidence is stored as `unknown` with
+  `free_access_missing`
 - AND the stage succeeds so downstream stages can use confirmed endpoints
 
-#### Scenario: Provider account wildcard quota rule applies to endpoint
-- GIVEN a provider/account has an active wildcard quota rule
-- AND two endpoints belong to that provider/account
+#### Scenario: Local wildcard quota rules are ignored
+- GIVEN a provider/account has a historical local wildcard quota rule
+- AND an endpoint belongs to that provider/account
 - WHEN access classification runs
-- THEN both endpoints are classified from the wildcard rule unless an exact
-  model rule overrides it
+- THEN the historical local quota rule does not classify the endpoint

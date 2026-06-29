@@ -1,8 +1,7 @@
 # llm-runtime Specification
 
-## Purpose
-TBD - created by archiving change add-foundation. Update Purpose after archive.
-## Requirements
+## MODIFIED Requirements
+
 ### Requirement: Uniform Instructor runtime for all LLM sites
 
 The system SHALL run every structured-LLM site through one shared Instructor
@@ -36,61 +35,6 @@ scope. FMO SHALL NOT include a quota-research Inspector site.
 - THEN it fails closed as `llm_model_unavailable`
 - AND no fabricated Inspector combo is used
 
-### Requirement: Externalized, independently editable prompts
-
-The system SHALL load each LLM site's prompt from its own file under
-`llm.prompts_dir` (one file per use case), including the `aa-index-migration`
-site. Editing one site's prompt file SHALL NOT require code changes or edits to
-any other site's prompt. Every wired LLM site that has a configured prompt file
-SHALL pass that file to shared prompt assembly through `LlmSiteConfig.prompt_path`
-or an equivalent shared-runtime site configuration, so prompt redaction,
-placeholder interpolation, unresolved placeholder cleanup, and prompt length
-limits apply uniformly.
-
-#### Scenario: Edit one prompt
-- GIVEN an operator edits `prompts/smart-combo-reviewer.md`
-- WHEN the reviewer next runs
-- THEN it uses the edited prompt and no other site's prompt or behavior changes
-
-#### Scenario: AA migration prompt is loaded from file
-- GIVEN an operator edits `prompts/aa-index-migration.md`
-- WHEN `aa-index analyze` next prepares the migration Instructor call
-- THEN it uses the edited prompt through the shared prompt assembly path
-- AND no code change is required for the prompt edit to take effect
-
-### Requirement: No secrets in any prompt
-
-The system SHALL redact PostgreSQL URLs, bearer tokens, cookie assignments, and
-secret-like environment/context values whose keys contain `API_KEY`, `TOKEN`,
-`SECRET`, or equal `DATABASE_URL`. Secret-like context keys SHALL be omitted
-before template interpolation. Any unresolved `{{ placeholder }}` SHALL be
-removed from the final prompt.
-
-#### Scenario: PostgreSQL URL redaction
-- GIVEN prompt content contains a PostgreSQL URL
-- WHEN prompt redaction runs
-- THEN the URL is replaced with a redacted marker
-
-#### Scenario: Bearer token redaction
-- GIVEN prompt content contains a bearer token
-- WHEN prompt redaction runs
-- THEN the token is replaced with a redacted marker
-
-#### Scenario: Cookie assignment redaction
-- GIVEN prompt content contains a cookie assignment
-- WHEN prompt redaction runs
-- THEN the cookie value is replaced with a redacted marker
-
-#### Scenario: Secret-like key removal
-- GIVEN prompt context contains `DATABASE_URL`, `API_KEY`, `TOKEN`, or `SECRET` keys
-- WHEN prompt context is prepared
-- THEN those keys are not interpolated
-
-#### Scenario: Unresolved placeholder cleanup
-- GIVEN rendered prompt content still contains an unresolved `{{ placeholder }}`
-- WHEN prompt assembly finishes
-- THEN the unresolved placeholder is removed
-
 ### Requirement: Shared Instructor + Pydantic runtime adapter
 
 The system SHALL route structured-LLM sites (Hermes role Inspector forecast,
@@ -119,34 +63,6 @@ route quota-research Inspector calls.
 - WHEN the adapter validates it
 - THEN the deterministic validator/repair path runs
 - AND an unrepairable result is handled as a deterministic failure, not silently accepted
-
-### Requirement: Production Instructor client is constructed and shared
-
-The composed runtime SHALL construct the shared Instructor client via
-`instructor.from_openai` from validated startup config and provide it, wrapped in
-`SharedInstructorRuntime`, to every wired LLM site. The client SHALL target the
-OmniRoute OpenAI-compatible `/v1` surface derived from `OMNIROUTE_URL` and
-authenticate with the configured api key; the per-call model is supplied by the
-selection procedure (see the model-selection requirement). Structured output
-SHALL be produced through Instructor with a Pydantic `response_model`.
-Startup validation SHALL fail closed when required LLM provider config is missing
-or malformed. No site SHALL call a model through any path other than this shared
-runtime.
-
-#### Scenario: Client built from config
-- **WHEN** the production composition is assembled from validated config
-- **THEN** the Instructor client is constructed via `instructor.from_openai` with
-  the OmniRoute `/v1` base URL and the configured api key
-- **AND** the wired sites receive the wrapping runtime rather than a test stub
-
-#### Scenario: Missing LLM provider config fails closed
-- **WHEN** startup validation runs without required LLM provider config
-- **THEN** validation fails with `validation_failed` and the pipeline does not start
-
-#### Scenario: No site bypasses the shared runtime
-- **WHEN** any wired structured-LLM site issues a call
-- **THEN** it goes through the shared runtime transport
-- **AND** a site constructing its own transport fails the suite
 
 ### Requirement: LLM model is selected by criteria from confirmed-free models
 

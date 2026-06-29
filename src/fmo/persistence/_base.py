@@ -26,7 +26,6 @@ if TYPE_CHECKING:
     from .probe import ProbeRepository
     from .provider import ProviderRepository
     from .published_generation import PublishedGenerationRepository
-    from .quota_rule import QuotaRuleRepository
     from .registry import FreeRegistryRepository
     from .role import RoleRepository
     from .role_consumer import RoleConsumerRepository
@@ -62,7 +61,6 @@ class Repository:
     provider_endpoints: ProviderEndpointRepository = field(init=False)
     free_registry: FreeRegistryRepository = field(init=False)
     snapshots: SnapshotRepository = field(init=False)
-    quota_rules: QuotaRuleRepository = field(init=False)
     probes: ProbeRepository = field(init=False)
     roles: RoleRepository = field(init=False)
     role_consumers: RoleConsumerRepository = field(init=False)
@@ -87,7 +85,6 @@ class Repository:
         from .probe import ProbeRepository
         from .provider import ProviderRepository
         from .published_generation import PublishedGenerationRepository
-        from .quota_rule import QuotaRuleRepository
         from .registry import FreeRegistryRepository
         from .role import RoleRepository
         from .role_consumer import RoleConsumerRepository
@@ -103,7 +100,6 @@ class Repository:
         object.__setattr__(self, "provider_endpoints", ProviderEndpointRepository())
         object.__setattr__(self, "free_registry", FreeRegistryRepository())
         object.__setattr__(self, "snapshots", SnapshotRepository())
-        object.__setattr__(self, "quota_rules", QuotaRuleRepository())
         object.__setattr__(self, "probes", ProbeRepository())
         object.__setattr__(self, "roles", RoleRepository())
         object.__setattr__(self, "role_consumers", RoleConsumerRepository())

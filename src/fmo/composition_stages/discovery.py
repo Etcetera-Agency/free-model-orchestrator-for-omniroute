@@ -21,12 +21,6 @@ from ._helpers import _effect_result, _omniroute_instance_id
 MetadataSync = Callable[..., MetadataSyncResult]
 
 
-def _ensure_named_quota_pool(transaction: Any, provider_id: str, pool_key: str) -> Any:
-    from .quota import _ensure_named_quota_pool as ensure_named_quota_pool
-
-    return ensure_named_quota_pool(transaction, provider_id, pool_key)
-
-
 def _metadata_stage(sync: MetadataSync) -> Callable[[PipelineContext], StageResult]:
     def run(context: PipelineContext) -> StageResult:
         try:
@@ -86,10 +80,8 @@ def _account_discovery_stage(
     def run(context: PipelineContext) -> StageResult:
         if dependencies.omniroute_client is None:
             return StageResult(status="external_dependency_failed", reason="omniroute_client_required")
-        with context.repository.database.transaction() as transaction:
-            previous_pools = _previous_account_pools(transaction)
         try:
-            outcome = adapters.account_discovery(dependencies.omniroute_client, previous_pools=previous_pools)
+            outcome = adapters.account_discovery(dependencies.omniroute_client, previous_pools={})
         except AccountFetchError as exc:
             return StageResult(status="external_dependency_failed", reason=exc.reason)
         with context.repository.database.transaction() as transaction:
@@ -97,18 +89,6 @@ def _account_discovery_stage(
         return _effect_result("account-discovery", changed=written > 0)
 
     return run
-
-
-def _previous_account_pools(transaction: Any) -> dict[str, str]:
-    rows = transaction.execute(
-        """
-        SELECT omniroute_connection_id, qp.name AS pool_name
-        FROM provider_accounts pa
-        JOIN quota_pools qp ON qp.id = pa.quota_pool_id
-        WHERE omniroute_connection_id IS NOT NULL
-        """
-    ).fetchall()
-    return {str(row["omniroute_connection_id"]): str(row["pool_name"]) for row in rows}
 
 
 def _persist_account_discovery(context: PipelineContext, transaction: Any, outcome: Any) -> int:
@@ -137,29 +117,13 @@ def _persist_account_discovery(context: PipelineContext, transaction: Any, outco
             enabled=connection_is_enabled(connection),
         )
         pool = outcome.pools[connection_id]
-        quota_pool_id = _ensure_named_quota_pool(transaction, provider_slug, pool.pool_key)
         transaction.execute(
             """
             UPDATE provider_accounts
-            SET quota_independence_status = %(status)s,
-                quota_pool_id = %(quota_pool_id)s
+            SET quota_independence_status = %(status)s
             WHERE id = %(account_id)s
             """,
-            {"status": pool.independence_status, "quota_pool_id": quota_pool_id, "account_id": account["id"]},
-        )
-        transaction.execute(
-            """
-            INSERT INTO quota_pool_members (
-              quota_pool_id, provider_account_id, membership_reason, confidence
-            )
-            VALUES (%(quota_pool_id)s, %(account_id)s, %(reason)s, %(confidence)s)
-            """,
-            {
-                "quota_pool_id": quota_pool_id,
-                "account_id": account["id"],
-                "reason": str(connection.get("membership_reason") or "account-discovery"),
-                "confidence": 1.0 if pool.independence_status == "confirmed" else 0.0,
-            },
+            {"status": pool.independence_status, "account_id": account["id"]},
         )
         accounts_by_connection[connection_id] = account["id"]
     independent_count = len(

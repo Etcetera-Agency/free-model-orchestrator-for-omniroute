@@ -84,17 +84,14 @@ def _production_stage_adapters() -> dict[str, StageAdapter]:
     from .discovery import _model_matching_stage
     from .inventory import _hermes_inventory_stage
     from .probing import _probing_stage
-    from .quota import _quota_research_stage, _quota_sync_stage
     from .roles import _role_lifecycle_stage, _role_scoring_stage
     from .telemetry import _telemetry_sync_stage
 
     return {
         "model-matching": _model_matching_stage,
-        "quota-research": _quota_research_stage,
         "access-classification": _access_classification_stage,
         "probing": _probing_stage,
         "telemetry-sync": _telemetry_sync_stage,
-        "quota-sync": _quota_sync_stage,
         "hermes-inventory": _hermes_inventory_stage,
         "role-lifecycle": _role_lifecycle_stage,
         "role-scoring": _role_scoring_stage,

@@ -99,8 +99,8 @@ def _expand_connection_scopes(connection: dict[str, Any], *, rate_limits_availab
     if not fingerprints or not rate_limits_available:
         return [connection]
 
-    # AICODE-NOTE: OmniRoute nested fingerprints are treated as account quota
-    # identities; do not multiply provider/model rows without this evidence.
+    # AICODE-NOTE: OmniRoute nested fingerprints are account-scope evidence;
+    # do not multiply provider/model rows without it.
     parent_connection_id = str(connection["id"])
     provider = str(connection.get("provider") or "unknown")
     accounts = []

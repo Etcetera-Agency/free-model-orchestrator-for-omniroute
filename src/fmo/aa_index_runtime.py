@@ -9,13 +9,11 @@ from fmo.composition_contracts import RuntimeCliResult
 from fmo.config import StartupConfig
 from fmo.llm_runtime import SharedInstructorRuntime
 from fmo.persistence import Repository
-from fmo.quota_manager import LiveQuota, QuotaFetchError, fetch_live_quota_snapshot
 
 
-def select_llm_model(repository: Repository, config: StartupConfig, live_quota_client: Any | None = None) -> str | None:
-    live_quotas = _fresh_live_quotas(live_quota_client)
-    if live_quotas is None:
-        return None
+def select_llm_model(
+    repository: Repository, config: StartupConfig, _live_quota_client: Any | None = None
+) -> str | None:
     if repository is not None:
         with repository.database.transaction() as transaction:
             rows = transaction.execute(
@@ -52,39 +50,10 @@ def select_llm_model(repository: Repository, config: StartupConfig, live_quota_c
                 """
             ).fetchall()
         for row in rows:
-            quota_key = _quota_key(row["omniroute_provider_id"], row["omniroute_connection_id"])
-            if _live_quota_usable(live_quotas.get(quota_key)):
-                return row["provider_model_id"]
+            return row["provider_model_id"]
     if config.llm_bootstrap_model_id and config.llm_bootstrap_confirmed_free:
-        bootstrap_quota = live_quotas.get(config.llm_bootstrap_model_id)
-        if _live_quota_usable(bootstrap_quota):
-            return config.llm_bootstrap_model_id
+        return config.llm_bootstrap_model_id
     return None
-
-
-def _fresh_live_quotas(client: Any | None) -> dict[str, LiveQuota] | None:
-    if client is None:
-        return None
-    try:
-        return fetch_live_quota_snapshot(client).quotas
-    except (QuotaFetchError, AttributeError, NotImplementedError):
-        return None
-    except Exception:
-        return None
-
-
-def _quota_key(provider_id: object, connection_id: object) -> str:
-    return f"{provider_id}:{connection_id}"
-
-
-def _live_quota_usable(quota: LiveQuota | None) -> bool:
-    if quota is None or quota.locked_out:
-        return False
-    if quota.percent_remaining is None or quota.percent_remaining <= 10:
-        return False
-    if quota.learned_request_limit is None or quota.learned_request_remaining is None:
-        return False
-    return quota.learned_request_limit > 0 and quota.learned_request_remaining > 0
 
 
 def _run_aa_index_command(
@@ -352,7 +321,7 @@ def _role_capacity(transaction: Any, version: str) -> dict[str, dict[str, Any]]:
         rows = transaction.execute(
             """
             SELECT pe.id, pe.capabilities, pe.effective_context_window,
-                   COALESCE(pa.quota_pool_id, pe.provider_account_id) AS pool_id,
+                   pe.provider_account_id AS pool_id,
                    p.provider_group, p.omniroute_provider_id,
                    eas.status AS access_status, eas.effective_remaining, eas.evidence,
                    COALESCE(health.status, 'active') AS health_status,

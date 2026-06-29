@@ -12,9 +12,9 @@ def probe_suites(capabilities: dict[str, bool]) -> tuple[str, ...]:
 
 def handle_probe_error(status_code: int) -> tuple[str, str]:
     if status_code == 402:
-        return ("exclude", "quota_research")
+        return ("exclude", "billing_required")
     if status_code == 429:
-        return ("quota_manager", "no_retry")
+        return ("retry_later", "rate_limited")
     if status_code in {401, 403}:
         return ("auth_degraded", "no_retry")
     if status_code >= 500:

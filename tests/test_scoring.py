@@ -21,8 +21,8 @@ def test_probe_suites_track_claimed_capabilities():
 
 @pytest.mark.spec("probe-runner::Probe error table")
 def test_probe_error_map_and_promotion_preconditions():
-    assert handle_probe_error(402) == ("exclude", "quota_research")
-    assert handle_probe_error(429) == ("quota_manager", "no_retry")
+    assert handle_probe_error(402) == ("exclude", "billing_required")
+    assert handle_probe_error(429) == ("retry_later", "rate_limited")
     assert handle_probe_error(401) == ("auth_degraded", "no_retry")
     assert handle_probe_error(500) == ("retry", "provider_5xx")
 
@@ -31,8 +31,8 @@ def test_probe_error_map_and_promotion_preconditions():
 @pytest.mark.parametrize(
     ("status_code", "expected"),
     [
-        (402, ("exclude", "quota_research")),
-        (429, ("quota_manager", "no_retry")),
+        (402, ("exclude", "billing_required")),
+        (429, ("retry_later", "rate_limited")),
         (401, ("auth_degraded", "no_retry")),
         (403, ("auth_degraded", "no_retry")),
         (500, ("retry", "provider_5xx")),

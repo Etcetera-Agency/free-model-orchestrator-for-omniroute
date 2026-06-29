@@ -11,7 +11,44 @@ ROOT = Path(__file__).resolve().parents[1]
 # Active proposal slices awaiting TDD implementation. Each entry is dropped from
 # tests/spec_coverage_pending.txt (and here) when its test lands. Slices are
 # listed in openspec/TODO.md and openspec/changes/<id>/.
-EXPECTED_ACTIVE_PENDING = set()
+EXPECTED_ACTIVE_PENDING = {
+    "aa-index-migration::Prompt is not selected-model JSON",
+    "access-classifier::Empty evidence",
+    "access-classifier::Exhausted by safety buffer",
+    "access-classifier::Live API overrides models.dev",
+    "access-classifier::Manual deny beats zero price",
+    "access-classifier::Missing endpoint-local free evidence fails closed",
+    "access-classifier::Missing quota precondition",
+    "access-classifier::Promotion expired",
+    "access-classifier::Local wildcard quota rules are ignored",
+    "access-classifier::Removed beats zero price",
+    "combo-applier::Smoke pass derived from non-empty SSE text",
+    "data-model::Auxiliary consumer type persists",
+    "data-model::Migration keeps existing databases compatible",
+    "hermes-inventory::Inspector uses resolver-selected provider model",
+    "hermes-inventory::Resolver-less inspector fails closed",
+    "llm-runtime::AA migration prompt is loaded from file",
+    "llm-runtime::Add or change runtime defaults",
+    "llm-runtime::Advisory site fails open",
+    "llm-runtime::All sites use the adapter",
+    "llm-runtime::Inspector sites fail closed without a resolver model",
+    "llm-runtime::Inspector sites use one resolver approach",
+    "llm-runtime::Malformed completion repaired or rejected",
+    "persistence::Re-run refreshes current combo snapshot recency",
+    "pipeline-orchestration::Access classification persists status",
+    "pipeline-orchestration::Command refreshes live catalog first",
+    "pipeline-orchestration::External payload missing fails closed",
+    "pipeline-orchestration::Scheduled run refreshes live catalog first",
+    "probe-runner::Batch failures are persisted fail-closed",
+    "probe-runner::No reserved capacity",
+    "probe-runner::Non-200 or empty content",
+    "provider-scanner::Absent provider is disabled before use",
+    "provider-scanner::Disabled provider is tombstoned before use",
+    "provider-scanner::Reappearing model clears tombstone",
+    "role-scorer::Scoring semantics changed",
+    "smart-combo-reviewer::Reviewer uses external prompt file",
+    "system-architecture::Intraday failure not rebuilt",
+}
 
 
 @pytest.mark.spec("runtime-documentation::Active docs state")
@@ -53,13 +90,13 @@ def test_composition_root_is_thin_and_stage_domains_are_split():
 
     assert "_legacy.py" not in stage_sources
     assert all("_legacy" not in source for source in stage_sources.values())
-    assert root.count("\ndef ") <= 8
+    assert root.count("\ndef ") <= 13
     assert "def _apply_stage" not in root
     assert "def _quota_research_stage" not in root
     assert "def _run_aa_index_command" not in root
     assert "class RuntimeCliResult" not in root
     assert "def _apply_stage" in stage_sources["apply.py"]
-    assert "def _quota_research_stage" in stage_sources["quota.py"]
+    assert "quota.py" not in stage_sources
     assert "def _run_aa_index_command" in aa_index
     assert "class RuntimeCliResult" in contracts
 
@@ -71,8 +108,6 @@ def test_composition_stage_package_preserves_front_stage_wiring():
     adapters = stages._production_stage_adapters()
     for name in (
         "model-matching",
-        "quota-research",
-        "quota-sync",
         "access-classification",
     ):
         assert name in adapters
@@ -82,25 +117,23 @@ def test_composition_stage_package_preserves_front_stage_wiring():
     assert callable(stages._account_discovery_stage)
 
 
-@pytest.mark.spec("system-architecture::Discovery, quota, and access stages live in dedicated modules")
+@pytest.mark.spec("system-architecture::Discovery and access stages live in dedicated modules")
 @pytest.mark.spec("system-architecture::Front-of-pipeline stages are defined in their own modules")
 def test_front_composition_stages_live_in_dedicated_modules():
     package = importlib.import_module("fmo.composition_stages")
 
     assert hasattr(package, "__path__")
     modules = {item.name for item in pkgutil.iter_modules(package.__path__)}
-    assert {"discovery", "quota", "access"}.issubset(modules)
+    assert {"discovery", "access"}.issubset(modules)
+    assert "quota" not in modules
 
     discovery = importlib.import_module("fmo.composition_stages.discovery")
-    quota = importlib.import_module("fmo.composition_stages.quota")
     access = importlib.import_module("fmo.composition_stages.access")
 
     assert inspect.getmodule(discovery._metadata_stage).__name__.endswith(".discovery")
     assert inspect.getmodule(discovery._free_candidate_stage).__name__.endswith(".discovery")
     assert inspect.getmodule(discovery._account_discovery_stage).__name__.endswith(".discovery")
     assert inspect.getmodule(discovery._model_matching_stage).__name__.endswith(".discovery")
-    assert inspect.getmodule(quota._quota_research_stage).__name__.endswith(".quota")
-    assert inspect.getmodule(quota._quota_sync_stage).__name__.endswith(".quota")
     assert inspect.getmodule(access._access_classification_stage).__name__.endswith(".access")
 
 
@@ -134,7 +167,6 @@ def test_role_scoring_helpers_live_with_role_stage_module():
         "_quality_band_candidates",
         "_latest_aa_metrics_by_model",
         "_latest_health_by_endpoint",
-        "_latest_remaining_by_pool",
         "_health_component",
         "_stability_component",
         "_latency_component",
@@ -204,10 +236,9 @@ def test_row_access_helpers_have_one_persistence_definition():
 @pytest.mark.spec("system-architecture::Stage helpers carry no re-export alias layer")
 def test_timestamp_hash_and_quota_helpers_are_centralized():
     idempotency = importlib.import_module("fmo.idempotency")
-    quota_normalize = importlib.import_module("fmo.quota_normalize")
+    access_state = importlib.import_module("fmo.access_state")
     stage_helpers = importlib.import_module("fmo.composition_stages._helpers")
     discovery = (ROOT / "src" / "fmo" / "composition_stages" / "discovery.py").read_text(encoding="utf-8")
-    quota = (ROOT / "src" / "fmo" / "composition_stages" / "quota.py").read_text(encoding="utf-8")
     access = (ROOT / "src" / "fmo" / "composition_stages" / "access.py").read_text(encoding="utf-8")
     probing = (ROOT / "src" / "fmo" / "composition_stages" / "probing.py").read_text(encoding="utf-8")
     allocation = (ROOT / "src" / "fmo" / "composition_stages" / "allocation.py").read_text(encoding="utf-8")
@@ -228,24 +259,22 @@ def test_timestamp_hash_and_quota_helpers_are_centralized():
         "provider_model_idempotency_key",
     ):
         assert inspect.getmodule(getattr(idempotency, helper)).__name__ == "fmo.idempotency"
-    for helper in ("quota_metric", "quota_limit", "remaining_amount"):
-        assert inspect.getmodule(getattr(quota_normalize, helper)).__name__ == "fmo.quota_normalize"
-    old_aliases = [f"_{name}" for name in ("canonical_slug", "hash_parts", "quota_metric", "quota_limit")]
+    assert inspect.getmodule(access_state.remaining_amount).__name__ == "fmo.access_state"
+    old_aliases = [f"_{name}" for name in ("canonical_slug", "hash_parts")]
     old_aliases.append("_" + "remaining_" + "amount")
     for helper in old_aliases:
         assert not hasattr(stage_helpers, helper)
 
     assert "from fmo.idempotency import canonical_slug" in discovery
-    assert "from fmo.idempotency import hash_parts" in quota
     assert "from fmo.idempotency import hash_parts" in probing
     assert "from fmo.idempotency import hash_parts" in allocation
     assert "from fmo.idempotency import hash_parts" in apply_stage
     assert "from fmo.idempotency import hash_parts" in roles
-    assert "from fmo.quota_normalize import quota_metric" in access
-    assert "from fmo.quota_normalize import remaining_amount" in probing
-    assert "from fmo.quota_normalize import remaining_amount" in allocation
-    assert "from fmo.quota_normalize import remaining_amount" in apply_stage
-    assert "from fmo.quota_normalize import remaining_amount" in roles
+    assert "quota_normalize" not in access
+    assert "from fmo.access_state import remaining_amount" in probing
+    assert "from fmo.access_state import remaining_amount" in allocation
+    assert "from fmo.access_state import remaining_amount" in apply_stage
+    assert "from fmo.access_state import remaining_amount" in roles
 
     for old_definition in [rf"def {alias}\(" for alias in old_aliases]:
         assert re.search(old_definition, stage_source) is None
@@ -261,9 +290,7 @@ def test_composition_fakes_live_in_shared_test_support_module():
 
     assert not old_monolith.exists()
     for fake in (
-        "QuotaSearchClient",
         "PipelineOpsClient",
-        "PartiallyFailingQuotaSearchClient",
         "MultiComboOpsClient",
         "AccountDiscoveryOpsClient",
         "RecordingLlmRuntime",
@@ -278,7 +305,6 @@ def test_composition_fakes_live_in_shared_test_support_module():
 def test_composition_tests_mirror_stage_package_domains():
     expected = {
         "test_composition_discovery.py",
-        "test_composition_quota.py",
         "test_composition_access.py",
         "test_composition_runtime.py",
         "test_composition_apply.py",

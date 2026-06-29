@@ -30,7 +30,6 @@ _PUBLIC_PERSISTENCE_CLASSES = {
     "ProviderCatalogRepository",
     "ProviderEndpointRepository",
     "ProviderRepository",
-    "QuotaRuleRepository",
     "Repository",
     "RoleConsumerRepository",
     "RoleRepository",
@@ -68,7 +67,6 @@ def test_persistence_layer_is_package_with_small_aggregate_modules():
         "lock",
         "probe",
         "provider",
-        "quota_rule",
         "registry",
         "role",
         "role_consumer",
@@ -173,27 +171,6 @@ def test_domain_repository_round_trips(repository):
             capabilities={"chat": True},
             metadata_hash="endpoint-key",
         )
-        snapshot = repository.snapshots.store_quota_source(
-            transaction,
-            source_url="https://quota.test/openai",
-            source_type="docs",
-            payload={"limit": "free"},
-            title="Quota docs",
-        )
-        quota_rule = repository.quota_rules.upsert(
-            transaction,
-            provider_id=provider["id"],
-            provider_account_id=account["id"],
-            source_snapshot_id=snapshot["id"],
-            model_pattern="gpt-*",
-            access_type="free_quota",
-            limits={"requests": 10},
-            reset_policy={"interval": "day"},
-            hard_stop_capable=True,
-            confidence=0.9,
-            status="active",
-            rule_hash="quota-key",
-        )
         probe = repository.probes.record(
             transaction,
             endpoint_id=endpoint["id"],
@@ -247,7 +224,6 @@ def test_domain_repository_round_trips(repository):
 
     with repository.database.transaction() as transaction:
         assert repository.provider_endpoints.get(transaction, endpoint["id"]) == endpoint
-        assert repository.quota_rules.get(transaction, quota_rule["id"]) == quota_rule
         assert repository.probes.get(transaction, probe["id"]) == probe
         assert repository.scores.get(transaction, score["id"]) == score
         assert repository.allocation_plans.get(transaction, plan["id"]) == plan

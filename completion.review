@@ -1,5 +1,17 @@
 # Completion Review
 
+- Removed FMO quota ownership per `remove-fmo-quota`: quota research/manager
+  modules, quota stages, prompt, repository, config knobs, quota tables, and
+  dead quota tests are gone. Access classification now records
+  OmniRoute-delegated free access state, apply safety accepts that delegated
+  evidence during the transition, and schema migration
+  `0014_v3.26_remove_fmo_quota.sql` drops retired quota tables/FKs. Focused
+  Code Simplifier pass removed dead missing-quota helpers, empty quota-pool
+  remaining lookups, the obsolete request-window apply helper/test, and the old
+  local quota-rule access-classifier branch after the table removal. Focused
+  checks: `uv run python -m compileall -q src/fmo`; spec coverage/runtime docs
+  plus focused apply/persistence/foundation/scoring/account-discovery pytest;
+  ruff on changed src/tests; `openspec validate --all --strict`; `git diff --check`.
 - Feature: added the additive `fmo-pools/v1` publisher slice. FMO can now build
   publisher stages (`hermes-inventory`, `role-lifecycle`, `demand-forecast`,
   `compose`, `publish`, `usage-feedback`), compose pool specs from role policy

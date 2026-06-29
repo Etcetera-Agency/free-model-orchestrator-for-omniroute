@@ -73,7 +73,7 @@ def test_live_catalog_scan_fetches_omniroute_fixtures_before_snapshot(postgres_u
     assert endpoint[1:] == ("discovered", "access_pending", "not_run")
 
 
-@pytest.mark.spec("account-discovery::Fingerprint pools feed allocation independently")
+@pytest.mark.spec("account-discovery::Fingerprint scopes feed allocation independently")
 def test_live_catalog_scan_fans_models_out_to_fingerprint_accounts(postgres_url):
     scanner = _prepare_scanner(postgres_url)
     providers_body = fixture_body("omniroute_api_providers")

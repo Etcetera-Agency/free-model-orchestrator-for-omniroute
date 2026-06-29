@@ -1,28 +1,22 @@
 from __future__ import annotations
 
-from datetime import timedelta
 from typing import Any
 
 from psycopg.types.json import Jsonb
 
-from fmo.access import classify_access
-from fmo.idempotency import utcnow
 from fmo.pipeline import PipelineContext, StageResult
-from fmo.quota_normalize import quota_metric
 
 from ._base import StageDependencies
 from ._helpers import _effect_result
-from .allocation import _capacity_weight
+
+OMNIROUTE_DELEGATED_REMAINING = 1_000_000_000
 
 
 def _access_classification_stage(_dependencies: StageDependencies, context: PipelineContext) -> StageResult:
     with context.repository.database.transaction() as transaction:
         rows = transaction.execute(
             """
-            SELECT DISTINCT ON (pe.id)
-                   pe.id AS endpoint_id, pe.provider_account_id, pe.provider_model_id,
-                   p.omniroute_provider_id, qr.id AS quota_rule_id, qr.limits,
-                   qr.reset_policy, qr.hard_stop_capable, qr.confidence,
+            SELECT pe.id AS endpoint_id,
                    fmd.status AS free_definition_status
             FROM provider_endpoints pe
             JOIN provider_accounts pa ON pa.id = pe.provider_account_id
@@ -30,59 +24,35 @@ def _access_classification_stage(_dependencies: StageDependencies, context: Pipe
             LEFT JOIN free_model_definitions fmd
               ON fmd.provider_id = p.omniroute_provider_id
              AND fmd.provider_model_id = pe.provider_model_id
-            LEFT JOIN quota_rules qr
-              ON qr.provider_id = p.id
-             AND (qr.provider_account_id IS NULL OR qr.provider_account_id = pa.id)
-             AND qr.model_pattern IN (pe.provider_model_id, '*')
-             AND qr.status = 'active'
             WHERE pe.canonical_model_id IS NOT NULL
               AND pe.removed_at IS NULL
               AND p.enabled = true
               AND pa.enabled = true
-            ORDER BY pe.id,
-                     CASE WHEN qr.model_pattern = pe.provider_model_id THEN 0 ELSE 1 END,
-                     qr.created_at DESC NULLS LAST
+            ORDER BY pe.id
             """
         ).fetchall()
-        lost_free_rows = [
-            row for row in rows if row["quota_rule_id"] is None and row["free_definition_status"] == "inactive"
-        ]
-        missing_rows = [
-            row for row in rows if row["quota_rule_id"] is None and row["free_definition_status"] != "inactive"
-        ]
+        lost_free_rows = [row for row in rows if row["free_definition_status"] == "inactive"]
         for row in lost_free_rows:
             _record_lost_free_access_state(transaction, row["endpoint_id"])
-        for row in missing_rows:
-            _record_missing_quota_access_state(transaction, row["endpoint_id"])
         written = 0
-        for row in [item for item in rows if item["quota_rule_id"] is not None]:
-            metric, limit = quota_metric(row["limits"])
-            reset_at = utcnow() + timedelta(days=1)
+        for row in [item for item in rows if item["free_definition_status"] != "inactive"]:
             evidence = {
-                "quota_rule": True,
-                "limit": limit,
-                "remaining": limit,
-                "reset_at": reset_at.isoformat(),
-                "hard_stop": row["hard_stop_capable"],
-                "confidence": float(row["confidence"]),
-                "remaining_source": "assumed",
-                "daily_budget_source": "research",
+                "free_access": True,
+                "quota_delegated_to": "omniroute",
+                "remaining_source": "omniroute",
             }
-            decision = classify_access(evidence)
-            status = _canonical_access_status(decision.status)
             transaction.execute(
                 """
                 INSERT INTO endpoint_access_states (
-                  endpoint_id, quota_rule_id, status, reason_code, effective_remaining,
+                  endpoint_id, status, reason_code, effective_remaining,
                   reset_at, hard_stop_capable, evidence
                 )
                 VALUES (
-                  %(endpoint_id)s, %(quota_rule_id)s, %(status)s, %(reason_code)s,
+                  %(endpoint_id)s, 'confirmed', 'omniroute_free_access',
                   %(effective_remaining)s, %(reset_at)s, %(hard_stop_capable)s, %(evidence)s
                 )
                 ON CONFLICT (endpoint_id)
                 DO UPDATE SET
-                  quota_rule_id = EXCLUDED.quota_rule_id,
                   status = EXCLUDED.status,
                   reason_code = EXCLUDED.reason_code,
                   effective_remaining = EXCLUDED.effective_remaining,
@@ -93,67 +63,18 @@ def _access_classification_stage(_dependencies: StageDependencies, context: Pipe
                 """,
                 {
                     "endpoint_id": row["endpoint_id"],
-                    "quota_rule_id": row["quota_rule_id"],
-                    "status": status,
-                    "reason_code": decision.reason_code,
-                    "effective_remaining": Jsonb({metric: limit}),
-                    "reset_at": reset_at,
-                    "hard_stop_capable": row["hard_stop_capable"],
-                    "evidence": Jsonb({**evidence, "free_access": status == "confirmed"}),
-                },
-            )
-            group = transaction.execute(
-                """
-                INSERT INTO quota_attribution_groups (
-                  provider_id, scope_type, scope_key, status, source, limit_type,
-                  request_limit, token_limit, reset_rule_json, confidence,
-                  capacity_weight, evidence_json
-                )
-                VALUES (
-                  %(provider_id)s, 'account', %(scope_key)s, %(status)s, 'quota-research',
-                  %(limit_type)s, %(request_limit)s, %(token_limit)s, %(reset_rule_json)s,
-                  %(confidence)s, %(capacity_weight)s, %(evidence_json)s
-                )
-                RETURNING *
-                """,
-                {
-                    "provider_id": row["omniroute_provider_id"],
-                    "scope_key": str(row["provider_account_id"]),
-                    "status": status,
-                    "limit_type": metric,
-                    "request_limit": limit if metric == "requests" else None,
-                    "token_limit": limit if metric == "tokens" else None,
-                    "reset_rule_json": Jsonb(row["reset_policy"]),
-                    "confidence": row["confidence"],
-                    "capacity_weight": _capacity_weight(status),
-                    "evidence_json": Jsonb([evidence]),
-                },
-            ).fetchone()
-            transaction.execute(
-                """
-                INSERT INTO endpoint_quota_attribution (
-                  endpoint_id, account_or_connection_id, quota_attribution_group_id,
-                  attribution_status, evidence_json
-                )
-                VALUES (
-                  %(endpoint_id)s, %(account_id)s, %(group_id)s,
-                  %(status)s, %(evidence_json)s
-                )
-                """,
-                {
-                    "endpoint_id": row["endpoint_id"],
-                    "account_id": str(row["provider_account_id"]),
-                    "group_id": group["id"],
-                    "status": status,
-                    "evidence_json": Jsonb([evidence]),
+                    "effective_remaining": Jsonb({"requests": OMNIROUTE_DELEGATED_REMAINING}),
+                    "reset_at": None,
+                    "hard_stop_capable": False,
+                    "evidence": Jsonb(evidence),
                 },
             )
             transaction.execute(
                 "UPDATE provider_endpoints SET access_status = %(status)s WHERE id = %(endpoint_id)s",
-                {"status": status, "endpoint_id": row["endpoint_id"]},
+                {"status": "confirmed", "endpoint_id": row["endpoint_id"]},
             )
             written += 1
-    return _effect_result("access-classification", changed=bool(written or lost_free_rows or missing_rows))
+    return _effect_result("access-classification", changed=bool(written or lost_free_rows))
 
 
 def _record_lost_free_access_state(transaction: Any, endpoint_id: Any) -> None:
@@ -189,65 +110,8 @@ def _record_lost_free_access_state(transaction: Any, endpoint_id: Any) -> None:
     )
 
 
-def _record_missing_quota_access_state(transaction: Any, endpoint_id: Any) -> None:
-    # AICODE-NOTE: Missing quota evidence is endpoint-local fail-closed state;
-    # it must not abort classification for other endpoints that have rules.
-    transaction.execute(
-        """
-        UPDATE provider_endpoints
-        SET access_status = 'unknown'
-        WHERE id = %(endpoint_id)s
-        """,
-        {"endpoint_id": endpoint_id},
-    )
-    transaction.execute(
-        """
-        INSERT INTO endpoint_access_states (
-          endpoint_id, status, reason_code, effective_remaining,
-          reset_at, hard_stop_capable, evidence
-        )
-        VALUES (
-          %(endpoint_id)s, 'unknown', 'quota_rule_missing',
-          '{}'::jsonb, NULL, false, '{"free_access": false, "quota_rule": false}'::jsonb
-        )
-        ON CONFLICT (endpoint_id)
-        DO UPDATE SET
-          quota_rule_id = NULL,
-          status = EXCLUDED.status,
-          reason_code = EXCLUDED.reason_code,
-          effective_remaining = EXCLUDED.effective_remaining,
-          reset_at = EXCLUDED.reset_at,
-          hard_stop_capable = EXCLUDED.hard_stop_capable,
-          evidence = EXCLUDED.evidence,
-          classified_at = now()
-        """,
-        {"endpoint_id": endpoint_id},
-    )
-
-
-def _canonical_access_status(access_status: str) -> str:
-    if access_status in {"free_unlimited", "free_quota_available"}:
-        return "confirmed"
-    if access_status == "free_promotional_available":
-        return "inferred"
-    return "unknown"
-
-
 def _deactivate_lost_free_models(transaction: Any, lost_models: set[tuple[str, str]]) -> None:
     for provider_id, model_id in lost_models:
-        # AICODE-NOTE: lost-free detection is the only path that turns quota
-        # rules inactive; provider-model rows stay additive and are not deleted.
-        transaction.execute(
-            """
-            UPDATE quota_rules qr
-            SET status = 'inactive'
-            FROM providers p
-            WHERE qr.provider_id = p.id
-              AND p.omniroute_provider_id = %(provider_id)s
-              AND qr.model_pattern = %(model_id)s
-            """,
-            {"provider_id": provider_id, "model_id": model_id},
-        )
         transaction.execute(
             """
             UPDATE provider_endpoints pe

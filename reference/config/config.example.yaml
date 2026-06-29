@@ -42,12 +42,11 @@ omniroute:
   expected_versions: [">=3.7.0"]
 
 # ── Unified LLM runtime ──────────────────────────────────────────────────────
-# Single, uniform place for all FOUR Instructor/LLM sites. Shared runtime
+# Single, uniform place for Instructor/LLM sites. Shared runtime
 # defaults live here; each site only overrides model selection and its prompt
 # file. Prompts are external files under `prompts_dir`, one per use case, so each
 # can be edited independently without touching code or this config. Feature
-# blocks below (quota_research, smart_combo_review, index_migration,
-# hermes_inventory.inspector) keep only their policy and point here for runtime.
+# blocks below keep only their policy and point here for runtime.
 llm:
   runtime: instructor
   transport: openai_compatible
@@ -59,11 +58,6 @@ llm:
   prompts_dir: prompts
   # Secrets are never injected into prompts (see environment-and-connections).
   sites:
-    quota_research:
-      prompt_file: prompts/quota-research.md
-      # Search provider (gemini-grounded-search) is configured in `search`;
-      # this is the chat model that extracts the QuotaClaim from answer.text.
-      model_selection: highest_available_intelligence_index
     hermes_inspector:
       prompt_file: prompts/hermes-inspector.md
       model_selection: highest_available_intelligence_index
@@ -79,43 +73,6 @@ llm:
       model_selection: highest_available_new_intelligence_index
       max_repair_attempts: 3
       operational_repair_retries: 3
-
-search:
-  # OmniRoute built-in search: POST /v1/search (same gateway + API key as chat).
-  # Fixed to gemini-grounded-search (Gemini + Google Search grounding): it
-  # returns the AI summary in `answer.text` and the grounding source URLs in
-  # `results[]`. No fallback provider — if it fails the run records the error
-  # and retries on the next batch.
-  via: omniroute
-  path: /v1/search
-  provider: gemini-grounded-search
-  model: gemini-2.5-flash                  # GEMINI_GROUNDED_SEARCH_MODEL
-  search_type: web
-  max_results: 10
-  time_range: any                          # day|week|month|year|any
-  query_language: natural                  # natural-language, date-aware queries
-  # `answer.text` is the source we extract from (grounding results are just the
-  # cited URLs, no page body). A quota rule is activated directly from it — no
-  # separate page fetch. Risk is contained by a capped confidence + the
-  # access_policy safety reserve.
-  allow_summary_only_activation: true
-  summary_confidence_cap: 0.6
-  summary_capacity_class: opportunistic
-  prefer_cited_source_when_present: true   # bump confidence if a result is official
-
-# Instructor-based quota inspector (Module 03). It is the PRIMARY source of
-# quota for endpoints not covered by an official quota API or OmniRoute (the
-# OmniRoute free registry / rate-limits cover only a subset of providers).
-# Flow: targeted web search -> fetch official page -> Instructor extraction ->
-# deterministic validation -> persist to quota_source_snapshots + quota_rules.
-quota_research:
-  enabled: true
-  # Runtime & prompt: see llm.sites.quota_research
-  llm_only_on_fetched_page: true        # never extract from search snippets
-  require_official_source_for_auto_activation: true
-  active_rule_recheck_days: 7
-  recheck_promo_ending_daily: true
-
 
 # Runtime & prompt for the migration agent: see llm.sites.aa_index_migration
 index_migration:
@@ -261,26 +218,6 @@ context_windows:
   safety_factor: 0.90
   unknown_context_policy: exclude_unless_manual_override
 
-
-
-quota_attribution:
-  require_confirmed_independence_for_guaranteed_capacity: true
-  unknown_capacity_weight: 0.0
-  inferred_independent_capacity_weight: 0.5
-  conservative_same_provider_fallback: assumed_shared
-  source_priority:
-    - official_quota_api
-    - omniroute_pool_key
-    - official_documentation
-    - upstream_account_identifier
-    - credential_fingerprint
-    - observed_depletion_and_reset
-  allow_open_source_quota_definitions: true
-  account_grouping:
-    auto_merge_on_shared_counter_evidence: true
-    auto_split_requires_confirmed_independence: true
-  no_auth_default_scope: unknown
-  no_auth_unknown_capacity_class: opportunistic
 
 demand_forecast:
   enabled: true
@@ -430,16 +367,15 @@ smart_combo_review:
   on_invalid_diff: reject_diff_only
 
 allocation:
-  max_primary_roles_per_quota_pool: 1
-  max_heavy_roles_per_quota_pool: 1
-  max_total_roles_per_quota_pool: 3
+  max_primary_roles_per_account: 1
+  max_heavy_roles_per_account: 1
+  max_total_roles_per_account: 3
   max_primary_roles_per_provider_group: 2
-  min_quota_pools_in_top3: 2
+  min_accounts_in_top3: 2
   min_provider_groups_in_top3: 2
   max_provider_group_projected_share: 0.40
   opportunistic_max_weight: 5
   expected_opportunistic_use_factor: 0.10
-  require_global_quota_validation: true
   promotion_stability_hours: 24
   minimum_score_improvement: 0.10
   minimum_weight_change: 10

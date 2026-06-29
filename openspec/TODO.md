@@ -2,19 +2,24 @@
 
 ## Deferred follow-up
 
-- Implement active pool migration changes after approval: publish
-  `fmo-pools/v1` with payload-hash idempotency first, then remove FMO
-  quota/matching/probing/allocation/apply modules only after OmniRoute shadow
-  solve, atomic apply, and single-writer cutover are verified.
-  Gate audit 2026-06-29: FMO publisher slice is archived and pushed, but
-  destructive removal remains blocked. Production `etc2nd-shlink`
-  `127.0.0.1:20129` returns bridge `404` for `/api/fmo/pools` and
-  `/api/fmo/usage`; `127.0.0.1:20128` refused connection from the same shell.
-  Local OmniRoute repo still has unimplemented active proposals
-  `add-fmo-pools-contract`, `add-fmo-pools-planning`,
-  `add-fmo-pools-solve-tail`, and `add-fmo-pools-apply`. Do not remove FMO
-  quota/matching/probing/allocation/apply until those OmniRoute slices are live
-  and the single-writer cutover is verified.
+- Bind post-quota-removal spec coverage pending scenarios. The FMO quota owner
+  deletion intentionally removed quota-only executable tests, leaving active
+  pending coverage for access-classifier, LLM runtime, account-discovery,
+  pipeline, inventory, smart-reviewer, AA migration, and architecture scenarios
+  in `tests/spec_coverage_pending.txt`; follow-up slices must either implement
+  new non-quota tests or rewrite/delete obsolete living spec scenarios.
+
+- Finish OmniRoute active-pool migration and single-writer cutover follow-up.
+  Gate audit 2026-06-29 before FMO removal: FMO publisher slice was archived
+  and pushed, but production `etc2nd-shlink` `127.0.0.1:20129` returned bridge
+  `404` for `/api/fmo/pools` and `/api/fmo/usage`; `127.0.0.1:20128` refused
+  connection from the same shell. Local OmniRoute repo still had unimplemented
+  active proposals `add-fmo-pools-contract`, `add-fmo-pools-planning`,
+  `add-fmo-pools-solve-tail`, and `add-fmo-pools-apply`.
+  User decision on 2026-06-29: implement pure FMO removal specs first and
+  resolve OmniRoute cutover later. Remaining follow-up: make OmniRoute accept
+  `fmo-pools/v1`, run shadow solve, apply atomically, and verify OmniRoute as
+  the only combo writer before relying on live pool ownership.
 
 - Server-side default combo grid bootstrap — separate deploy task. Regenerate
   seed models with the live FMO matcher, back up `GET /api/combos`, then create

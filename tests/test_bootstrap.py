@@ -151,37 +151,18 @@ def test_apply_entrypoint_uses_diff_scoped_apply_safety(postgres_url):
         after_model_id="request-window-model",
     )
     with repository.database.transaction() as transaction:
-        rule = transaction.execute(
-            """
-            INSERT INTO quota_rules (
-              provider_id, provider_account_id, model_pattern, access_type,
-              limits, reset_policy, hard_stop_capable, confidence, status, rule_hash
-            )
-            SELECT pa.provider_id, pa.id, '*', 'free_quota',
-                   '{"window": "minute", "requests": 40}'::jsonb,
-                   '{"window": "minute"}'::jsonb,
-                   true, 0.7, 'active', 'request-window-bootstrap'
-            FROM provider_accounts pa
-            LIMIT 1
-            RETURNING id
-            """
-        ).fetchone()
         transaction.execute(
             """
             UPDATE endpoint_access_states
-            SET quota_rule_id = %(rule_id)s,
-                effective_remaining = '{"requests": 40}'::jsonb,
+            SET effective_remaining = '{"requests": 40}'::jsonb,
                 reset_at = now() + interval '1 minute',
                 evidence = '{
-                  "remaining_source": "assumed",
-                  "daily_budget_source": "research",
-                  "quota_rule": true,
-                  "hard_stop": true,
+                  "quota_delegated_to": "omniroute",
                   "safety_buffer": 1
                 }'::jsonb
             WHERE endpoint_id = %(endpoint_id)s
             """,
-            {"rule_id": rule["id"], "endpoint_id": endpoint_id},
+            {"endpoint_id": endpoint_id},
         )
         transaction.execute(
             """

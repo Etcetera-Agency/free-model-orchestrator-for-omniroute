@@ -64,7 +64,6 @@ def test_schema_sql_applies_on_real_postgres(postgres_url):
     tables = runner.table_names()
     assert "provider_endpoints" in tables
     assert "sync_runs" in tables
-    assert "quota_attribution_groups" in tables
 
 
 @pytest.mark.spec("omniroute-client::429 with Retry-After")
@@ -360,12 +359,6 @@ def test_static_config_rejects_missing_database_url():
         validate_static_config(valid_startup_config(database_url=None))
 
 
-@pytest.mark.spec("quota-manager::Tokens-per-request config validated")
-def test_static_config_rejects_non_positive_tokens_per_request():
-    with pytest.raises(ValueError, match="TOKENS_PER_REQUEST"):
-        validate_static_config(valid_startup_config(tokens_per_request=0))
-
-
 @pytest.mark.spec("role-scorer::Configured router is recognized")
 @pytest.mark.spec("role-scorer::Unlisted model is not a router")
 @pytest.mark.spec("role-scorer::Child router is independent of its parent")
@@ -437,7 +430,7 @@ def test_startup_validation_rejects_non_object_health_payload():
         validate_startup(valid_startup_config(), health_check=lambda: ["ok"])
 
 
-@pytest.mark.spec("system-architecture::Reactivate exhausted endpoint too early")
+@pytest.mark.spec("system-architecture::Reactivate failed endpoint too early")
 @pytest.mark.parametrize(
     ("state", "target"),
     [
@@ -504,7 +497,7 @@ def test_stable_hash_makes_unchanged_inputs_skip_changes():
 def test_llm_prompt_loads_external_file_and_redacts_secrets(tmp_path):
     prompt_file = tmp_path / "prompt.md"
     prompt_file.write_text("Use endpoint {{ endpoint_id }} with {{ OMNIROUTE_API_KEY }}", encoding="utf-8")
-    site = LlmSiteConfig(name="quota-research", model="free-model", prompt_path=prompt_file)
+    site = LlmSiteConfig(name="smart-combo-review", model="free-model", prompt_path=prompt_file)
     prompt = assemble_prompt(site, {"endpoint_id": "provider-account-1", "OMNIROUTE_API_KEY": "secret"})
 
     assert "provider-account-1" in prompt
@@ -549,7 +542,7 @@ def test_llm_prompt_omits_secret_like_context_keys_and_database_url(tmp_path):
         "{{ safe }} {{ DATABASE_URL }} {{ API_KEY }} {{ TOKEN }} {{ SECRET }}",
         encoding="utf-8",
     )
-    site = LlmSiteConfig(name="quota-research", model="free-model", prompt_path=prompt_file)
+    site = LlmSiteConfig(name="smart-combo-review", model="free-model", prompt_path=prompt_file)
 
     prompt = assemble_prompt(
         site,
@@ -569,7 +562,7 @@ def test_llm_prompt_omits_secret_like_context_keys_and_database_url(tmp_path):
 def test_llm_prompt_removes_unresolved_placeholders(tmp_path):
     prompt_file = tmp_path / "prompt.md"
     prompt_file.write_text("Use {{ endpoint_id }} {{ missing }}", encoding="utf-8")
-    site = LlmSiteConfig(name="quota-research", model="free-model", prompt_path=prompt_file)
+    site = LlmSiteConfig(name="smart-combo-review", model="free-model", prompt_path=prompt_file)
 
     prompt = assemble_prompt(site, {"endpoint_id": "e1"})
 

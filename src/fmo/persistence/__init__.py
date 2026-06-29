@@ -11,7 +11,6 @@ from .lock import LockRepository
 from .probe import ProbeRepository
 from .provider import ProviderRepository
 from .published_generation import PublishedGenerationRepository
-from .quota_rule import QuotaRuleRepository
 from .registry import FreeRegistryRepository
 from .role import RoleRepository
 from .role_consumer import RoleConsumerRepository
@@ -36,7 +35,6 @@ __all__ = (
     "ProviderEndpointRepository",
     "ProviderRepository",
     "PublishedGenerationRepository",
-    "QuotaRuleRepository",
     "Repository",
     "RoleConsumerRepository",
     "RoleRepository",

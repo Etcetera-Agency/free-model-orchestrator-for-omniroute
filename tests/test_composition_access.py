@@ -35,7 +35,6 @@ from tests._composition_support import (
 )
 
 
-@pytest.mark.spec("pipeline-orchestration::Lost-free-status model is dropped on rebalance")
 def test_lost_free_model_is_removed_from_existing_combo_on_rebalance(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     repository = Repository(Database(postgres_url))
@@ -76,7 +75,6 @@ def test_lost_free_model_is_removed_from_existing_combo_on_rebalance(postgres_ur
     assert not client.deleted_paths
 
 
-@pytest.mark.spec("pipeline-orchestration::Quota research is triggered by new free models")
 def test_gained_free_model_is_added_to_existing_combo_on_rebalance(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     repository = Repository(Database(postgres_url))
@@ -157,11 +155,9 @@ def test_full_pipeline_runs_through_apply_and_audit(postgres_url):
         "free-candidate-discovery",
         "account-discovery",
         "model-matching",
-        "quota-research",
         "access-classification",
         "probing",
         "telemetry-sync",
-        "quota-sync",
         "hermes-inventory",
         "role-lifecycle",
         "role-scoring",
@@ -174,8 +170,8 @@ def test_full_pipeline_runs_through_apply_and_audit(postgres_url):
     assert result.stage_results[-1]["status"] == "success"
 
 
-@pytest.mark.spec("pipeline-orchestration::Account discovery persists quota pools")
-def test_account_discovery_stage_persists_quota_pools_and_membership(postgres_url):
+@pytest.mark.spec("pipeline-orchestration::Account discovery persists account scopes")
+def test_account_discovery_stage_persists_account_scopes(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     repository = Repository(Database(postgres_url))
     client = AccountDiscoveryOpsClient()
@@ -185,12 +181,11 @@ def test_account_discovery_stage_persists_quota_pools_and_membership(postgres_ur
     with repository.database.transaction() as transaction:
         account_rows = transaction.execute(
             """
-            SELECT omniroute_connection_id, quota_independence_status, quota_pool_id
+            SELECT omniroute_connection_id, quota_independence_status
             FROM provider_accounts
             ORDER BY omniroute_connection_id
             """
         ).fetchall()
-        member_count = transaction.execute("SELECT count(*) AS total FROM quota_pool_members").fetchone()["total"]
         snapshot = transaction.execute(
             "SELECT independent_quota_pool_count, snapshot_json FROM account_discovery_snapshots"
         ).fetchone()
@@ -198,14 +193,11 @@ def test_account_discovery_stage_persists_quota_pools_and_membership(postgres_ur
     assert result.stage_results[0]["details"]["effect"] == "repository_write"
     assert client.get_calls[:2] == ["/api/providers", "/api/rate-limits"]
     assert [row["quota_independence_status"] for row in account_rows] == ["confirmed", "confirmed"]
-    assert all(row["quota_pool_id"] for row in account_rows)
-    assert len({row["quota_pool_id"] for row in account_rows}) == 1
-    assert member_count == 2
     assert snapshot["snapshot_json"]["rate_limits_available"] is True
 
 
-@pytest.mark.spec("account-discovery::Fingerprints create independent pools")
-def test_account_discovery_stage_persists_fingerprint_scopes_and_membership(postgres_url):
+@pytest.mark.spec("account-discovery::Fingerprints create independent scopes")
+def test_account_discovery_stage_persists_fingerprint_scopes(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     repository = Repository(Database(postgres_url))
     client = AccountDiscoveryOpsClient(
@@ -226,11 +218,8 @@ def test_account_discovery_stage_persists_fingerprint_scopes_and_membership(post
         rows = transaction.execute(
             """
             SELECT pa.omniroute_connection_id, pa.external_account_ref,
-                   pa.metadata, pa.quota_independence_status, qp.name AS pool_name,
-                   qpm.membership_reason
+                   pa.metadata, pa.quota_independence_status
             FROM provider_accounts pa
-            JOIN quota_pools qp ON qp.id = pa.quota_pool_id
-            JOIN quota_pool_members qpm ON qpm.provider_account_id = pa.id
             ORDER BY pa.omniroute_connection_id
             """
         ).fetchall()
@@ -239,27 +228,21 @@ def test_account_discovery_stage_persists_fingerprint_scopes_and_membership(post
         ).fetchone()
     assert result.exit_code == 0
     assert len(rows) == 3
-    assert {row["pool_name"] for row in rows} == {
-        "provider-a:fingerprint:fp-a:requests",
-        "provider-a:fingerprint:fp-b:requests",
-        "provider-a:fingerprint:fp-c:requests",
-    }
     assert {row["external_account_ref"] for row in rows} == {
         "provider-a:fingerprint:fp-a",
         "provider-a:fingerprint:fp-b",
         "provider-a:fingerprint:fp-c",
     }
     assert all(row["quota_independence_status"] == "confirmed" for row in rows)
-    assert all(row["membership_reason"] == "account-fingerprint" for row in rows)
     assert {row["metadata"]["parent_connection_id"] for row in rows} == {"conn-fp"}
     assert snapshot["independent_quota_pool_count"] == 3
 
 
-@pytest.mark.spec("account-discovery::Fingerprint pools feed allocation independently")
+@pytest.mark.spec("account-discovery::Fingerprint scopes feed allocation independently")
 def test_fingerprint_pool_endpoints_feed_allocation_independently(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     repository = Repository(Database(postgres_url))
-    endpoints = [
+    [
         seed_confirmed_llm_candidate(
             repository,
             model_id=f"fingerprint-model-{index}",
@@ -270,28 +253,6 @@ def test_fingerprint_pool_endpoints_feed_allocation_independently(postgres_url):
         for index in range(3)
     ]
     with repository.database.transaction() as transaction:
-        for index, endpoint in enumerate(endpoints):
-            row = transaction.execute(
-                "SELECT provider_account_id FROM provider_endpoints WHERE id = %(endpoint_id)s",
-                {"endpoint_id": endpoint["id"]},
-            ).fetchone()
-            pool_id = transaction.execute(
-                """
-                INSERT INTO quota_pools (name, provider_group, reset_policy)
-                VALUES (%(name)s, 'provider-a', '{}'::jsonb)
-                RETURNING id
-                """,
-                {"name": f"provider-a:fingerprint:fp-{index}"},
-            ).fetchone()["id"]
-            transaction.execute(
-                """
-                UPDATE provider_accounts
-                SET quota_pool_id = %(pool_id)s,
-                    quota_independence_status = 'confirmed'
-                WHERE id = %(account_id)s
-                """,
-                {"pool_id": pool_id, "account_id": row["provider_account_id"]},
-            )
         repository.roles.upsert(
             transaction,
             role_id="fingerprint_capacity",
@@ -310,12 +271,11 @@ def test_fingerprint_pool_endpoints_feed_allocation_independently(postgres_url):
         ).fetchone()
         target_pools = transaction.execute(
             """
-            SELECT qp.name
+            SELECT pa.external_account_ref AS name
             FROM provider_endpoints pe
             JOIN provider_accounts pa ON pa.id = pe.provider_account_id
-            JOIN quota_pools qp ON qp.id = pa.quota_pool_id
             WHERE pe.id = ANY(%(endpoint_ids)s::uuid[])
-            ORDER BY qp.name
+            ORDER BY pa.external_account_ref
             """,
             {"endpoint_ids": [target["endpoint_id"] for target in plan["targets"]]},
         ).fetchall()
@@ -323,11 +283,6 @@ def test_fingerprint_pool_endpoints_feed_allocation_independently(postgres_url):
     assert plan["status"] == "planned"
     assert len(plan["targets"]) >= 2
     assert len({row["name"] for row in target_pools}) == len(plan["targets"])
-    assert {row["name"] for row in target_pools} <= {
-        "provider-a:fingerprint:fp-0",
-        "provider-a:fingerprint:fp-1",
-        "provider-a:fingerprint:fp-2",
-    }
 
 
 @pytest.mark.spec("pipeline-orchestration::Unavailable rate-limit data stays conservative")
@@ -357,7 +312,6 @@ def test_canonical_pipeline_orders_account_discovery_before_quota_and_scoring():
     names = CANONICAL_STAGE_NAMES
 
     assert names.index("free-candidate-discovery") < names.index("account-discovery")
-    assert names.index("account-discovery") < names.index("quota-sync")
     assert names.index("account-discovery") < names.index("role-scoring")
 
 
@@ -387,64 +341,6 @@ def test_discover_accounts_command_selects_account_discovery_stage(postgres_url)
     assert result.exit_code == 0
     assert [stage["name"] for stage in stages] == ["account-discovery"]
     assert account_count == 2
-
-
-@pytest.mark.spec("pipeline-orchestration::Account discovery persists quota pools")
-@pytest.mark.spec("quota-manager::Account remaining is not duplicated per endpoint")
-@pytest.mark.spec("quota-manager::Pool capacity bounds the sum of member allocations")
-def test_allocation_uses_account_quota_pool_not_per_account_capacity(postgres_url):
-    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
-    repository = Repository(Database(postgres_url))
-    pool_id = None
-    for model_id in ["shared-a", "shared-b"]:
-        endpoint = seed_confirmed_llm_candidate(repository, model_id=model_id, intelligence_index=80, remaining=1)
-        with repository.database.transaction() as transaction:
-            account = transaction.execute(
-                """
-                SELECT provider_account_id
-                FROM provider_endpoints
-                WHERE id = %(endpoint_id)s
-                """,
-                {"endpoint_id": endpoint["id"]},
-            ).fetchone()
-            if pool_id is None:
-                pool_id = transaction.execute(
-                    """
-                    INSERT INTO quota_pools (name, provider_group, reset_policy)
-                    VALUES ('provider-a:shared:requests', 'provider-a', '{}'::jsonb)
-                    RETURNING id
-                    """
-                ).fetchone()["id"]
-            transaction.execute(
-                """
-                UPDATE provider_accounts
-                SET quota_pool_id = %(pool_id)s,
-                    quota_independence_status = 'assumed_shared'
-                WHERE id = %(account_id)s
-                """,
-                {"pool_id": pool_id, "account_id": account["provider_account_id"]},
-            )
-    with repository.database.transaction() as transaction:
-        repository.roles.upsert(
-            transaction,
-            role_id="shared_capacity",
-            requirements={"capabilities": []},
-            expected_load={"requests": 2},
-            criticality=1,
-        )
-    run_composed_stage(repository, "role-scoring")
-    run_composed_stage(repository, "demand-forecast")
-
-    result = run_composed_stage(repository, "allocation")
-
-    with repository.database.transaction() as transaction:
-        plan = transaction.execute(
-            "SELECT status, targets, constraint_report FROM allocation_plans WHERE role_id = 'shared_capacity'"
-        ).fetchone()
-    assert result.exit_code == 0
-    assert plan["status"] == "degraded"
-    assert plan["targets"] == []
-    assert plan["constraint_report"]["reason"] == "no_primary"
 
 
 @pytest.mark.spec("cli-and-operations::Dry-run runs the stage, not an unconditional success")

@@ -76,7 +76,7 @@ def test_live_account_discovery_rate_limit_failure_is_conservative():
     assert usable_capacity(outcome.pools) == 0.0
 
 
-@pytest.mark.spec("account-discovery::Fingerprints create independent pools")
+@pytest.mark.spec("account-discovery::Fingerprints create independent scopes")
 def test_fingerprint_fixture_connection_creates_independent_quota_pools():
     providers_body = deepcopy(fixture_body("omniroute_api_providers"))
     connection = next(

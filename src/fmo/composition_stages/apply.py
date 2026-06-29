@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from datetime import datetime, timedelta
 from typing import Any
 
+from fmo.access_state import remaining_amount
 from fmo.applier import ComboApplier
 from fmo.apply_guard import ApplyPreconditions, check_apply_preconditions
 from fmo.config import DEFAULT_APPLY_MIN_PERCENT_REMAINING, DEFAULT_APPLY_MIN_SAFETY_BUFFER
@@ -11,7 +12,6 @@ from fmo.idempotency import combo_models_idempotency_key as _combo_models_idempo
 from fmo.idempotency import hash_parts, utcnow
 from fmo.omniroute import OmniRouteRequestError
 from fmo.pipeline import PipelineContext, StageResult
-from fmo.quota_normalize import remaining_amount
 from fmo.smart_review import ComboReviewResult, build_combo_review_context, run_combo_review
 
 from ._base import StageDependencies
@@ -346,10 +346,8 @@ def _desired_endpoints_have_current_quota_safety(
     rows = transaction.execute(
         """
         SELECT eas.endpoint_id, eas.effective_remaining, eas.hard_stop_capable, eas.evidence,
-               eas.reset_at, eas.classified_at, eas.valid_until, eas.status,
-               qr.limits AS quota_rule_limits
+               eas.reset_at, eas.classified_at, eas.valid_until, eas.status
         FROM endpoint_access_states eas
-        LEFT JOIN quota_rules qr ON qr.id = eas.quota_rule_id
         WHERE eas.endpoint_id::text = ANY(%(endpoint_ids)s)
         """,
         {"endpoint_ids": list(endpoint_ids)},
@@ -387,41 +385,14 @@ def _endpoint_quota_row_is_safe(
         and isinstance(percent_remaining, int | float)
         and float(percent_remaining) > minimum_percent_remaining
     )
-    has_request_window_budget = _request_window_rule_is_safe(row, evidence=evidence)
-    # AICODE-NOTE: A request-window rule only earns the locked_out/reset bypass
-    # when its reset is imminent (within the window horizon). A far-future reset
-    # — e.g. a daily/monthly liveness lock-out — must still hard-stop apply.
-    window_bypass = has_request_window_budget and _request_window_reset_imminent(row, now=now)
     return (
         row["status"] == "confirmed"
-        and row["hard_stop_capable"] is True
-        and (has_known_daily_budget or has_request_window_budget)
-        and (window_bypass or evidence.get("locked_out") is not True)
+        and (has_known_daily_budget or evidence.get("quota_delegated_to") == "omniroute")
+        and evidence.get("locked_out") is not True
         and remaining_amount(row["effective_remaining"]) > safety_buffer
-        and (window_bypass or row["reset_at"] is None or row["reset_at"] <= now)
+        and (row["reset_at"] is None or row["reset_at"] <= now)
         and row["classified_at"] >= oldest_allowed
         and (row["valid_until"] is None or row["valid_until"] > now)
-    )
-
-
-# Maximum time until reset for a request-window rule to bypass locked_out/reset.
-REQUEST_WINDOW_RESET_HORIZON = timedelta(hours=1)
-
-
-def _request_window_reset_imminent(row: Any, *, now: datetime) -> bool:
-    reset_at = row["reset_at"]
-    return reset_at is None or reset_at <= now + REQUEST_WINDOW_RESET_HORIZON
-
-
-def _request_window_rule_is_safe(row: Any, *, evidence: dict[str, Any]) -> bool:
-    limits = row["quota_rule_limits"] if isinstance(row["quota_rule_limits"], dict) else {}
-    return (
-        evidence.get("remaining_source") in {"assumed", "live_observed"}
-        and evidence.get("quota_rule") is True
-        and evidence.get("daily_budget_source") == "research"
-        and evidence.get("hard_stop") is True
-        and limits.get("window") in {"minute", "hour"}
-        and isinstance(limits.get("requests"), int | float)
     )
 
 

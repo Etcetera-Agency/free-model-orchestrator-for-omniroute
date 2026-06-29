@@ -3,12 +3,12 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from fmo.access_state import remaining_amount
 from fmo.context import context_eligible, effective_context_window
 from fmo.forecast import quality_band_for_demand
 from fmo.idempotency import hash_parts
 from fmo.pipeline import PipelineContext, StageResult
 from fmo.quality import evaluate_quality_gate
-from fmo.quota_normalize import remaining_amount
 from fmo.scoring import EligibilityDecision, aa_subscore, eligible_for_scoring, latency_score_source, score_endpoint
 
 from ._base import StageDependencies
@@ -79,7 +79,7 @@ def _role_scoring_stage(_dependencies: StageDependencies, context: PipelineConte
                    pe.provider_context_window, pe.probed_context_window,
                    pe.effective_context_window, pe.canonical_model_id,
                    eas.effective_remaining,
-                   COALESCE(pa.quota_pool_id, pe.provider_account_id) AS quota_pool_id
+                   pe.provider_account_id AS quota_pool_id
             FROM provider_endpoints pe
             JOIN provider_accounts pa ON pa.id = pe.provider_account_id
             JOIN providers p ON p.id = pa.provider_id
@@ -94,15 +94,12 @@ def _role_scoring_stage(_dependencies: StageDependencies, context: PipelineConte
         ).fetchall()
         latest_metrics = _latest_aa_metrics_by_model(transaction)
         latest_health = _latest_health_by_endpoint(transaction)
-        pool_remaining = _latest_remaining_by_pool(transaction)
         written = 0
         for role in roles:
             requirements = role["requirements"] or {}
             required = set(requirements.get("capabilities", []))
             for endpoint in endpoints:
-                remaining = pool_remaining.get(
-                    str(endpoint["quota_pool_id"]), remaining_amount(endpoint["effective_remaining"])
-                )
+                remaining = remaining_amount(endpoint["effective_remaining"])
                 eligibility = eligible_for_scoring(
                     {
                         "access": "free_quota_available",
@@ -279,7 +276,7 @@ def _quality_band_candidates(transaction: Any, metric: str) -> list[dict[str, An
             # cannot contribute capacity that would narrow the band.
             "confirmed_free": row["probe_status"] == "passed"
             and row["status"] == "confirmed"
-            and bool(row["hard_stop_capable"]),
+            and remaining_amount(row["effective_remaining"]) > 0,
         }
         for row in rows
     ]
@@ -363,19 +360,6 @@ def _latest_health_by_endpoint(transaction: Any) -> dict[str, dict[str, float | 
         }
         for row in rows
     }
-
-
-def _latest_remaining_by_pool(transaction: Any) -> dict[str, float]:
-    rows = transaction.execute(
-        """
-        SELECT DISTINCT ON (quota_pool_id) quota_pool_id, remaining_value
-        FROM quota_observations
-        WHERE metric = 'requests'
-          AND remaining_value IS NOT NULL
-        ORDER BY quota_pool_id, observed_at DESC
-        """
-    ).fetchall()
-    return {str(row["quota_pool_id"]): float(row["remaining_value"]) for row in rows}
 
 
 def _health_component(status: str | None, success_rate: Any, error_rate: Any) -> float:

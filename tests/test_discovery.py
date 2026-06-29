@@ -385,7 +385,7 @@ def test_quota_grouping_counts_only_confirmed_independent_capacity():
     assert pools["d"].independence_status == "assumed_shared"
 
 
-@pytest.mark.spec("account-discovery::Conflicting pool statuses")
+@pytest.mark.spec("account-discovery::Conflicting scope statuses")
 def test_quota_grouping_conflicting_statuses_merge_to_unknown():
     pools = group_quota_pools(
         [

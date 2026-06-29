@@ -28,6 +28,7 @@ the end of `schema.sql`; they were extracted so the baseline stays clean.
 | `0011_v3.23_provider_endpoint_identity.sql` | 3.23 | `provider_endpoints.provider_id` and provider/model dedupe identity |
 | `0012_v3.24_drop_endpoint_account_identity.sql` | 3.24 | drop redundant account-level `provider_endpoints` unique constraint |
 | `0013_v3.25_published_generations.sql` | 3.25 | `published_generations` payload-hash publish records |
+| `0014_v3.26_remove_fmo_quota.sql` | 3.26 | drop retired FMO quota tables and FK columns |
 
 > The AA index-migration / threshold-version tables, demand tables, quota
 > attribution tables, bootstrap profiles, combo review, role lifecycle events,

@@ -5,11 +5,11 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 
+from fmo.access_state import remaining_amount
 from fmo.idempotency import hash_parts, utcnow
 from fmo.omniroute import OmniRouteRequestError
 from fmo.pipeline import PipelineContext, StageResult
 from fmo.probes import handle_probe_error, probe_suites
-from fmo.quota_normalize import remaining_amount
 from fmo.scanner import CatalogScanner, scan_live_omniroute_catalogs
 
 from ._base import StageDependencies

@@ -7,19 +7,19 @@ TBD - created by archiving change add-foundation. Update Purpose after archive.
 
 The system SHALL treat a `provider_endpoint` (provider account + provider model
 id) as the unit of management, not the canonical model, because one canonical
-model can have several endpoints with different quotas, reset policies, latency
+model can have several endpoints with different access status, latency
 and availability.
 
 #### Scenario: Same model on two providers
 - GIVEN one canonical model offered by provider A and provider B
 - WHEN endpoints are built
-- THEN two independent provider_endpoints exist, each carrying its own quota and
+- THEN two independent provider_endpoints exist, each carrying its own access and
   status
 
 ### Requirement: Daily batch is the main process
 
 The system SHALL run the full pipeline once per day; additional runs are manual
-or event-driven. The system SHALL NOT require sub-daily health or quota loops —
+or event-driven. The system SHALL NOT require sub-daily health or quota loops -
 intraday endpoint failures are handled by OmniRoute fallback and circuit breaker.
 
 #### Scenario: Intraday failure not rebuilt
@@ -32,7 +32,7 @@ intraday endpoint failures are handled by OmniRoute fallback and circuit breaker
 
 The system SHALL NOT change OmniRoute when PostgreSQL is unavailable, no current
 snapshot exists, the desired state failed validation, an access rule is
-stale/conflicting, quota is unknown, or the endpoint failed probe.
+stale/conflicting, or the endpoint failed probe.
 
 #### Scenario: Missing snapshot blocks apply
 - GIVEN no snapshot of current OmniRoute state exists
@@ -41,10 +41,9 @@ stale/conflicting, quota is unknown, or the endpoint failed probe.
 
 ### Requirement: Idempotent runs
 
-The system SHALL use idempotency keys (catalog snapshot, quota source, quota
-rule, probe, combo apply) so that repeating a run creates no duplicate models or
-aliases, makes no diff-free combo change, and does not re-run an expensive probe
-whose inputs are unchanged.
+The system SHALL use idempotency keys (catalog snapshot, probe, combo apply) so
+that repeating a run creates no duplicate models or aliases, makes no diff-free
+combo change, and does not re-run an expensive probe whose inputs are unchanged.
 
 #### Scenario: Re-run with unchanged inputs
 - GIVEN a completed daily run
@@ -53,14 +52,13 @@ whose inputs are unchanged.
 
 ### Requirement: Forbidden state transitions
 
-The system SHALL reject the transitions: `excluded_unknown → active` without a
-new confirmed quota rule; `quota_exhausted → active` before reset and quota
-refresh; `probe_failed → active` without a new successful probe; `planned →
-applied` without a saved snapshot.
+The system SHALL reject the transitions: `excluded_unknown -> active` without
+new confirmed access evidence; `probe_failed -> active` without a new successful
+probe; `planned -> applied` without a saved snapshot.
 
-#### Scenario: Reactivate exhausted endpoint too early
-- GIVEN an endpoint in `quota_exhausted`
-- WHEN reset has not occurred and quota is not refreshed
+#### Scenario: Reactivate failed endpoint too early
+- GIVEN an endpoint failed a probe
+- WHEN no later successful probe exists
 - THEN the endpoint cannot transition to `active`
 
 ### Requirement: Composition root stays within a single-responsibility boundary
@@ -129,24 +127,24 @@ unchanged as the behavior-preservation oracle.
 
 The front-of-pipeline stages SHALL be **defined** in dedicated per-cluster
 modules under the `fmo.composition_stages` package — metadata, free-candidate and
-account discovery, model matching, quota research/sync, and access classification
-— each owning its own private helpers, rather than in a single stage module. The
+account discovery, model matching, and access classification — each owning its
+own private helpers, rather than in a single stage module. The
 module that fronts a front-of-pipeline stage SHALL contain the stage's
 implementation rather than a delegation to another module (in particular not to
 `_legacy`). Draining these clusters SHALL NOT change any stage behavior, persisted
 shape, or the production stage-adapter wiring; the existing test suite SHALL pass
 unchanged as the behavior-preservation oracle.
 
-#### Scenario: Discovery, quota, and access stages live in dedicated modules
+#### Scenario: Discovery and access stages live in dedicated modules
 - **WHEN** the composition stages package is inspected
-- **THEN** the discovery, quota-research/sync, and access-classification stages
-  live in separate cluster modules under `fmo.composition_stages`
+- **THEN** the discovery and access-classification stages live in separate
+  cluster modules under `fmo.composition_stages`
 - **AND** no extracted module defines a stage belonging to a different cluster
 
 #### Scenario: Front-of-pipeline stages are defined in their own modules
 - **WHEN** a front-of-pipeline stage entrypoint is inspected with
   `inspect.getmodule`
-- **THEN** it resolves to its cluster module (`discovery`, `quota`, or `access`)
+- **THEN** it resolves to its cluster module (`discovery` or `access`)
 - **AND** it does not resolve to `fmo.composition_stages._legacy`
 
 #### Scenario: Stage package re-exports preserve composition wiring
@@ -194,7 +192,7 @@ behavior-preservation oracle.
 The back-of-pipeline stages SHALL be **defined** in dedicated per-cluster modules
 under the `fmo.composition_stages` package — demand forecast, allocation, diff,
 apply, rollback, and audit — and the cross-cluster shared helpers (effect/result,
-slug/hash, quota-math, adapter helpers) SHALL be defined once in a single helpers
+slug/hash, adapter helpers) SHALL be defined once in a single helpers
 module imported by the domain modules. The module that fronts a back-of-pipeline
 stage SHALL contain the stage's implementation rather than a delegation to another
 module. After the drain the package SHALL contain only the re-export shim, the
@@ -251,12 +249,12 @@ preserved.
 
 Duplicated cross-module helpers SHALL each have exactly one canonical definition,
 with call sites importing it rather than reimplementing: the repository row
-helpers live in `persistence/_base`; the timestamp (`utcnow`), slug, and hashing
-helpers live in one shared module each; and the quota-math helpers live next to
-the quota normalization/manager modules. Stage cluster modules SHALL import the
-canonical helper name directly from its module; the `composition_stages._helpers`
-module SHALL NOT carry a per-package re-export alias layer (e.g. `_canonical_slug
-= canonical_slug`) for those helpers. Consolidation SHALL NOT change any
+helpers live in `persistence/_base`; the timestamp (`utcnow`), slug, hashing, and
+access-state helpers live in one shared module each. Stage cluster modules SHALL
+import the canonical helper name directly from its module; the
+`composition_stages._helpers` module SHALL NOT carry a per-package re-export
+alias layer (e.g. `_canonical_slug = canonical_slug`) for those helpers.
+Consolidation SHALL NOT change any
 behavior — it removes duplicate definitions and redundant aliases only; the
 existing test suite SHALL pass unchanged as the behavior-preservation oracle.
 
@@ -268,17 +266,16 @@ existing test suite SHALL pass unchanged as the behavior-preservation oracle.
 
 #### Scenario: Timestamp and hashing helpers are centralized
 - **WHEN** a module needs the UTC-now, canonical-slug, hash, idempotency-key, or
-  quota-math helper
+  access-state helper
 - **THEN** it imports the one canonical definition for that helper
 - **AND** the full existing pytest suite passes unchanged
 
 #### Scenario: Stage helpers carry no re-export alias layer
 - **WHEN** the `composition_stages._helpers` module is inspected
 - **THEN** it defines only the genuine cross-cluster stage helpers and no
-  underscore re-export alias (`_canonical_slug`, `_hash_parts`, `_quota_metric`,
-  `_quota_limit`, `_remaining_amount`) for the centralized helpers
-- **AND** the cluster modules import those helpers directly from
-  `fmo.idempotency` / `fmo.quota_normalize`
+  underscore re-export alias for the centralized helpers
+- **AND** the cluster modules import those helpers directly from their canonical
+  modules
 
 ### Requirement: Stage bodies are defined in their domain modules
 

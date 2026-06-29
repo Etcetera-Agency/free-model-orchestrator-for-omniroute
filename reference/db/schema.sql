@@ -40,15 +40,6 @@ CREATE TABLE providers (
   UNIQUE (omniroute_instance_id, omniroute_provider_id)
 );
 
--- Defined before provider_accounts so the quota_pool_id FK can be inlined.
-CREATE TABLE quota_pools (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  name text UNIQUE NOT NULL,
-  provider_group text,
-  reset_policy jsonb,
-  manual boolean NOT NULL DEFAULT false
-);
-
 CREATE TABLE provider_accounts (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   provider_id uuid NOT NULL REFERENCES providers(id),
@@ -58,14 +49,10 @@ CREATE TABLE provider_accounts (
   account_type text NOT NULL DEFAULT 'credential',
   auth_type text,
   connection_fingerprint text,
-  -- Shared vocabulary with quota_attribution_groups.status and
-  -- endpoint_quota_attribution.attribution_status. Here it expresses how
-  -- confident we are that this account's free quota is independent.
   quota_independence_status text NOT NULL DEFAULT 'assumed_shared'
     CHECK (quota_independence_status IN (
       'confirmed', 'inferred', 'assumed_shared', 'unknown'
     )),
-  quota_pool_id uuid REFERENCES quota_pools(id),
   -- Quota scope identity (v3.4): how the upstream quota is partitioned.
   quota_scope_type text,
   quota_scope_key text,
@@ -128,68 +115,8 @@ CREATE TABLE provider_endpoints (
   UNIQUE (provider_id, provider_model_id, model_type)
 );
 
-CREATE TABLE quota_source_snapshots (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  provider_id uuid REFERENCES providers(id),
-  source_url text NOT NULL,
-  source_type text NOT NULL,
-  title text,
-  http_status integer,
-  content_hash text NOT NULL,
-  normalized_content text,
-  published_at timestamptz,
-  fetched_at timestamptz NOT NULL DEFAULT now(),
-  etag text,
-  last_modified text,
-  UNIQUE (source_url, content_hash)
-);
-
-CREATE TABLE quota_rules (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  provider_id uuid REFERENCES providers(id),
-  provider_account_id uuid REFERENCES provider_accounts(id),
-  source_snapshot_id uuid REFERENCES quota_source_snapshots(id),
-  model_pattern text NOT NULL DEFAULT '*',
-  access_type text NOT NULL,
-  limits jsonb NOT NULL,
-  reset_policy jsonb NOT NULL,
-  hard_stop_capable boolean NOT NULL,
-  confidence numeric(5,4) NOT NULL,
-  status text NOT NULL,
-  rule_hash text NOT NULL,
-  valid_from timestamptz,
-  valid_until timestamptz,
-  created_at timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE TABLE quota_observations (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  quota_pool_id uuid NOT NULL REFERENCES quota_pools(id),
-  provider_account_id uuid REFERENCES provider_accounts(id),
-  source text NOT NULL,
-  metric text NOT NULL,
-  limit_value numeric,
-  used_value numeric,
-  remaining_value numeric,
-  reset_at timestamptz,
-  raw_payload jsonb,
-  observed_at timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE TABLE quota_reservations (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  quota_pool_id uuid NOT NULL REFERENCES quota_pools(id),
-  endpoint_id uuid REFERENCES provider_endpoints(id),
-  metric text NOT NULL,
-  reserved_amount numeric NOT NULL,
-  status text NOT NULL,
-  expires_at timestamptz NOT NULL,
-  created_at timestamptz NOT NULL DEFAULT now()
-);
-
 CREATE TABLE endpoint_access_states (
   endpoint_id uuid PRIMARY KEY REFERENCES provider_endpoints(id),
-  quota_rule_id uuid REFERENCES quota_rules(id),
   status text NOT NULL,
   reason_code text NOT NULL,
   effective_remaining jsonb,
@@ -353,29 +280,11 @@ CREATE TABLE change_log (
 
 CREATE INDEX idx_provider_endpoints_status ON provider_endpoints(access_status, lifecycle_status);
 CREATE INDEX idx_provider_endpoints_context ON provider_endpoints(effective_context_window);
-CREATE INDEX idx_quota_rules_active ON quota_rules(provider_id, provider_account_id, status);
 CREATE INDEX idx_probes_endpoint_time ON endpoint_probes(endpoint_id, finished_at DESC);
 CREATE INDEX idx_health_endpoint_time ON endpoint_health_observations(endpoint_id, observed_at DESC);
 CREATE INDEX idx_role_scores_role_time ON role_scores(role_id, calculated_at DESC);
 CREATE INDEX idx_provider_accounts_connection
   ON provider_accounts(provider_id, omniroute_connection_id);
-
-
-CREATE TABLE role_quota_budgets (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  allocation_plan_id uuid,
-  quota_pool_id uuid NOT NULL REFERENCES quota_pools(id),
-  role_id text NOT NULL REFERENCES roles(id),
-  budget_type text NOT NULL CHECK (budget_type IN ('guaranteed', 'opportunistic')),
-  requests_budget numeric,
-  tokens_budget numeric,
-  expected_use_factor numeric NOT NULL DEFAULT 1,
-  valid_until timestamptz,
-  created_at timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE INDEX idx_role_quota_budgets_pool_role
-  ON role_quota_budgets(quota_pool_id, role_id);
 
 CREATE TABLE global_allocation_plans (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -385,20 +294,6 @@ CREATE TABLE global_allocation_plans (
   input_state_hash text NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now()
 );
-
-CREATE TABLE quota_pool_members (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  quota_pool_id uuid NOT NULL REFERENCES quota_pools(id),
-  provider_account_id uuid NOT NULL REFERENCES provider_accounts(id),
-  membership_reason text NOT NULL,
-  confidence numeric(5,4) NOT NULL,
-  valid_from timestamptz NOT NULL DEFAULT now(),
-  valid_until timestamptz,
-  UNIQUE (quota_pool_id, provider_account_id, valid_from)
-);
-
-CREATE INDEX idx_quota_pool_members_account
-  ON quota_pool_members(provider_account_id, valid_until);
 
 CREATE TABLE account_discovery_snapshots (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -639,68 +534,9 @@ CREATE TABLE role_usage_observations (
   observed_at timestamptz NOT NULL DEFAULT now()
 );
 
--- Defined before role_demand_forecasts so the attribution-group FK inlines.
-CREATE TABLE quota_attribution_groups (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  provider_id text NOT NULL,
-  scope_type text NOT NULL CHECK (
-    scope_type IN (
-      'account', 'credential', 'provider', 'model',
-      'ip', 'installation', 'device', 'session',
-      'global', 'unknown'
-    )
-  ),
-  scope_key text,
-  status text NOT NULL CHECK (
-    status IN ('confirmed', 'inferred', 'assumed_shared', 'unknown')
-  ),
-  source text NOT NULL,
-  limit_type text,
-  request_limit numeric,
-  token_limit numeric,
-  reset_rule_json jsonb,
-  confidence numeric(5,4) NOT NULL,
-  capacity_weight numeric(5,4) NOT NULL,
-  evidence_json jsonb NOT NULL DEFAULT '[]'::jsonb,
-  active boolean NOT NULL DEFAULT true,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE TABLE endpoint_quota_attribution (
-  endpoint_id uuid NOT NULL REFERENCES provider_endpoints(id),
-  account_or_connection_id text,
-  quota_attribution_group_id uuid REFERENCES quota_attribution_groups(id),
-  attribution_status text NOT NULL CHECK (
-    attribution_status IN ('confirmed', 'inferred', 'assumed_shared', 'unknown')
-  ),
-  evidence_json jsonb NOT NULL DEFAULT '[]'::jsonb,
-  valid_from timestamptz NOT NULL DEFAULT now(),
-  valid_until timestamptz,
-  PRIMARY KEY(endpoint_id, account_or_connection_id, valid_from)
-);
-
-CREATE TABLE quota_attribution_events (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  event_type text NOT NULL CHECK (
-    event_type IN ('created', 'merged', 'split', 'reclassified', 'disabled')
-  ),
-  old_group_ids jsonb NOT NULL DEFAULT '[]'::jsonb,
-  new_group_ids jsonb NOT NULL DEFAULT '[]'::jsonb,
-  evidence_json jsonb NOT NULL DEFAULT '[]'::jsonb,
-  created_at timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE INDEX idx_quota_attribution_provider_status
-  ON quota_attribution_groups(provider_id, status, active);
-
-CREATE INDEX idx_endpoint_quota_attribution_group
-  ON endpoint_quota_attribution(quota_attribution_group_id, valid_until);
-
 CREATE TABLE role_demand_forecasts (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   role_id text NOT NULL REFERENCES roles(id),
-  quota_pool_id uuid REFERENCES quota_pools(id),
   forecast_start timestamptz NOT NULL,
   forecast_end timestamptz NOT NULL,
   expected_requests numeric NOT NULL,
@@ -715,9 +551,6 @@ CREATE TABLE role_demand_forecasts (
   source_mix jsonb NOT NULL DEFAULT '{}'::jsonb,
   confidence numeric(5,4) NOT NULL,
   input_state_hash text NOT NULL,
-  -- Quota attribution linkage (v3.15).
-  quota_attribution_group_id uuid REFERENCES quota_attribution_groups(id),
-  quota_attribution_status text,
   -- Historical-reserve / cold-start blending (v3.16).
   demand_source text,
   base_historical_requests numeric,

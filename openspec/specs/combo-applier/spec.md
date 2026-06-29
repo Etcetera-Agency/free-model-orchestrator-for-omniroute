@@ -228,36 +228,18 @@ or locked-out input yields the corresponding value `False`, the stage returns
 - **AND** the stage returns `unsafe_to_apply` (exit 5) and mutates no combo
 
 #### Scenario: Confirmed safety allows the apply stage
-- **WHEN** every endpoint in the desired combos is confirmed-free, hard-stop,
-  freshly probed, has a known daily budget above the buffer, and a fresh liveness
-  signal above the floor that is not locked out
+- **WHEN** every endpoint in the desired combos is confirmed-free, freshly
+  probed, has OmniRoute-delegated or known daily capacity above the buffer, and
+  a fresh liveness signal above the floor that is not locked out
 - **THEN** both derived inputs are `True`
 - **AND** the apply stage proceeds to mutate the combos
 
 #### Scenario: Assumed remaining does not satisfy the apply gate
 - **WHEN** an endpoint's only quota evidence is an assumed remaining synthesized
-  at classification time, with no live liveness observation or researched
-  request-window hard-stop rule
+  at classification time, with no live liveness observation or OmniRoute
+  delegation evidence
 - **THEN** the stage derives `quota_safe` as `False` for that endpoint
 - **AND** the stage returns `unsafe_to_apply` (exit 5) and mutates no combo
-
-#### Scenario: Request-window hard-stop quota can satisfy apply safety
-- **WHEN** a confirmed-free endpoint has a researched active hard-stop quota rule
-  for requests per minute or hour
-- AND the endpoint has assumed request remaining above the safety buffer
-- **THEN** the stage derives `quota_safe` as `True` without requiring a daily or
-  monthly live budget
-- AND an imminent reset (its `resetAt` within the 1-hour window horizon) does not
-  fail the gate while remaining capacity is still above the buffer
-
-#### Scenario: Far-future reset hard-stops a request-window endpoint
-- **WHEN** a confirmed-free endpoint's only capacity is a request-window hard-stop
-  rule and it is locked out
-- AND its `resetAt` is further than the 1-hour window horizon in the future
-- **THEN** the stage derives `quota_safe` as `False` for that endpoint
-- **AND** the stage returns `unsafe_to_apply` (exit 5) and mutates no combo
-- AND a live liveness overlay with zero percent remaining or a future reset does
-  not fail that request-window gate while researched request capacity remains
   above the buffer
 
 #### Scenario: Zero safety buffer does not satisfy the apply gate

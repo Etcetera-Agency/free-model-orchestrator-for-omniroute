@@ -6,7 +6,6 @@ from datetime import UTC, datetime
 from fmo.aa_migration import MigrationProposalResponse
 from fmo.hermes_inventory import InspectorForecastResponse, IntelligenceForecastResponse
 from fmo.omniroute import OmniRouteHttpResponse, OmniRouteRequestError
-from fmo.quota_research import QuotaClaimResponse
 from fmo.smart_review import ComboReviewResponse
 from tests._fixtures import fixture_body
 
@@ -23,22 +22,9 @@ EMPTY_OPENAI_CHAT_COMPLETION_BODY = {
 }
 
 
-class QuotaSearchClient:
-    def __init__(self, answer="Provider gives 100 requests per day with hard stop."):
-        self.answer = answer
-        self.calls = []
-
-    def post(self, path, payload):
-        self.calls.append((path, payload))
-        return {
-            "answer": {"text": self.answer},
-            "results": [{"title": "Docs", "url": "https://provider.example/free"}],
-        }
-
-
-class PipelineOpsClient(QuotaSearchClient):
+class PipelineOpsClient:
     def __init__(self, *, probe_status=200, smoke_status=200, rollback_fails=False):
-        super().__init__()
+        self.calls = []
         self.probe_status = probe_status
         self.smoke_status = smoke_status
         self.rollback_fails = rollback_fails
@@ -106,8 +92,6 @@ class PipelineOpsClient(QuotaSearchClient):
         raise AssertionError(f"unexpected PUT {path}")
 
     def post(self, path, payload, headers=None, idempotency_key=None):
-        if path == "/v1/search":
-            return super().post(path, payload)
         if path.startswith("/api/combos/"):
             raise AssertionError("combo updates must use PUT")
         if path == "/v1/chat/completions":
@@ -153,22 +137,6 @@ class PipelineOpsClient(QuotaSearchClient):
         if path == "/api/combos":
             return {"combos": [{"id": combo_id, "models": models} for combo_id, models in self.combos.items()]}
         raise AssertionError(f"unexpected GET {path}")
-
-
-class PartiallyFailingQuotaSearchClient(PipelineOpsClient):
-    def __init__(self, *, failing_model):
-        super().__init__()
-        self.failing_model = failing_model
-        self.attempted_models = []
-
-    def post(self, path, payload, headers=None, idempotency_key=None):
-        if path == "/v1/search":
-            query = str(payload["query"])
-            model_id = query.split("model ", 1)[1].split(",", 1)[0].split(" on provider", 1)[0]
-            self.attempted_models.append(model_id)
-            if model_id == self.failing_model:
-                raise OmniRouteRequestError("POST", path, 503)
-        return super().post(path, payload, headers=headers, idempotency_key=idempotency_key)
 
 
 class MultiComboOpsClient(PipelineOpsClient):
@@ -259,8 +227,7 @@ class AccountDiscoveryOpsClient(PipelineOpsClient):
 
 
 class RecordingLlmRuntime:
-    def __init__(self, *, quota_amount=200.0, review_diffs=None, fail=False):
-        self.quota_amount = quota_amount
+    def __init__(self, *, review_diffs=None, fail=False):
         self.review_diffs = review_diffs or []
         self.fail = fail
         self.calls = []
@@ -269,14 +236,6 @@ class RecordingLlmRuntime:
         self.calls.append({"site": site.name, "context": context, "response_model": response_model.__name__})
         if self.fail:
             raise RuntimeError("llm unavailable")
-        if response_model is QuotaClaimResponse:
-            return response_model(
-                metric="requests",
-                amount=self.quota_amount,
-                window="day",
-                evidence=["https://llm.example/evidence"],
-                hard_stop=True,
-            )
         if response_model is ComboReviewResponse:
             return response_model(diffs=self.review_diffs)
         if response_model is InspectorForecastResponse:

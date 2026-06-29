@@ -26,7 +26,6 @@ from fmo.hermes_inventory import Consumer, Inventory
 from fmo.metadata_sync import MetadataSyncResult
 from fmo.persistence import Database, Repository
 from fmo.pipeline import CANONICAL_STAGE_NAMES, PipelineRunner
-from fmo.quota_research import QuotaClaimResponse
 from fmo.registry import FreeRegistry, FreeRegistrySyncOutcome
 from tests._clients import (
     OPENAI_CHAT_COMPLETION_BODY,
@@ -34,9 +33,7 @@ from tests._clients import (
     FakeInstructorClient,
     FakeOpenAIClient,
     MultiComboOpsClient,
-    PartiallyFailingQuotaSearchClient,
     PipelineOpsClient,
-    QuotaSearchClient,
     RecordingLlmRuntime,
 )
 from tests._fixtures import load_hermes_fixture
@@ -60,12 +57,9 @@ __all__ = [
     "MetadataSyncResult",
     "MigrationRunner",
     "MultiComboOpsClient",
-    "PartiallyFailingQuotaSearchClient",
     "Path",
     "PipelineOpsClient",
     "PipelineRunner",
-    "QuotaClaimResponse",
-    "QuotaSearchClient",
     "RecordingLlmRuntime",
     "Repository",
     "StageAdapters",
@@ -278,11 +272,9 @@ def run_runtime_command(repository, client, command, **args):
 
 def run_rebalance_stages(repository, client):
     stage_names = [
-        "quota-research",
         "access-classification",
         "probing",
         "telemetry-sync",
-        "quota-sync",
         "role-scoring",
         "allocation",
         "diff",
@@ -295,11 +287,9 @@ def _command_for_stage(stage_name):
     commands = {
         "model-matching": "match-models",
         "account-discovery": "discover-accounts",
-        "quota-research": "research-quotas",
         "access-classification": "classify-access",
         "probing": "probe-models",
         "telemetry-sync": "sync-telemetry",
-        "quota-sync": "sync-quotas",
         "hermes-inventory": "sync-hermes-inventory",
         "role-lifecycle": "reconcile-roles",
         "role-scoring": "score-roles",
@@ -315,7 +305,6 @@ def _command_for_stage(stage_name):
 def prepare_confirmed_endpoint(repository, *, client=None):
     seed_endpoint(repository)
     run_composed_stage(repository, "model-matching", client=client)
-    run_composed_stage(repository, "quota-research", client=client)
     run_composed_stage(repository, "access-classification", client=client)
 
 
@@ -323,7 +312,6 @@ def prepare_scored_endpoint(repository, *, client=None):
     prepare_confirmed_endpoint(repository, client=client)
     run_composed_stage(repository, "probing", client=client)
     run_composed_stage(repository, "telemetry-sync", client=client)
-    run_composed_stage(repository, "quota-sync", client=client)
     with repository.database.transaction() as transaction:
         repository.roles.upsert(
             transaction,

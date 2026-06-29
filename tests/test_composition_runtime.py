@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from fmo.omniroute import OmniRouteRequestError
+from fmo.smart_review import ComboReviewResponse
 from tests._composition_support import (
     CANONICAL_STAGE_NAMES,
     UTC,
@@ -19,7 +20,6 @@ from tests._composition_support import (
     MigrationRunner,
     Path,
     PipelineOpsClient,
-    QuotaClaimResponse,
     RecordingLlmRuntime,
     Repository,
     StageAdapters,
@@ -116,7 +116,7 @@ def test_runtime_fails_closed_when_live_catalog_refresh_fails(postgres_url):
     assert calls == ["refresh"]
 
 
-@pytest.mark.spec("pipeline-orchestration::Probe respects confirmed free capacity")
+@pytest.mark.spec("pipeline-orchestration::Probe respects confirmed free access")
 @pytest.mark.spec("pipeline-orchestration::Probe persists results and excludes failures")
 def test_probe_stage_gates_on_confirmed_capacity_and_persists_results(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
@@ -157,7 +157,6 @@ def test_probe_stage_probes_seed_and_admits_bounded_new_candidate(postgres_url):
     seed_endpoint(repository, model_id="free-chat")
     seed_endpoint(repository, model_id="second-free")
     run_composed_stage(repository, "model-matching", client=client)
-    run_composed_stage(repository, "quota-research", client=client)
     run_composed_stage(repository, "access-classification", client=client)
 
     result = run_composed_stage(repository, "probing", client=client)
@@ -423,29 +422,6 @@ def test_telemetry_sync_stage_writes_normalized_health_rows(postgres_url):
         ("provider", 10, 120),
         ("provider", 5, 80),
     ]
-
-
-@pytest.mark.spec("pipeline-orchestration::Quota sync writes remaining-quota state")
-def test_quota_sync_stage_writes_remaining_quota_state(postgres_url):
-    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
-    repository = Repository(Database(postgres_url))
-    client = PipelineOpsClient()
-    prepare_confirmed_endpoint(repository, client=client)
-
-    result = run_composed_stage(repository, "quota-sync", client=client)
-
-    with repository.database.transaction() as transaction:
-        observation = transaction.execute(
-            "SELECT limit_value, used_value, remaining_value FROM quota_observations"
-        ).fetchone()
-        access = transaction.execute("SELECT effective_remaining FROM endpoint_access_states").fetchone()
-    assert result.exit_code == 0
-    assert result.stage_results[0]["details"]["effect"] == "repository_write"
-    assert client.get_calls[-1] == "/api/usage/quota"
-    assert float(observation["limit_value"]) == 200_000.0
-    assert float(observation["used_value"]) == 80_000.0
-    assert float(observation["remaining_value"]) == 120_000.0
-    assert access["effective_remaining"]["requests"] == 100.0
 
 
 @pytest.mark.spec("hermes-inventory::Inventory persisted from the selected mode")
@@ -1286,18 +1262,6 @@ def test_production_llm_runtime_uses_instructor_from_openai_and_bootstrap_model(
             LLM_BOOTSTRAP_MODEL_CONFIRMED_FREE="true",
         )
     )
-    client = PipelineOpsClient()
-    client.quota_body["providers"] = [
-        {
-            "provider": "provider-bootstrap",
-            "connectionId": "conn-bootstrap",
-            "quotaTotal": 100,
-            "quotaUsed": 20,
-            "quotaWindow": "day",
-            "percentRemaining": 80,
-            "resetAt": None,
-        }
-    ]
     openai_clients = []
     instructor_clients = []
     fake_instructor_client = FakeInstructorClient()
@@ -1314,7 +1278,7 @@ def test_production_llm_runtime_uses_instructor_from_openai_and_bootstrap_model(
     runtime = build_production_llm_runtime(
         config,
         repository,
-        live_quota_client=client,
+        live_quota_client=PipelineOpsClient(),
         adapters=StageAdapters(
             instructor_from_openai=instructor_from_openai,
             openai_client_factory=openai_client_factory,
@@ -1326,18 +1290,18 @@ def test_production_llm_runtime_uses_instructor_from_openai_and_bootstrap_model(
             "Site",
             (),
             {
-                "name": "quota-research-inspector",
+                "name": "smart-combo-review",
                 "model": "paid-static",
                 "prompt_path": None,
                 "max_prompt_chars": 1000,
                 "retries": 1,
             },
         )(),
-        context={"prompt": "quota"},
-        response_model=QuotaClaimResponse,
+        context={"prompt": "review"},
+        response_model=ComboReviewResponse,
     )
 
-    assert response.amount == 1
+    assert response.diffs == []
     assert openai_clients[0].kwargs == {"base_url": "https://omniroute.test/v1", "api_key": "test-key"}
     assert instructor_clients == openai_clients
     assert fake_instructor_client.chat.completions.calls[0]["model"] == "provider-bootstrap:conn-bootstrap"
@@ -1378,7 +1342,6 @@ def test_llm_model_selection_uses_confirmed_free_index_order_and_no_llm_fallback
 
 
 @pytest.mark.spec("llm-runtime::Falls to next model by index on unavailability")
-@pytest.mark.spec("llm-runtime::Just-consumed quota is not selected")
 def test_llm_model_selection_requires_fresh_live_quota_before_returning_candidate(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     repository = Repository(Database(postgres_url))
@@ -1781,11 +1744,9 @@ def test_full_runtime_invokes_every_production_adapter_in_order(postgres_url):
         "free-candidate-discovery:registry",
         "free-candidate-discovery:catalog",
         "model-matching",
-        "quota-research",
         "access-classification",
         "probing",
         "telemetry-sync",
-        "quota-sync",
         "hermes-inventory",
         "role-lifecycle",
         "role-scoring",
