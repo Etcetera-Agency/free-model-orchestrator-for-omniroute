@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from fmo.access_state import remaining_amount
+from fmo.combo_reader import read_current_combos
 from fmo.idempotency import hash_parts, utcnow
 from fmo.omniroute import OmniRouteRequestError
 from fmo.pipeline import PipelineContext, StageResult
@@ -14,7 +15,6 @@ from fmo.scanner import CatalogScanner, scan_live_omniroute_catalogs
 
 from ._base import StageDependencies
 from ._helpers import _effect_result, _omniroute_instance_id
-from .apply import _read_current_combos
 
 PROBE_SUITE_VERSION = "production-v3-model-test-all"
 PROBE_BATCH_SIZE = 100
@@ -342,7 +342,7 @@ def _record_probe_outcome(context: PipelineContext, *, row: dict[str, Any], outc
 
 
 def _current_combo_seed_models(client) -> set[str]:
-    current = _read_current_combos(client)
+    current = read_current_combos(client)
     models: set[str] = set()
     for combo_id, members in current.items():
         if not combo_id.startswith("fmo-") or len(members) != 1:

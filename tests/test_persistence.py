@@ -17,10 +17,8 @@ _PROBE_STARTED_AT = (datetime.now(UTC) - timedelta(minutes=1)).isoformat()
 _PROBE_FINISHED_AT = (datetime.now(UTC) - timedelta(minutes=1) + timedelta(seconds=1)).isoformat()
 
 _PUBLIC_PERSISTENCE_CLASSES = {
-    "AllocationPlanRepository",
     "AuditRepository",
     "CanonicalModelRepository",
-    "ComboSnapshotRepository",
     "Database",
     "ExternalMetadataRepository",
     "FreeRegistryRepository",
@@ -57,11 +55,9 @@ def test_persistence_layer_is_package_with_small_aggregate_modules():
     assert "_base" in modules
     assert {
         "account",
-        "allocation_plan",
         "audit",
         "canonical_model",
         "catalog",
-        "combo_snapshot",
         "endpoint",
         "external_metadata",
         "lock",
@@ -198,27 +194,12 @@ def test_domain_repository_round_trips(repository):
             eligibility=True,
             input_state_hash="score-key",
         )
-        plan = repository.allocation_plans.upsert(
-            transaction,
-            role_id=role["id"],
-            status="planned",
-            targets=[{"endpoint_id": str(endpoint["id"]), "weight": 1}],
-            constraint_report={"ok": True},
-            input_state_hash="plan-key",
-        )
-        combo = repository.combo_snapshots.upsert(
-            transaction,
-            role_id=role["id"],
-            state_hash="combo-key",
-            state_json={"models": ["gpt-test"]},
-            phase="planned",
-        )
         audit = repository.audit.record(
             transaction,
             entity_type="combo",
             entity_id=role["id"],
             action="planned",
-            after_json=combo["state_json"],
+            after_json={"models": ["gpt-test"]},
             reason_codes=["test"],
         )
 
@@ -226,8 +207,6 @@ def test_domain_repository_round_trips(repository):
         assert repository.provider_endpoints.get(transaction, endpoint["id"]) == endpoint
         assert repository.probes.get(transaction, probe["id"]) == probe
         assert repository.scores.get(transaction, score["id"]) == score
-        assert repository.allocation_plans.get(transaction, plan["id"]) == plan
-        assert repository.combo_snapshots.get(transaction, combo["id"]) == combo
         assert repository.audit.get(transaction, audit["id"]) == audit
 
 
@@ -337,37 +316,6 @@ def test_provider_endpoint_upsert_overwrites_provider_model_identity(repository)
     assert total == 1
 
 
-@pytest.mark.spec("persistence::Re-run does not duplicate")
-def test_combo_snapshot_rerun_refreshes_existing_snapshot_recency(repository):
-    with repository.database.transaction() as transaction:
-        first = repository.combo_snapshots.upsert(
-            transaction,
-            role_id="routing_fast",
-            omniroute_combo_id="fmo-routing_fast",
-            state_hash="same-diff",
-            state_json={"after": []},
-            phase="diff",
-            run_id="run-1",
-        )
-        transaction.execute(
-            "UPDATE combo_snapshots SET created_at = now() - interval '1 hour' WHERE id = %(id)s",
-            {"id": first["id"]},
-        )
-        second = repository.combo_snapshots.upsert(
-            transaction,
-            role_id="routing_fast",
-            omniroute_combo_id="fmo-routing_fast",
-            state_hash="same-diff",
-            state_json={"after": []},
-            phase="diff",
-            run_id="run-2",
-        )
-        count = transaction.execute("SELECT count(*) AS total FROM combo_snapshots").fetchone()["total"]
-
-    assert second["id"] == first["id"]
-    assert second["created_at"] > first["created_at"]
-    assert second["run_id"] == "run-2"
-    assert count == 1
 
 
 @pytest.mark.spec("data-model::Role carries a maximum quality bound")

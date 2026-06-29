@@ -1,7 +1,6 @@
 from pathlib import Path
 
 import pytest
-from tests._stage_effects import assert_success_has_declared_effect
 
 from fmo.db import MigrationRunner
 from fmo.persistence import Database, Repository
@@ -12,6 +11,7 @@ from fmo.pipeline import (
     StageResult,
     outcome_exit_code,
 )
+from tests._stage_effects import assert_success_has_declared_effect
 
 
 @pytest.fixture()
@@ -88,34 +88,6 @@ def test_unchanged_stage_idempotency_key_skips_reexecution(repository):
     assert run["error_json"]["stages"][0]["skipped"] is True
 
 
-@pytest.mark.spec("pipeline-orchestration::Failed gate stops apply")
-def test_failed_safety_gate_stops_downstream_apply(repository):
-    calls = []
-
-    def quota_gate(context):
-        calls.append("quota")
-        return StageResult(status="unsafe_to_apply", idempotency_key="quota-v1", reason="quota")
-
-    def apply_stage(context):
-        calls.append("apply")
-        return StageResult(status="success", idempotency_key="apply-v1", changed=True)
-
-    runner = PipelineRunner(
-        repository,
-        stages=[
-            Stage("quota", quota_gate),
-            Stage("apply", apply_stage),
-        ],
-    )
-
-    result = runner.run(trigger="manual")
-
-    assert calls == ["quota"]
-    assert result.exit_code == 5
-    assert result.changed is False
-    assert result.status == "unsafe_to_apply"
-
-
 @pytest.mark.spec("pipeline-orchestration::Partial data not consumed")
 @pytest.mark.spec("pipeline-orchestration::Stale stage does not abort the run")
 @pytest.mark.spec("pipeline-orchestration::Stale stage yields exit 2 while later stages run")
@@ -143,29 +115,6 @@ def test_partial_stale_output_does_not_abort_dependent_stages(repository):
     assert result.status == "partial_stale"
 
 
-@pytest.mark.spec("pipeline-orchestration::No combo test call")
-def test_runner_never_calls_combo_test(repository):
-    class Client:
-        def __init__(self):
-            self.paths = []
-
-        def post(self, path, payload):
-            self.paths.append(path)
-            if path == "/api/combos/test":
-                raise AssertionError("combo test must not be called")
-            return {"ok": True}
-
-    client = Client()
-
-    def apply_stage(context):
-        client.post("/api/combos/fmo-role", {"models": []})
-        return StageResult(status="success", idempotency_key="apply-v1", changed=True)
-
-    PipelineRunner(repository, stages=[Stage("apply", apply_stage)]).run(trigger="manual")
-
-    assert client.paths == ["/api/combos/fmo-role"]
-
-
 @pytest.mark.parametrize(
     ("status", "exit_code"),
     [
@@ -174,29 +123,12 @@ def test_runner_never_calls_combo_test(repository):
         ("validation_failed", 3),
         ("not_implemented", 3),
         ("external_dependency_failed", 4),
-        ("unsafe_to_apply", 5),
-        ("apply_failed_rolled_back", 6),
-        ("rollback_failed", 7),
     ],
 )
-@pytest.mark.spec("pipeline-orchestration::Unsafe apply outcome")
 @pytest.mark.spec("pipeline-orchestration::External dependency failure outcome")
 def test_outcomes_map_to_exit_codes(status, exit_code):
     assert outcome_exit_code(status) == exit_code
     assert EXIT_CODES[status] == exit_code
-
-
-@pytest.mark.spec("pipeline-orchestration::Unsafe apply outcome")
-def test_unsafe_apply_outcome_maps_to_code_5(repository):
-    runner = PipelineRunner(
-        repository,
-        stages=[Stage("apply", lambda context: StageResult(status="unsafe_to_apply", idempotency_key="apply-v1"))],
-    )
-
-    result = runner.run(trigger="manual")
-
-    assert result.exit_code == 5
-    assert result.changed is False
 
 
 @pytest.mark.spec("pipeline-orchestration::External dependency failure outcome")

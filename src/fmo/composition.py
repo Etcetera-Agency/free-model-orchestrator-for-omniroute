@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from urllib.parse import urljoin
 
 from fmo.aa_index_runtime import _run_aa_index_command, select_llm_model
+from fmo.combo_reader import read_current_combos
 from fmo.composition_contracts import RuntimeCliResult
 from fmo.composition_stages import (
     MetadataSync,
@@ -18,8 +19,6 @@ from fmo.composition_stages import (
     _free_candidate_stage,
     _latest_role_diagnostic,
     _metadata_stage,
-    _read_current_combos,
-    _rollback_stage,
 )
 from fmo.config import StartupConfig
 from fmo.llm_runtime import LlmProviderConfig, SharedInstructorRuntime, build_instructor_runtime
@@ -48,18 +47,7 @@ class ComposedRuntime:
         refresh_result = self._refresh_live_catalog()
         if refresh_result is not None:
             return refresh_result
-        if command == "rollback":
-            selected_stages = [
-                Stage(
-                    "rollback",
-                    lambda context: _rollback_stage(
-                        StageDependencies(repository=self.repository, omniroute_client=self.omniroute_client),
-                        context,
-                    ),
-                )
-            ]
-        else:
-            selected_stages = stages_for_command(command, self.stages)
+        selected_stages = stages_for_command(command, self.stages)
         result = PipelineRunner(
             self.repository,
             stages=selected_stages,
@@ -123,7 +111,7 @@ class ComposedRuntime:
         # are only lookup targets for raw/missing Hermes slots.
         result = normalize_profile_configs(
             self.config.hermes_home,
-            current_combos=_read_current_combos(self.omniroute_client),
+            current_combos=read_current_combos(self.omniroute_client),
             dry_run=getattr(args, "dry_run", False),
         )
         return RuntimeCliResult(
@@ -250,9 +238,6 @@ def build_canonical_stages(
         "role-lifecycle": Stage("role-lifecycle", _adapter_stage("role-lifecycle", deps, stage_adapters)),
         "role-scoring": Stage("role-scoring", _adapter_stage("role-scoring", deps, stage_adapters)),
         "demand-forecast": Stage("demand-forecast", _adapter_stage("demand-forecast", deps, stage_adapters)),
-        "allocation": Stage("allocation", _adapter_stage("allocation", deps, stage_adapters)),
-        "diff": Stage("diff", _adapter_stage("diff", deps, stage_adapters)),
-        "apply": Stage("apply", _adapter_stage("apply", deps, stage_adapters)),
         "audit": Stage("audit", _adapter_stage("audit", deps, stage_adapters)),
     }
     return [stage_by_name[name] for name in CANONICAL_STAGE_NAMES]
@@ -450,11 +435,4 @@ _COMMAND_STAGE_NAMES = {
     "reconcile-roles": "role-lifecycle",
     "score-roles": "role-scoring",
     "forecast-demand": "demand-forecast",
-    "allocate": "allocation",
-    "diff": "diff",
-    "apply": "apply",
-    # `rollback` selects the audit stage via stages_for_command (audit has no
-    # command of its own); the top-level `rollback` CLI command is separately
-    # special-cased in run_command to the dedicated revert path.
-    "rollback": "audit",
 }

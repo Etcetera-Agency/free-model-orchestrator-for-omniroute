@@ -29,10 +29,6 @@ COMMANDS = [
     "reconcile-roles",
     "score-roles",
     "forecast-demand",
-    "allocate",
-    "diff",
-    "apply",
-    "rollback",
     "full",
     "serve",
     "explain-endpoint",
@@ -46,9 +42,6 @@ EXIT_CODES = {
     "partial_stale": 2,
     "validation_failed": 3,
     "external_dependency_failed": 4,
-    "unsafe_to_apply": 5,
-    "apply_failed_rolled_back": 6,
-    "rollback_failed": 7,
 }
 
 
@@ -84,10 +77,6 @@ PIPELINE_COMMANDS = {
     "reconcile-roles",
     "score-roles",
     "forecast-demand",
-    "allocate",
-    "diff",
-    "apply",
-    "rollback",
 }
 
 
@@ -115,6 +104,7 @@ def run_cli(
     profile_normalizer: ProfileNormalizer | None = None,
     provider_sweeper: ProviderSweeper | None = None,
 ) -> CliResult:
+    del preconditions_ok
     args = parse_args(argv)
     if args.command == "aa-index":
         return _run_aa_index(args, aa_index_handler)
@@ -122,8 +112,6 @@ def run_cli(
         return _run_profile_normalization(args, profile_normalizer)
     if args.command == "sweep-provider-models":
         return _run_provider_sweep(args, provider_sweeper)
-    if args.command == "apply" and not preconditions_ok:
-        return CliResult(exit_code=EXIT_CODES["unsafe_to_apply"], changed=False)
     if args.command == "serve":
         return _run_scheduler(args, scheduler_runner)
     if args.command in {"explain-endpoint", "explain-role"}:

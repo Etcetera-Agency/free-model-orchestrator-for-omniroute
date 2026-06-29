@@ -17,7 +17,7 @@ class FakeRunner:
 
 @pytest.mark.spec("cli-and-operations::Stage command invokes its stage")
 @pytest.mark.parametrize(
-    "command", ["scan-providers", "match-models", "probe-models", "score-roles", "allocate", "diff"]
+    "command", ["scan-providers", "match-models", "probe-models", "score-roles", "forecast-demand"]
 )
 def test_stage_commands_invoke_pipeline_runner(command):
     runner = FakeRunner()
@@ -33,7 +33,7 @@ def test_stage_commands_invoke_pipeline_runner(command):
 def test_stage_failure_surfaces_runner_exit_code():
     runner = FakeRunner([CliResult(exit_code=EXIT_CODES["external_dependency_failed"], changed=False)])
 
-    result = run_cli(["allocate"], preconditions_ok=True, pipeline_runner=runner)
+    result = run_cli(["forecast-demand"], preconditions_ok=True, pipeline_runner=runner)
 
     assert result.exit_code == 4
 
@@ -97,38 +97,17 @@ def test_normalize_profiles_dry_run_passes_through_and_reports_result():
     assert calls[0].dry_run is True
 
 
-@pytest.mark.spec("cli-and-operations::Apply surfaces gating outcomes")
-@pytest.mark.parametrize("exit_code", [5, 6, 7])
-def test_apply_and_rollback_surface_guarded_runner_outcomes(exit_code):
-    runner = FakeRunner([CliResult(exit_code=exit_code, changed=exit_code != 5)])
-
-    result = run_cli(["apply"], preconditions_ok=True, pipeline_runner=runner)
-
-    assert result.exit_code == exit_code
-    assert result.changed is (exit_code != 5)
-
-
-@pytest.mark.spec("audit-rollback::Roll back a run")
-def test_rollback_uses_runner_outcome():
-    runner = FakeRunner([CliResult(exit_code=EXIT_CODES["rollback_failed"], changed=True)])
-
-    result = run_cli(["rollback"], preconditions_ok=True, pipeline_runner=runner)
-
-    assert result.exit_code == 7
-    assert runner.calls[0][0] == "rollback"
-
-
 @pytest.mark.spec("cli-and-operations::Dry-run validation")
 @pytest.mark.spec("persistence::Dry-run persists nothing")
 def test_dry_run_stays_local_and_does_not_call_combo_test():
     runner = FakeRunner([CliResult(exit_code=0, changed=False, combo_test_called=False)])
 
-    result = run_cli(["apply", "--dry-run"], preconditions_ok=True, pipeline_runner=runner)
+    result = run_cli(["forecast-demand", "--dry-run"], preconditions_ok=True, pipeline_runner=runner)
 
     assert result.exit_code == 0
     assert result.changed is False
     assert result.combo_test_called is False
-    assert runner.calls[0][0] == "apply"
+    assert runner.calls[0][0] == "forecast-demand"
     assert runner.calls[0][1].dry_run is True
 
 
@@ -136,10 +115,10 @@ def test_dry_run_stays_local_and_does_not_call_combo_test():
 def test_dry_run_runs_pipeline_stage_and_surfaces_real_outcome():
     runner = FakeRunner([CliResult(exit_code=EXIT_CODES["external_dependency_failed"], changed=False)])
 
-    result = run_cli(["diff", "--dry-run"], preconditions_ok=True, pipeline_runner=runner)
+    result = run_cli(["forecast-demand", "--dry-run"], preconditions_ok=True, pipeline_runner=runner)
 
     assert result.exit_code == EXIT_CODES["external_dependency_failed"]
-    assert runner.calls[0][0] == "diff"
+    assert runner.calls[0][0] == "forecast-demand"
     assert runner.calls[0][1].dry_run is True
 
 

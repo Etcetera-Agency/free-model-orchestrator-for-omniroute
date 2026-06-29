@@ -83,13 +83,11 @@ index_migration:
   percentile_mapping_as_reference: true
   keep_current_combos_until_rollout: true
   maintenance_quota_reservation: true
-  rollback_on_smoke_test_failure: true
   auto_approval:
     enabled: false
     require_all_roles_safe: true
     require_no_quota_pool_loss: true
     require_smoke_tests_passed: true
-
 
 quality_gates:
   allow_unverified_quality_gate: false
@@ -335,11 +333,6 @@ role_lifecycle:
   protected_roles: []
   role_aliases: {}
 
-apply_pipeline:
-  local_dry_run: true
-  call_omniroute_combo_test: false
-  upstream_smoke_test: false
-
 combo_output:
   routing_strategy: priority
   endpoint_weights_enabled: false
@@ -363,30 +356,8 @@ smart_combo_review:
     critical_capacity_loss: true
     unknown_or_inferred_quota_present: true
     minimum_combo_change_ratio: 0.25
-  on_reviewer_failure: apply_deterministic_combo
-  on_invalid_diff: reject_diff_only
-
-allocation:
-  max_primary_roles_per_account: 1
-  max_heavy_roles_per_account: 1
-  max_total_roles_per_account: 3
-  max_primary_roles_per_provider_group: 2
-  min_accounts_in_top3: 2
-  min_provider_groups_in_top3: 2
-  max_provider_group_projected_share: 0.40
-  opportunistic_max_weight: 5
-  expected_opportunistic_use_factor: 0.10
-  promotion_stability_hours: 24
-  minimum_score_improvement: 0.10
-  minimum_weight_change: 10
-
-apply:
-  enabled: false
-  managed_combo_prefix: fmo-
-  require_snapshot: true
-  require_smoke_test: true
-  auto_rollback: true
-  max_changes_per_run: 10
+  on_reviewer_failure: keep_published_pool_spec
+  on_invalid_diff: keep_published_pool_spec
 
 schedules:
   daily_batch: "15 3 * * *"

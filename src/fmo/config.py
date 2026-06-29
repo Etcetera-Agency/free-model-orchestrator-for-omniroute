@@ -13,8 +13,6 @@ DEFAULT_AUTO_ROUTER_TAIL = (
     AutoRouterEntry("kilo-auto/free", ("text",)),
     AutoRouterEntry("openrouter/free", ("text", "image")),
 )
-DEFAULT_APPLY_MIN_SAFETY_BUFFER = 1.0
-DEFAULT_APPLY_MIN_PERCENT_REMAINING = 1.0
 
 
 @dataclass(frozen=True)
@@ -26,8 +24,6 @@ class StartupConfig:
     llm_bootstrap_model_id: str | None = None
     llm_bootstrap_confirmed_free: bool = False
     llm_smart_review_call_limit: int = 1
-    apply_min_safety_buffer: float = DEFAULT_APPLY_MIN_SAFETY_BUFFER
-    apply_min_percent_remaining: float = DEFAULT_APPLY_MIN_PERCENT_REMAINING
     auto_router_tail: tuple[AutoRouterEntry, ...] = DEFAULT_AUTO_ROUTER_TAIL
     hermes_home: str | None = None
     hermes_agents_path: str | None = None
@@ -55,10 +51,6 @@ def validate_static_config(config: StartupConfig) -> None:
         raise ValueError("LLM_BOOTSTRAP_MODEL_CONFIRMED_FREE must be true when LLM_BOOTSTRAP_MODEL_ID is set")
     if config.llm_smart_review_call_limit < 0:
         raise ValueError("LLM_SMART_REVIEW_CALL_LIMIT must be non-negative")
-    if config.apply_min_safety_buffer <= 0:
-        raise ValueError("APPLY_MIN_SAFETY_BUFFER must be positive")
-    if config.apply_min_percent_remaining <= 0:
-        raise ValueError("APPLY_MIN_PERCENT_REMAINING must be positive")
     if not config.auto_router_tail:
         raise ValueError("AUTO_ROUTER_TAIL must not be empty")
     for entry in config.auto_router_tail:

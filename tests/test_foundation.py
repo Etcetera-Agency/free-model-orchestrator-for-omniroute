@@ -3,7 +3,6 @@ from pathlib import Path
 import httpx
 import pytest
 
-from fmo.apply_guard import ApplyPreconditions, check_apply_preconditions
 from fmo.config import (
     DEFAULT_AUTO_ROUTER_TAIL,
     StartupConfig,
@@ -250,7 +249,6 @@ def test_omniroute_client_post_returns_text_content_for_non_json_success():
     assert response["headers"]["content-type"] == "text/event-stream"
 
 
-@pytest.mark.spec("combo-applier::Apply writes existing combos through management API bridge")
 def test_omniroute_client_put_carries_idempotency_key_and_is_not_retried():
     transport = FakeTransport([FakeResponse(503, {"error": "busy"})])
     client = OmniRouteClient(base_url="https://omniroute.test/api", transport=transport, max_get_retries=3)
@@ -466,20 +464,6 @@ def test_planned_combo_cannot_apply_without_snapshot():
 def test_forbidden_combo_transitions_rejected(state, target):
     with pytest.raises(ValueError):
         transition_combo(state, target)
-
-
-@pytest.mark.spec("system-architecture::Missing snapshot blocks apply")
-def test_apply_refused_when_any_precondition_fails():
-    preconditions = ApplyPreconditions(
-        db_available=True,
-        snapshot_saved=True,
-        desired_state_valid=True,
-        quota_safe=False,
-        probes_passed=True,
-    )
-
-    with pytest.raises(ValueError, match="quota_safe"):
-        check_apply_preconditions(preconditions)
 
 
 @pytest.mark.spec("system-architecture::Re-run with unchanged inputs")

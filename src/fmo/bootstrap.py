@@ -2,12 +2,9 @@ from __future__ import annotations
 
 import os
 from collections.abc import Callable, Mapping, Sequence
-from typing import Any
 
-from fmo.apply_guard import ApplyPreconditions, check_apply_preconditions
 from fmo.config import StartupConfig, validate_startup
 from fmo.omniroute import OmniRouteClient
-from fmo.persistence import Database, Repository
 
 Dispatcher = Callable[[list[str], bool, StartupConfig], int]
 
@@ -21,8 +18,6 @@ def build_startup_config(env: Mapping[str, str] | None = None) -> StartupConfig:
         llm_bootstrap_model_id=_empty_to_none(values.get("LLM_BOOTSTRAP_MODEL_ID")),
         llm_bootstrap_confirmed_free=_truthy(values.get("LLM_BOOTSTRAP_MODEL_CONFIRMED_FREE")),
         llm_smart_review_call_limit=_non_negative_int(values.get("LLM_SMART_REVIEW_CALL_LIMIT"), 1),
-        apply_min_safety_buffer=_positive_float(values.get("APPLY_MIN_SAFETY_BUFFER"), 1.0),
-        apply_min_percent_remaining=_positive_float(values.get("APPLY_MIN_PERCENT_REMAINING"), 1.0),
         hermes_inventory_mode=values.get("HERMES_INVENTORY_MODE", "filesystem"),
         hermes_home=_empty_to_none(values.get("HERMES_HOME")),
         hermes_agents_path=_empty_to_none(values.get("HERMES_AGENTS_PATH")),
@@ -45,8 +40,7 @@ def bootstrap_and_dispatch(
         validate_startup(config, health_check=health_check or _health_check(config))
     except ValueError:
         return 3
-    preconditions_ok = _apply_preconditions_ok(config) if _requires_apply_preconditions(argv) else True
-    return dispatcher(list(argv), preconditions_ok, config)
+    return dispatcher(list(argv), True, config)
 
 
 def _health_check(config: StartupConfig) -> Callable[[], dict]:
@@ -69,46 +63,3 @@ def _non_negative_int(value: str | None, default: int) -> int:
     if value is None or value == "":
         return default
     return int(value)
-
-
-def _positive_float(value: str | None, default: float) -> float:
-    if value is None or value == "":
-        return default
-    return float(value)
-
-
-def _requires_apply_preconditions(argv: Sequence[str]) -> bool:
-    return any(arg == "apply" for arg in argv)
-
-
-def _apply_preconditions_ok(config: StartupConfig) -> bool:
-    if config.database_url is None:
-        return False
-    from fmo.composition_stages.apply import _derive_apply_stage_safety, _latest_diff_snapshots
-
-    try:
-        repository = Repository(Database(config.database_url))
-        with repository.database.transaction() as transaction:
-            diffs = _latest_diff_snapshots(transaction)
-            safety = _derive_apply_stage_safety(
-                transaction,
-                diffs,
-                minimum_safety_buffer=config.apply_min_safety_buffer,
-                minimum_percent_remaining=config.apply_min_percent_remaining,
-            )
-            preconditions = ApplyPreconditions(
-                db_available=_database_available(transaction),
-                snapshot_saved=bool(diffs),
-                desired_state_valid=all(isinstance(diff["state_json"].get("after"), list) for diff in diffs),
-                quota_safe=safety["quota_safe"],
-                probes_passed=safety["probes_passed"],
-            )
-        check_apply_preconditions(preconditions)
-    except Exception:
-        return False
-    return True
-
-
-def _database_available(transaction: Any) -> bool:
-    transaction.execute("SELECT 1")
-    return True

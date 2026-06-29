@@ -294,8 +294,7 @@ SHALL stay identical.
 #### Scenario: Each stage resolves to its own domain module
 - **WHEN** a stage entrypoint exposed by the `fmo.composition_stages` package is
   inspected with `inspect.getmodule`
-- **THEN** it resolves to the cluster module that owns it (e.g. `_apply_stage` to
-  `fmo.composition_stages.apply`)
+- **THEN** it resolves to the cluster module that owns it
 - **AND** it does not resolve to a `fmo.composition_stages._legacy` module
 
 #### Scenario: No legacy delegation module remains

@@ -220,16 +220,6 @@ declared effect is observable.
 - **THEN** per-role endpoint scores are persisted through the repository
 - **AND** an adapter returning success without writing scores fails the suite
 
-#### Scenario: Allocation persists one combo plan per role
-- **WHEN** the `allocation` stage runs
-- **THEN** `allocation_plans` rows are persisted with targets and constraint report
-- **AND** each role receives exactly one priority combo with stable ordering
-
-#### Scenario: Oversubscription gate blocks zero-capacity pool
-- **WHEN** allocation encounters a pool with zero confirmed-free capacity
-- **THEN** the role is degraded with no paid fallback
-- **AND** the constraint report records the blocked pool
-
 #### Scenario: Diff is computed without mutating OmniRoute
 - **WHEN** the `diff` stage runs
 - **THEN** the minimal change against current OmniRoute state is persisted

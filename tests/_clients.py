@@ -170,18 +170,7 @@ class MultiComboOpsClient(PipelineOpsClient):
         return super().post(path, payload, headers, idempotency_key)
 
     def _applied_record_exists(self, combo_id):
-        with self.repository.database.transaction() as transaction:
-            row = transaction.execute(
-                """
-                SELECT 1
-                FROM combo_snapshots
-                WHERE omniroute_combo_id = %(combo_id)s
-                  AND phase = 'applied'
-                LIMIT 1
-                """,
-                {"combo_id": combo_id},
-            ).fetchone()
-        return row is not None
+        return False
 
     def _before_models(self, combo_id):
         return {"fmo-a": ["old-a"], "fmo-b": ["old-b"]}[combo_id]

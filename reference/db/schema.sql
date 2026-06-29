@@ -233,28 +233,6 @@ CREATE TABLE role_scores (
   calculated_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE TABLE allocation_plans (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  role_id text NOT NULL REFERENCES roles(id),
-  status text NOT NULL,
-  targets jsonb NOT NULL,
-  constraint_report jsonb NOT NULL,
-  input_state_hash text NOT NULL,
-  quality_gate_report_json jsonb,
-  created_at timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE TABLE combo_snapshots (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  role_id text NOT NULL REFERENCES roles(id),
-  omniroute_combo_id text,
-  state_hash text NOT NULL,
-  state_json jsonb NOT NULL,
-  phase text NOT NULL,
-  run_id uuid REFERENCES sync_runs(id),
-  created_at timestamptz NOT NULL DEFAULT now()
-);
-
 CREATE TABLE published_generations (
   generation text NOT NULL,
   payload_hash text NOT NULL,
@@ -285,15 +263,6 @@ CREATE INDEX idx_health_endpoint_time ON endpoint_health_observations(endpoint_i
 CREATE INDEX idx_role_scores_role_time ON role_scores(role_id, calculated_at DESC);
 CREATE INDEX idx_provider_accounts_connection
   ON provider_accounts(provider_id, omniroute_connection_id);
-
-CREATE TABLE global_allocation_plans (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  status text NOT NULL,
-  quota_summary jsonb NOT NULL,
-  oversubscription_report jsonb NOT NULL,
-  input_state_hash text NOT NULL,
-  created_at timestamptz NOT NULL DEFAULT now()
-);
 
 CREATE TABLE account_discovery_snapshots (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

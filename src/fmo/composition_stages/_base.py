@@ -78,9 +78,8 @@ class FreeModelChanges:
 
 def _production_stage_adapters() -> dict[str, StageAdapter]:
     from .access import _access_classification_stage
-    from .allocation import _allocation_stage, _demand_forecast_stage
-    from .apply import _apply_stage, _diff_stage
     from .audit import _audit_stage
+    from .demand import _demand_forecast_stage
     from .discovery import _model_matching_stage
     from .inventory import _hermes_inventory_stage
     from .probing import _probing_stage
@@ -96,8 +95,5 @@ def _production_stage_adapters() -> dict[str, StageAdapter]:
         "role-lifecycle": _role_lifecycle_stage,
         "role-scoring": _role_scoring_stage,
         "demand-forecast": _demand_forecast_stage,
-        "allocation": _allocation_stage,
-        "diff": _diff_stage,
-        "apply": _apply_stage,
         "audit": _audit_stage,
     }

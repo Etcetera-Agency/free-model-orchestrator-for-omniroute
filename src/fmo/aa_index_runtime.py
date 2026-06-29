@@ -257,14 +257,7 @@ def build_migration_context(repository: Repository) -> dict[str, Any] | None:
         ).fetchall()
         old_version = active_versions[0]["index_version"] if active_versions else None
         roles = transaction.execute("SELECT id, requirements, criticality FROM roles ORDER BY id").fetchall()
-        combos = transaction.execute(
-            """
-            SELECT DISTINCT ON (role_id) role_id, omniroute_combo_id, state_json
-            FROM combo_snapshots
-            WHERE omniroute_combo_id LIKE 'fmo-%'
-            ORDER BY role_id, created_at DESC
-            """
-        ).fetchall()
+        combos = []
         role_capacity = _role_capacity(transaction, new_version)
         return {
             "old_index_version": old_version,

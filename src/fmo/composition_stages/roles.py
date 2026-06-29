@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Any
 
 from fmo.access_state import remaining_amount
+from fmo.combo_reader import read_current_combos
 from fmo.context import context_eligible, effective_context_window
 from fmo.forecast import quality_band_for_demand
 from fmo.idempotency import hash_parts
@@ -13,7 +14,6 @@ from fmo.scoring import EligibilityDecision, aa_subscore, eligible_for_scoring, 
 
 from ._base import StageDependencies
 from ._helpers import _effect_result
-from .apply import _read_current_combos
 
 AA_SCORE_WEIGHTS = {"intelligence_index": 1.0, "coding_index": 0.5, "agentic_index": 0.5}
 AA_SCORE_PERCENTILES = {
@@ -158,7 +158,7 @@ def _role_scoring_stage(_dependencies: StageDependencies, context: PipelineConte
 
 
 def _seed_quality_bands(transaction: Any, client: Any) -> None:
-    current = _read_current_combos(client)
+    current = read_current_combos(client)
     latest_metrics = _latest_aa_metrics_by_model(transaction)
     for combo_id, members in current.items():
         if not combo_id.startswith("fmo-") or len(members) != 1:
@@ -493,11 +493,12 @@ def _insert_health_observation(
 def _latest_role_diagnostic(transaction: Any, role_id: str) -> dict[str, Any] | None:
     row = transaction.execute(
         """
-        SELECT r.id AS role_id, ap.status, ap.targets, ap.constraint_report
+        SELECT r.id AS role_id,
+               NULL::text AS status,
+               '[]'::jsonb AS targets,
+               '{}'::jsonb AS constraint_report
         FROM roles r
-        LEFT JOIN allocation_plans ap ON ap.role_id = r.id
         WHERE r.id = %(role_id)s
-        ORDER BY ap.created_at DESC NULLS LAST
         LIMIT 1
         """,
         {"role_id": role_id},

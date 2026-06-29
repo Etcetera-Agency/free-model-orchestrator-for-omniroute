@@ -90,18 +90,13 @@ def test_fallback_only_unknown_quota_opportunistic():
     assert override.primary_allowed is True
 
 
-@pytest.mark.spec("cli-and-operations::Unsafe apply")
 @pytest.mark.spec("cli-and-operations::Dry-run validation")
 def test_cli_commands_flags_exit_codes_and_dry_run_no_combo_test():
-    args = parse_args(["apply", "--dry-run", "--role", "research_scout", "--json"])
-    assert args.command == "apply"
+    args = parse_args(["forecast-demand", "--dry-run", "--role", "research_scout", "--json"])
+    assert args.command == "forecast-demand"
     assert args.dry_run is True
-    unsafe = run_cli(["apply"], preconditions_ok=False)
-    dry = run_cli(["allocate", "--dry-run"], preconditions_ok=True)
+    dry = run_cli(["forecast-demand", "--dry-run"], preconditions_ok=True)
     aa = parse_args(["aa-index", "status"])
-    assert EXIT_CODES["unsafe_to_apply"] == 5
-    assert unsafe.exit_code == 5
-    assert unsafe.changed is False
     assert dry.combo_test_called is False
     assert aa.command == "aa-index"
     assert aa.aa_command == "status"

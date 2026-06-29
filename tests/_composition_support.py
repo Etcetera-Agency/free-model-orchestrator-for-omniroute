@@ -5,7 +5,6 @@ from pathlib import Path
 from psycopg.types.json import Jsonb
 
 from fmo.accounts import AccountDiscoveryOutcome
-from fmo.applier import ComboApplier
 from fmo.artificial_analysis import AAModelMetrics, AASnapshot
 from fmo.bootstrap import build_startup_config
 from fmo.candidates import FreeCandidate
@@ -20,7 +19,6 @@ from fmo.composition import (
     select_llm_model,
     stages_for_command,
 )
-from fmo.composition_stages import _smoke_combo
 from fmo.db import MigrationRunner
 from fmo.hermes_inventory import Consumer, Inventory
 from fmo.metadata_sync import MetadataSyncResult
@@ -46,7 +44,6 @@ __all__ = [
     "AAModelMetrics",
     "AASnapshot",
     "AccountDiscoveryOpsClient",
-    "ComboApplier",
     "ComposedRuntime",
     "Database",
     "FakeInstructorClient",
@@ -65,7 +62,6 @@ __all__ = [
     "StageAdapters",
     "StageDependencies",
     "_cli_result",
-    "_smoke_combo",
     "argparse",
     "assert_success_has_declared_effect",
     "build_canonical_stages",
@@ -83,7 +79,6 @@ __all__ = [
     "run_composed_stage_with_dependencies",
     "run_rebalance_stages",
     "run_runtime_command",
-    "seed_apply_ready_diff",
     "seed_confirmed_llm_candidate",
     "seed_endpoint",
     "seed_free_registry_snapshot",
@@ -276,9 +271,7 @@ def run_rebalance_stages(repository, client):
         "probing",
         "telemetry-sync",
         "role-scoring",
-        "allocation",
-        "diff",
-        "apply",
+        "demand-forecast",
     ]
     return [run_composed_stage(repository, stage_name, client=client) for stage_name in stage_names]
 
@@ -294,10 +287,7 @@ def _command_for_stage(stage_name):
         "role-lifecycle": "reconcile-roles",
         "role-scoring": "score-roles",
         "demand-forecast": "forecast-demand",
-        "allocation": "allocate",
-        "diff": "diff",
-        "apply": "apply",
-        "audit": "rollback",
+        "audit": "full",
     }
     return commands[stage_name]
 
@@ -449,50 +439,3 @@ def structured_combo_step(*, model_id, provider_id="provider-a", connection_id="
     if connection_id:
         step["connectionId"] = connection_id
     return step
-
-
-def seed_apply_ready_diff(repository, *, role_id, combo_id, before, after_model_id):
-    endpoint = seed_confirmed_llm_candidate(
-        repository,
-        model_id=after_model_id,
-        intelligence_index=80,
-        remaining=100,
-    )
-    now = datetime.now(UTC)
-    with repository.database.transaction() as transaction:
-        repository.roles.upsert(
-            transaction,
-            role_id=role_id,
-            requirements={"capabilities": []},
-            expected_load={"requests": 1},
-            criticality=1,
-        )
-        repository.probes.record(
-            transaction,
-            endpoint_id=endpoint["id"],
-            suite_version="production-v1",
-            probe_type="basic",
-            request_hash=f"{combo_id}:probe",
-            passed=True,
-            http_status=200,
-            started_at=now,
-            finished_at=now,
-            details={"suites": ["basic"], "reserved_capacity": True},
-        )
-        repository.combo_snapshots.upsert(
-            transaction,
-            role_id=role_id,
-            omniroute_combo_id=combo_id,
-            state_hash=f"{combo_id}:diff",
-            state_json={
-                "before": before,
-                "after": [structured_combo_step(model_id=after_model_id)],
-                "before_endpoint_ids": before,
-                "after_endpoint_ids": [str(endpoint["id"])],
-                "add": [str(endpoint["id"])],
-                "remove": before,
-            },
-            phase="diff",
-            run_id=None,
-        )
-    return str(endpoint["id"])

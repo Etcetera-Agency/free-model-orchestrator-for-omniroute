@@ -98,7 +98,6 @@ def test_rate_limits_and_rankings_fixtures_have_expected_shape(client):
     assert "modelId" in ranking["topModel"]
 
 
-@pytest.mark.spec("combo-applier::Non-existent combo is not created")
 @pytest.mark.spec("omniroute-client::Bridge exposes management combo routes")
 def test_live_combos_fixture_records_seeded_operator_state(client):
     recording = load_fixture("omniroute_api_combos")

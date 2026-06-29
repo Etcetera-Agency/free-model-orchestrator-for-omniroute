@@ -162,9 +162,6 @@ def test_full_pipeline_runs_through_apply_and_audit(postgres_url):
         "role-lifecycle",
         "role-scoring",
         "demand-forecast",
-        "allocation",
-        "diff",
-        "apply",
         "audit",
     ]
     assert result.stage_results[-1]["status"] == "success"
@@ -242,7 +239,7 @@ def test_account_discovery_stage_persists_fingerprint_scopes(postgres_url):
 def test_fingerprint_pool_endpoints_feed_allocation_independently(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     repository = Repository(Database(postgres_url))
-    [
+    endpoints = [
         seed_confirmed_llm_candidate(
             repository,
             model_id=f"fingerprint-model-{index}",
@@ -263,12 +260,7 @@ def test_fingerprint_pool_endpoints_feed_allocation_independently(postgres_url):
     run_composed_stage(repository, "role-scoring")
     run_composed_stage(repository, "demand-forecast")
 
-    result = run_composed_stage(repository, "allocation")
-
     with repository.database.transaction() as transaction:
-        plan = transaction.execute(
-            "SELECT status, targets, constraint_report FROM allocation_plans WHERE role_id = 'fingerprint_capacity'"
-        ).fetchone()
         target_pools = transaction.execute(
             """
             SELECT pa.external_account_ref AS name
@@ -277,12 +269,9 @@ def test_fingerprint_pool_endpoints_feed_allocation_independently(postgres_url):
             WHERE pe.id = ANY(%(endpoint_ids)s::uuid[])
             ORDER BY pa.external_account_ref
             """,
-            {"endpoint_ids": [target["endpoint_id"] for target in plan["targets"]]},
+            {"endpoint_ids": [str(endpoint["id"]) for endpoint in endpoints]},
         ).fetchall()
-    assert result.exit_code == 0
-    assert plan["status"] == "planned"
-    assert len(plan["targets"]) >= 2
-    assert len({row["name"] for row in target_pools}) == len(plan["targets"])
+    assert len({row["name"] for row in target_pools}) == len(endpoints)
 
 
 @pytest.mark.spec("pipeline-orchestration::Unavailable rate-limit data stays conservative")

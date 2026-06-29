@@ -22,9 +22,23 @@ EXPECTED_ACTIVE_PENDING = {
     "access-classifier::Promotion expired",
     "access-classifier::Local wildcard quota rules are ignored",
     "access-classifier::Removed beats zero price",
-    "combo-applier::Smoke pass derived from non-empty SSE text",
+    "audit-rollback::Combo change logged",
+    "audit-rollback::Inspect an assignment",
+    "audit-rollback::Roll back a run",
+    "audit-rollback::rollback command reverts combos, not AA-index",
+    "audit-rollback::rollback restore failure exits 7",
+    "cli-and-operations::Apply dry-run previews without mutating",
+    "cli-and-operations::Apply surfaces gating outcomes",
+    "cli-and-operations::Unsafe apply",
     "data-model::Auxiliary consumer type persists",
     "data-model::Migration keeps existing databases compatible",
+    "demand-forecast::Bursty weekly load",
+    "demand-forecast::Cold start floor applied",
+    "demand-forecast::Demand comes from the forecast",
+    "demand-forecast::Dependency cycle",
+    "demand-forecast::Multiple agents and a shared role",
+    "demand-forecast::Reserve applied once",
+    "demand-forecast::Unknown new role",
     "hermes-inventory::Inspector uses resolver-selected provider model",
     "hermes-inventory::Resolver-less inspector fails closed",
     "llm-runtime::AA migration prompt is loaded from file",
@@ -34,18 +48,32 @@ EXPECTED_ACTIVE_PENDING = {
     "llm-runtime::Inspector sites fail closed without a resolver model",
     "llm-runtime::Inspector sites use one resolver approach",
     "llm-runtime::Malformed completion repaired or rejected",
+    "omniroute-client::Bridge denies combo test helper",
     "persistence::Re-run refreshes current combo snapshot recency",
+    "pipeline-orchestration::Apply still excludes stale evidence",
     "pipeline-orchestration::Access classification persists status",
+    "pipeline-orchestration::Audit persists records",
     "pipeline-orchestration::Command refreshes live catalog first",
+    "pipeline-orchestration::Diff is computed without mutating OmniRoute",
     "pipeline-orchestration::External payload missing fails closed",
+    "pipeline-orchestration::Failed gate stops apply",
+    "pipeline-orchestration::Failing guard blocks apply",
+    "pipeline-orchestration::No combo test call",
+    "pipeline-orchestration::Production apply runs the real smoke test",
     "pipeline-orchestration::Scheduled run refreshes live catalog first",
+    "pipeline-orchestration::Smoke failure rolls back",
+    "pipeline-orchestration::Unsafe apply outcome",
     "probe-runner::Batch failures are persisted fail-closed",
     "probe-runner::No reserved capacity",
     "probe-runner::Non-200 or empty content",
     "provider-scanner::Absent provider is disabled before use",
     "provider-scanner::Disabled provider is tombstoned before use",
     "provider-scanner::Reappearing model clears tombstone",
+    "role-scorer::Router still honors non-quality filters",
     "role-scorer::Scoring semantics changed",
+    "smart-combo-reviewer::Applied diff is independent of the reviewer",
+    "smart-combo-reviewer::Reviewer disabled by trigger",
+    "smart-combo-reviewer::Reviewer output is recorded",
     "smart-combo-reviewer::Reviewer uses external prompt file",
     "system-architecture::Intraday failure not rebuilt",
 }
@@ -95,7 +123,9 @@ def test_composition_root_is_thin_and_stage_domains_are_split():
     assert "def _quota_research_stage" not in root
     assert "def _run_aa_index_command" not in root
     assert "class RuntimeCliResult" not in root
-    assert "def _apply_stage" in stage_sources["apply.py"]
+    assert "apply.py" not in stage_sources
+    assert "allocation.py" not in stage_sources
+    assert "rollback.py" not in stage_sources
     assert "quota.py" not in stage_sources
     assert "def _run_aa_index_command" in aa_index
     assert "class RuntimeCliResult" in contracts
@@ -188,21 +218,14 @@ def test_back_pipeline_stages_live_in_dedicated_modules():
 
     stages = importlib.import_module("fmo.composition_stages")
     adapters = stages._production_stage_adapters()
-    for name in ("demand-forecast", "allocation", "diff", "apply", "audit"):
+    for name in ("demand-forecast", "audit"):
         assert name in adapters
         assert callable(adapters[name])
-    assert callable(stages._rollback_stage)
 
-    allocation = importlib.import_module("fmo.composition_stages.allocation")
-    apply = importlib.import_module("fmo.composition_stages.apply")
-    rollback = importlib.import_module("fmo.composition_stages.rollback")
+    demand = importlib.import_module("fmo.composition_stages.demand")
     audit = importlib.import_module("fmo.composition_stages.audit")
 
-    assert inspect.getmodule(allocation._allocation_stage).__name__.endswith(".allocation")
-    assert inspect.getmodule(allocation._demand_forecast_stage).__name__.endswith(".allocation")
-    assert inspect.getmodule(apply._apply_stage).__name__.endswith(".apply")
-    assert inspect.getmodule(apply._diff_stage).__name__.endswith(".apply")
-    assert inspect.getmodule(rollback._rollback_stage).__name__.endswith(".rollback")
+    assert inspect.getmodule(demand._demand_forecast_stage).__name__.endswith(".demand")
     assert inspect.getmodule(audit._audit_stage).__name__.endswith(".audit")
 
 
@@ -241,8 +264,7 @@ def test_timestamp_hash_and_quota_helpers_are_centralized():
     discovery = (ROOT / "src" / "fmo" / "composition_stages" / "discovery.py").read_text(encoding="utf-8")
     access = (ROOT / "src" / "fmo" / "composition_stages" / "access.py").read_text(encoding="utf-8")
     probing = (ROOT / "src" / "fmo" / "composition_stages" / "probing.py").read_text(encoding="utf-8")
-    allocation = (ROOT / "src" / "fmo" / "composition_stages" / "allocation.py").read_text(encoding="utf-8")
-    apply_stage = (ROOT / "src" / "fmo" / "composition_stages" / "apply.py").read_text(encoding="utf-8")
+    demand = (ROOT / "src" / "fmo" / "composition_stages" / "demand.py").read_text(encoding="utf-8")
     roles = (ROOT / "src" / "fmo" / "composition_stages" / "roles.py").read_text(encoding="utf-8")
     stage_source = "\n".join(
         path.read_text(encoding="utf-8")
@@ -267,13 +289,10 @@ def test_timestamp_hash_and_quota_helpers_are_centralized():
 
     assert "from fmo.idempotency import canonical_slug" in discovery
     assert "from fmo.idempotency import hash_parts" in probing
-    assert "from fmo.idempotency import hash_parts" in allocation
-    assert "from fmo.idempotency import hash_parts" in apply_stage
+    assert "from fmo.idempotency import hash_parts" in demand
     assert "from fmo.idempotency import hash_parts" in roles
     assert "quota_normalize" not in access
     assert "from fmo.access_state import remaining_amount" in probing
-    assert "from fmo.access_state import remaining_amount" in allocation
-    assert "from fmo.access_state import remaining_amount" in apply_stage
     assert "from fmo.access_state import remaining_amount" in roles
 
     for old_definition in [rf"def {alias}\(" for alias in old_aliases]:
@@ -307,7 +326,6 @@ def test_composition_tests_mirror_stage_package_domains():
         "test_composition_discovery.py",
         "test_composition_access.py",
         "test_composition_runtime.py",
-        "test_composition_apply.py",
     }
     test_files = {path.name for path in (ROOT / "tests").glob("test_composition*.py")}
 

@@ -1070,7 +1070,7 @@ def test_paid_seed_sets_anchor_but_is_excluded_from_allocated_members(postgres_u
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     repository = Repository(Database(postgres_url))
     paid_seed = seed_confirmed_llm_candidate(repository, model_id="paid-seed", intelligence_index=70)
-    free_member = seed_confirmed_llm_candidate(repository, model_id="free-member", intelligence_index=68)
+    seed_confirmed_llm_candidate(repository, model_id="free-member", intelligence_index=68)
     with repository.database.transaction() as transaction:
         transaction.execute(
             "UPDATE provider_endpoints SET access_status = 'paid' WHERE id = %(id)s", {"id": paid_seed["id"]}
@@ -1088,19 +1088,12 @@ def test_paid_seed_sets_anchor_but_is_excluded_from_allocated_members(postgres_u
 
     run_composed_stage(repository, "role-scoring", client=client)
     run_composed_stage(repository, "demand-forecast", client=client)
-    run_composed_stage(repository, "allocation", client=client)
 
     with repository.database.transaction() as transaction:
         role = transaction.execute(
             "SELECT minimum_quality_value, maximum_quality_value FROM roles WHERE id = 'routing_fast'"
         ).fetchone()
-        plan = transaction.execute(
-            "SELECT targets FROM allocation_plans WHERE role_id = 'routing_fast' ORDER BY created_at DESC LIMIT 1"
-        ).fetchone()
-    target_ids = [target["endpoint_id"] for target in plan["targets"]]
     assert float(role["minimum_quality_value"]) <= 70 <= float(role["maximum_quality_value"])
-    assert str(paid_seed["id"]) not in target_ids
-    assert str(free_member["id"]) in target_ids
 
 
 @pytest.mark.spec("quality-gate::Missing gate metric")
@@ -1161,17 +1154,11 @@ def test_quality_gate_index_version_mismatch_skips_new_allocation_plan(postgres_
         )
 
     run_composed_stage(repository, "role-scoring")
-    allocation = run_composed_stage(repository, "allocation")
 
     with repository.database.transaction() as transaction:
         score = transaction.execute("SELECT eligibility, rejection_reasons FROM role_scores").fetchone()
-        plan_count = transaction.execute(
-            "SELECT count(*) AS total FROM allocation_plans WHERE role_id = 'stale_gate'"
-        ).fetchone()["total"]
     assert score["eligibility"] is False
     assert score["rejection_reasons"] == ["quality_gate:needs_recalibration"]
-    assert allocation.exit_code == 0
-    assert plan_count == 0
 
 
 @pytest.mark.spec("pipeline-orchestration::Scoring stage drops below-gate endpoint")
@@ -1333,10 +1320,7 @@ def test_llm_model_selection_uses_confirmed_free_index_order_and_no_llm_fallback
     client = PipelineOpsClient()
     selected = select_llm_model(repository, config, client)
 
-    with repository.database.transaction() as transaction:
-        combo_count = transaction.execute("SELECT count(*) AS total FROM combo_snapshots").fetchone()["total"]
     assert selected == "free-low"
-    assert combo_count == 0
 
     assert select_llm_model(repository, config) is None
 
@@ -1544,13 +1528,9 @@ def test_aa_index_analyze_fails_closed_without_aa_snapshot_or_model(postgres_url
         migration_count = transaction.execute(
             "SELECT count(*) AS total FROM artificial_analysis_index_migrations"
         ).fetchone()["total"]
-        combo_count = transaction.execute(
-            "SELECT count(*) AS total FROM combo_snapshots WHERE omniroute_combo_id LIKE 'fmo-%'"
-        ).fetchone()["total"]
     assert result.exit_code == 4
     assert result.error_reason == "aa_unavailable"
     assert migration_count == 0
-    assert combo_count == 0
 
 
 @pytest.mark.spec("persistence::Sync writes metadata through the repository")

@@ -1,5 +1,16 @@
 # Completion Review
 
+- Removed FMO allocation/apply ownership per `remove-fmo-allocation-apply`:
+  canonical pipeline no longer runs `allocation`, `diff`, or `apply`; allocator,
+  applier, apply guard, rollback, allocation-plan and combo-snapshot repositories,
+  tables, config knobs, and dead tests are gone. Demand forecasting now lives in
+  its own stage module, read-only combo lookup moved to `combo_reader`, and audit
+  is a no-op because OmniRoute is the single combo writer. Archived the OpenSpec
+  package, removed living allocator/combo-applier specs, and expanded pending
+  coverage for stale living docs that still need publisher-only cleanup. Focused
+  checks: `uv run python -m compileall -q src/fmo`; spec coverage/runtime docs
+  plus CLI/bootstrap/persistence/foundation/composition focused pytest; ruff on
+  changed src/tests; `openspec validate --all --strict`; `git diff --check`.
 - Removed FMO quota ownership per `remove-fmo-quota`: quota research/manager
   modules, quota stages, prompt, repository, config knobs, quota tables, and
   dead quota tests are gone. Access classification now records

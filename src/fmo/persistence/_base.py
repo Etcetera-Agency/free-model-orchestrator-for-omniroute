@@ -15,11 +15,9 @@ Record = dict[str, Any]
 
 if TYPE_CHECKING:
     from .account import ProviderAccountRepository
-    from .allocation_plan import AllocationPlanRepository
     from .audit import AuditRepository
     from .canonical_model import CanonicalModelRepository
     from .catalog import ProviderCatalogRepository
-    from .combo_snapshot import ComboSnapshotRepository
     from .endpoint import ProviderEndpointRepository
     from .external_metadata import ExternalMetadataRepository
     from .lock import LockRepository
@@ -65,8 +63,6 @@ class Repository:
     roles: RoleRepository = field(init=False)
     role_consumers: RoleConsumerRepository = field(init=False)
     scores: ScoreRepository = field(init=False)
-    allocation_plans: AllocationPlanRepository = field(init=False)
-    combo_snapshots: ComboSnapshotRepository = field(init=False)
     audit: AuditRepository = field(init=False)
     locks: LockRepository = field(init=False)
     external_metadata: ExternalMetadataRepository = field(init=False)
@@ -74,11 +70,9 @@ class Repository:
 
     def __post_init__(self) -> None:
         from .account import ProviderAccountRepository
-        from .allocation_plan import AllocationPlanRepository
         from .audit import AuditRepository
         from .canonical_model import CanonicalModelRepository
         from .catalog import ProviderCatalogRepository
-        from .combo_snapshot import ComboSnapshotRepository
         from .endpoint import ProviderEndpointRepository
         from .external_metadata import ExternalMetadataRepository
         from .lock import LockRepository
@@ -104,8 +98,6 @@ class Repository:
         object.__setattr__(self, "roles", RoleRepository())
         object.__setattr__(self, "role_consumers", RoleConsumerRepository())
         object.__setattr__(self, "scores", ScoreRepository())
-        object.__setattr__(self, "allocation_plans", AllocationPlanRepository())
-        object.__setattr__(self, "combo_snapshots", ComboSnapshotRepository())
         object.__setattr__(self, "audit", AuditRepository())
         object.__setattr__(self, "locks", LockRepository())
         object.__setattr__(self, "external_metadata", ExternalMetadataRepository())
