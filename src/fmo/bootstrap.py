@@ -15,9 +15,6 @@ def build_startup_config(env: Mapping[str, str] | None = None) -> StartupConfig:
         omniroute_url=values.get("OMNIROUTE_URL", ""),
         database_url=_empty_to_none(values.get("DATABASE_URL")),
         omniroute_api_key=_empty_to_none(values.get("OMNIROUTE_API_KEY")),
-        llm_bootstrap_model_id=_empty_to_none(values.get("LLM_BOOTSTRAP_MODEL_ID")),
-        llm_bootstrap_confirmed_free=_truthy(values.get("LLM_BOOTSTRAP_MODEL_CONFIRMED_FREE")),
-        llm_smart_review_call_limit=_non_negative_int(values.get("LLM_SMART_REVIEW_CALL_LIMIT"), 1),
         hermes_inventory_mode=values.get("HERMES_INVENTORY_MODE", "filesystem"),
         hermes_home=_empty_to_none(values.get("HERMES_HOME")),
         hermes_agents_path=_empty_to_none(values.get("HERMES_AGENTS_PATH")),
@@ -53,13 +50,3 @@ def _health_check(config: StartupConfig) -> Callable[[], dict]:
 
 def _empty_to_none(value: str | None) -> str | None:
     return value or None
-
-
-def _truthy(value: str | None) -> bool:
-    return (value or "").strip().lower() in {"1", "true", "yes", "on"}
-
-
-def _non_negative_int(value: str | None, default: int) -> int:
-    if value is None or value == "":
-        return default
-    return int(value)

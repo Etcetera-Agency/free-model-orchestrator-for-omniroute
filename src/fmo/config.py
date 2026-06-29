@@ -21,9 +21,6 @@ class StartupConfig:
     database_url: str | None
     hermes_inventory_mode: str
     omniroute_api_key: str | None = None
-    llm_bootstrap_model_id: str | None = None
-    llm_bootstrap_confirmed_free: bool = False
-    llm_smart_review_call_limit: int = 1
     auto_router_tail: tuple[AutoRouterEntry, ...] = DEFAULT_AUTO_ROUTER_TAIL
     hermes_home: str | None = None
     hermes_agents_path: str | None = None
@@ -47,10 +44,6 @@ def validate_static_config(config: StartupConfig) -> None:
         raise ValueError("OMNIROUTE_URL must be http or https")
     if not config.omniroute_api_key:
         raise ValueError("OMNIROUTE_API_KEY is required")
-    if config.llm_bootstrap_model_id and not config.llm_bootstrap_confirmed_free:
-        raise ValueError("LLM_BOOTSTRAP_MODEL_CONFIRMED_FREE must be true when LLM_BOOTSTRAP_MODEL_ID is set")
-    if config.llm_smart_review_call_limit < 0:
-        raise ValueError("LLM_SMART_REVIEW_CALL_LIMIT must be non-negative")
     if not config.auto_router_tail:
         raise ValueError("AUTO_ROUTER_TAIL must not be empty")
     for entry in config.auto_router_tail:

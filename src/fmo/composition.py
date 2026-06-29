@@ -1,35 +1,25 @@
 from __future__ import annotations
 
 import argparse
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
-from urllib.parse import urljoin
 
-from fmo.aa_index_runtime import _run_aa_index_command, select_llm_model
 from fmo.combo_reader import read_current_combos
 from fmo.composition_contracts import RuntimeCliResult
 from fmo.composition_stages import (
-    MetadataSync,
     StageAdapters,
     StageDependencies,
-    _account_discovery_stage,
     _adapter_stage,
-    _default_live_catalog_refresh,
-    _effect_result,
-    _free_candidate_stage,
     _latest_role_diagnostic,
-    _metadata_stage,
 )
 from fmo.config import StartupConfig
-from fmo.llm_runtime import LlmProviderConfig, SharedInstructorRuntime, build_instructor_runtime
-from fmo.metadata_sync import sync_external_metadata
+from fmo.llm_runtime import SharedInstructorRuntime
 from fmo.omniroute import OmniRouteClient, OmniRouteVersionGate
 from fmo.persistence import Database, Repository
 from fmo.pipeline import CANONICAL_STAGE_NAMES, PipelineContext, PipelineRunner, PipelineRunResult, Stage, StageResult
 from fmo.pool_publisher import compose_pool_generation, publish_pool_generation, usage_feedback
 from fmo.profile_normalization import ProfileNormalizationResult
 from fmo.profile_normalization import normalize_profiles as normalize_profile_configs
-from fmo.provider_sweep import ProviderSweepResult, sweep_provider_models
 from fmo.scheduler import Scheduler
 
 
@@ -41,12 +31,8 @@ class ComposedRuntime:
     cron: str
     llm_runtime: SharedInstructorRuntime
     config: StartupConfig
-    live_catalog_refresh: Callable[[Repository, OmniRouteClient, str], object]
 
     def run_command(self, command: str, args: argparse.Namespace) -> RuntimeCliResult:
-        refresh_result = self._refresh_live_catalog()
-        if refresh_result is not None:
-            return refresh_result
         selected_stages = stages_for_command(command, self.stages)
         result = PipelineRunner(
             self.repository,
@@ -64,20 +50,10 @@ class ComposedRuntime:
         return _cli_result(result)
 
     def read_diagnostics(self, kind: str, identifier: str) -> str:
-        refresh_result = self._refresh_live_catalog()
-        if refresh_result is not None:
-            return f"{kind}:{identifier}:live_catalog_refresh_failed:{refresh_result.error_reason}"
         with self.repository.database.transaction() as transaction:
-            if kind == "endpoint":
-                row = self.repository.provider_endpoints.get(transaction, identifier)
-                rejection = _latest_endpoint_rejection(transaction, identifier)
-            else:
-                row = _latest_role_diagnostic(transaction, identifier)
-                rejection = None
+            row = _latest_role_diagnostic(transaction, identifier)
         if row is None:
             return f"{kind}:{identifier}:not_found"
-        if rejection:
-            return f"{kind}:{identifier}:{row}:rejection={rejection}"
         return f"{kind}:{identifier}:{row}"
 
     def run_scheduler_once(self, timestamp: str) -> RuntimeCliResult:
@@ -88,23 +64,13 @@ class ComposedRuntime:
         return _cli_result(result)
 
     def run_pipeline(self, trigger: str, run_type: str) -> PipelineRunResult:
-        stages = [
-            Stage("live-catalog-refresh", self._live_catalog_refresh_stage),
-            *list(self.stages),
-        ]
         return PipelineRunner(
             self.repository,
-            stages=stages,
+            stages=list(self.stages),
             config={"command": run_type, "dry_run": False},
         ).run(trigger=trigger, run_type=run_type)
 
-    def run_aa_index(self, command: str, _args: argparse.Namespace) -> RuntimeCliResult:
-        return _run_aa_index_command(self.repository, self.llm_runtime, self.config, command)
-
     def normalize_profiles(self, args: argparse.Namespace) -> RuntimeCliResult:
-        refresh_result = self._refresh_live_catalog()
-        if refresh_result is not None:
-            return refresh_result
         if not self.config.hermes_home:
             return RuntimeCliResult(exit_code=3, changed=False, error_reason="hermes_home_required")
         # AICODE-NOTE: profile normalization never creates combos; live combos
@@ -120,53 +86,20 @@ class ComposedRuntime:
             output=_profile_normalization_output(result),
         )
 
-    def sweep_provider_models(self, args: argparse.Namespace) -> ProviderSweepResult:
-        def log(message: str) -> None:
-            print(message, flush=True)
-
-        return sweep_provider_models(
-            self.repository,
-            self.omniroute_client,
-            provider=args.provider,
-            limit=args.limit,
-            offset=args.offset,
-            force=args.force,
-            dry_run=args.dry_run,
-            delay_seconds=args.delay_seconds,
-            timeout_seconds=args.timeout_seconds,
-            omniroute_instance_id=self.config.omniroute_url,
-            log=log,
-        )
-
-    def _refresh_live_catalog(self) -> RuntimeCliResult | None:
-        try:
-            self.live_catalog_refresh(self.repository, self.omniroute_client, self.config.omniroute_url)
-        except Exception as exc:
-            return RuntimeCliResult(exit_code=4, changed=False, error_reason=f"live_catalog_refresh:{exc}")
-        return None
-
-    def _live_catalog_refresh_stage(self, _context: PipelineContext):
-        try:
-            self.live_catalog_refresh(self.repository, self.omniroute_client, self.config.omniroute_url)
-        except Exception as exc:
-            return StageResult(status="external_dependency_failed", reason=f"live_catalog_refresh:{exc}")
-        return _effect_result("live-catalog-refresh", changed=True)
-
 
 def compose_runtime(
     config: StartupConfig,
     *,
-    metadata_sync: MetadataSync | None = None,
     adapters: StageAdapters | None = None,
 ) -> ComposedRuntime:
     if config.database_url is None:
         raise ValueError("database_url_required")
     if config.omniroute_api_key is None:
         raise ValueError("omniroute_api_key_required")
-    selected_adapters = adapters or StageAdapters(live_catalog_refresh=_default_live_catalog_refresh())
+    selected_adapters = adapters or StageAdapters()
     repository = Repository(Database(config.database_url))
     client = OmniRouteClient(base_url=config.omniroute_url, api_key=config.omniroute_api_key)
-    llm_runtime = build_production_llm_runtime(config, repository, live_quota_client=client, adapters=selected_adapters)
+    llm_runtime = build_production_llm_runtime()
     dependencies = StageDependencies(
         repository=repository,
         omniroute_client=client,
@@ -177,43 +110,22 @@ def compose_runtime(
     return ComposedRuntime(
         repository=repository,
         omniroute_client=client,
-        stages=build_canonical_stages(
-            dependencies=dependencies, metadata_sync=metadata_sync, adapters=selected_adapters
-        ),
+        stages=build_canonical_stages(dependencies=dependencies, adapters=selected_adapters),
         cron=config.hermes_inventory_cron,
         llm_runtime=llm_runtime,
         config=config,
-        live_catalog_refresh=selected_adapters.live_catalog_refresh,
     )
 
 
-def build_production_llm_runtime(
-    config: StartupConfig,
-    repository: Repository,
-    *,
-    live_quota_client=None,
-    adapters: StageAdapters | None = None,
-) -> SharedInstructorRuntime:
-    selected_adapters = adapters or StageAdapters()
-    provider = LlmProviderConfig(
-        base_url=urljoin(config.omniroute_url.rstrip("/") + "/", "v1"),
-        api_key=config.omniroute_api_key or "",
-    )
-    return build_instructor_runtime(
-        provider=provider,
-        model_resolver=lambda: select_llm_model(repository, config, live_quota_client),
-        instructor_from_openai=selected_adapters.instructor_from_openai,
-        openai_client_factory=selected_adapters.openai_client_factory,
-    )
+def build_production_llm_runtime() -> SharedInstructorRuntime | None:
+    return None
 
 
 def build_canonical_stages(
     *,
     dependencies: StageDependencies | None = None,
-    metadata_sync: MetadataSync | None = None,
     adapters: StageAdapters | None = None,
 ) -> list[Stage]:
-    sync = metadata_sync or sync_external_metadata
     deps = dependencies or StageDependencies(repository=None, omniroute_client=None)
     stage_adapters = adapters or StageAdapters()
     if deps.hermes_inventory_adapter is None and stage_adapters.hermes_inventory is not None:
@@ -225,18 +137,8 @@ def build_canonical_stages(
             hermes_inventory_adapter=stage_adapters.hermes_inventory,
         )
     stage_by_name = {
-        "external-metadata-sync": Stage("external-metadata-sync", _metadata_stage(sync)),
-        "free-candidate-discovery": Stage("free-candidate-discovery", _free_candidate_stage(deps, stage_adapters)),
-        "account-discovery": Stage("account-discovery", _account_discovery_stage(deps, stage_adapters)),
-        "model-matching": Stage("model-matching", _adapter_stage("model-matching", deps, stage_adapters)),
-        "access-classification": Stage(
-            "access-classification", _adapter_stage("access-classification", deps, stage_adapters)
-        ),
-        "probing": Stage("probing", _adapter_stage("probing", deps, stage_adapters)),
-        "telemetry-sync": Stage("telemetry-sync", _adapter_stage("telemetry-sync", deps, stage_adapters)),
         "hermes-inventory": Stage("hermes-inventory", _adapter_stage("hermes-inventory", deps, stage_adapters)),
         "role-lifecycle": Stage("role-lifecycle", _adapter_stage("role-lifecycle", deps, stage_adapters)),
-        "role-scoring": Stage("role-scoring", _adapter_stage("role-scoring", deps, stage_adapters)),
         "demand-forecast": Stage("demand-forecast", _adapter_stage("demand-forecast", deps, stage_adapters)),
         "audit": Stage("audit", _adapter_stage("audit", deps, stage_adapters)),
     }
@@ -397,25 +299,6 @@ def _profile_normalization_output(result: ProfileNormalizationResult) -> str:
     return "\n".join(lines)
 
 
-def _latest_endpoint_rejection(transaction, endpoint_id: str) -> str | None:
-    row = transaction.execute(
-        """
-        SELECT rejection_reasons
-        FROM role_scores
-        WHERE endpoint_id = %(endpoint_id)s
-          AND eligibility = false
-          AND rejection_reasons IS NOT NULL
-        ORDER BY calculated_at DESC
-        LIMIT 1
-        """,
-        {"endpoint_id": endpoint_id},
-    ).fetchone()
-    if row is None:
-        return None
-    reasons = row["rejection_reasons"] or []
-    return ",".join(str(reason) for reason in reasons)
-
-
 def _run_type(command: str) -> str:
     if command == "full":
         return "full"
@@ -423,16 +306,7 @@ def _run_type(command: str) -> str:
 
 
 _COMMAND_STAGE_NAMES = {
-    "sync-free-registry": "free-candidate-discovery",
-    "discover-accounts": "account-discovery",
-    "scan-providers": "free-candidate-discovery",
-    "classify-access": "access-classification",
-    "sync-metadata": "external-metadata-sync",
-    "match-models": "model-matching",
-    "probe-models": "probing",
-    "sync-telemetry": "telemetry-sync",
     "sync-hermes-inventory": "hermes-inventory",
     "reconcile-roles": "role-lifecycle",
-    "score-roles": "role-scoring",
     "forecast-demand": "demand-forecast",
 }

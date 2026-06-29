@@ -3,7 +3,7 @@
 Policy:
 
 - **Fresh install** → run `db/schema.sql` once. It already contains the full
-  current-state schema (v3.19) with every column folded into its `CREATE TABLE`.
+  current-state schema (v3.28) with every column folded into its `CREATE TABLE`.
 - **Existing database** created by an older version → apply the numbered scripts
   here in order. Every statement is idempotent (`ADD COLUMN IF NOT EXISTS`,
   `CREATE TABLE IF NOT EXISTS`), so re-running is safe and a script that a
@@ -30,6 +30,7 @@ the end of `schema.sql`; they were extracted so the baseline stays clean.
 | `0013_v3.25_published_generations.sql` | 3.25 | `published_generations` payload-hash publish records |
 | `0014_v3.26_remove_fmo_quota.sql` | 3.26 | drop retired FMO quota tables and FK columns |
 | `0015_v3.27_remove_fmo_allocation_apply.sql` | 3.27 | drop retired FMO allocation/apply tables |
+| `0016_v3.28_remove_fmo_matching_probing.sql` | 3.28 | drop retired FMO discovery/matching/probing/scoring tables |
 
 > The AA index-migration / threshold-version tables, demand tables, quota
 > attribution tables, bootstrap profiles, combo review, role lifecycle events,

@@ -14,22 +14,12 @@ from psycopg.types.json import Jsonb
 Record = dict[str, Any]
 
 if TYPE_CHECKING:
-    from .account import ProviderAccountRepository
     from .audit import AuditRepository
-    from .canonical_model import CanonicalModelRepository
-    from .catalog import ProviderCatalogRepository
-    from .endpoint import ProviderEndpointRepository
-    from .external_metadata import ExternalMetadataRepository
     from .lock import LockRepository
-    from .probe import ProbeRepository
-    from .provider import ProviderRepository
     from .published_generation import PublishedGenerationRepository
-    from .registry import FreeRegistryRepository
     from .role import RoleRepository
     from .role_consumer import RoleConsumerRepository
     from .run import RunRepository
-    from .score import ScoreRepository
-    from .snapshot import SnapshotRepository
 
 
 class Database:
@@ -52,55 +42,25 @@ class Database:
 class Repository:
     database: Database
     runs: RunRepository = field(init=False)
-    providers: ProviderRepository = field(init=False)
-    provider_accounts: ProviderAccountRepository = field(init=False)
-    provider_catalogs: ProviderCatalogRepository = field(init=False)
-    canonical_models: CanonicalModelRepository = field(init=False)
-    provider_endpoints: ProviderEndpointRepository = field(init=False)
-    free_registry: FreeRegistryRepository = field(init=False)
-    snapshots: SnapshotRepository = field(init=False)
-    probes: ProbeRepository = field(init=False)
     roles: RoleRepository = field(init=False)
     role_consumers: RoleConsumerRepository = field(init=False)
-    scores: ScoreRepository = field(init=False)
     audit: AuditRepository = field(init=False)
     locks: LockRepository = field(init=False)
-    external_metadata: ExternalMetadataRepository = field(init=False)
     published_generations: PublishedGenerationRepository = field(init=False)
 
     def __post_init__(self) -> None:
-        from .account import ProviderAccountRepository
         from .audit import AuditRepository
-        from .canonical_model import CanonicalModelRepository
-        from .catalog import ProviderCatalogRepository
-        from .endpoint import ProviderEndpointRepository
-        from .external_metadata import ExternalMetadataRepository
         from .lock import LockRepository
-        from .probe import ProbeRepository
-        from .provider import ProviderRepository
         from .published_generation import PublishedGenerationRepository
-        from .registry import FreeRegistryRepository
         from .role import RoleRepository
         from .role_consumer import RoleConsumerRepository
         from .run import RunRepository
-        from .score import ScoreRepository
-        from .snapshot import SnapshotRepository
 
         object.__setattr__(self, "runs", RunRepository())
-        object.__setattr__(self, "providers", ProviderRepository())
-        object.__setattr__(self, "provider_accounts", ProviderAccountRepository())
-        object.__setattr__(self, "provider_catalogs", ProviderCatalogRepository())
-        object.__setattr__(self, "canonical_models", CanonicalModelRepository())
-        object.__setattr__(self, "provider_endpoints", ProviderEndpointRepository())
-        object.__setattr__(self, "free_registry", FreeRegistryRepository())
-        object.__setattr__(self, "snapshots", SnapshotRepository())
-        object.__setattr__(self, "probes", ProbeRepository())
         object.__setattr__(self, "roles", RoleRepository())
         object.__setattr__(self, "role_consumers", RoleConsumerRepository())
-        object.__setattr__(self, "scores", ScoreRepository())
         object.__setattr__(self, "audit", AuditRepository())
         object.__setattr__(self, "locks", LockRepository())
-        object.__setattr__(self, "external_metadata", ExternalMetadataRepository())
         object.__setattr__(self, "published_generations", PublishedGenerationRepository())
 
 
@@ -136,23 +96,6 @@ def _trigger_type(cadence: str) -> str:
     if cadence.startswith("every"):
         return "interval"
     return "cron"
-
-
-def _free_type(reasons: tuple[str, ...]) -> str:
-    if "zero_cost" in reasons:
-        return "zero_cost"
-    if "multiple_signals" in reasons:
-        return "multiple_signals"
-    if reasons:
-        return reasons[0]
-    return "candidate"
-
-
-def _split_model_id(model_id: str) -> tuple[str, str | None]:
-    if "/" in model_id:
-        provider_id, provider_model_id = model_id.split("/", 1)
-        return provider_id, provider_model_id
-    return "artificial_analysis", model_id
 
 
 def _canonical_json(payload: dict[str, Any]) -> str:

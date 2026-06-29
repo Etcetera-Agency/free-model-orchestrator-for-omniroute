@@ -1,5 +1,21 @@
 # Completion Review
 
+- Removed FMO matching/probing ownership per `remove-fmo-matching-probing`:
+  canonical runtime now owns only Hermes inventory, role lifecycle, demand
+  forecast, audit, and pool publishing; discovery, model matching, provider
+  scanning, Artificial Analysis metadata, probing, telemetry health, role
+  scoring, smart review, web-cookie, and related persistence modules are gone.
+  Fresh schema is reduced to publisher-owned tables and migration
+  `0016_v3.28_remove_fmo_matching_probing.sql` drops retired provider/model/
+  endpoint/AA/probe/scoring/free-definition tables for existing databases.
+  Living OpenSpec docs now describe the publisher-only surface and
+  `tests/spec_coverage_pending.txt` tracks only remaining current-scope
+  uncovered scenarios. Code Simplifier review removed the leftover metadata/LLM
+  adapter compatibility exports and unused composition parameters after the
+  destructive removal. Focused checks: `uv run python -m compileall -q src/fmo`;
+  focused CLI/bootstrap/persistence/pipeline/foundation/pool-publisher/scheduler
+  pytest plus spec coverage/runtime docs; ruff on changed src/tests; OpenSpec
+  strict validation; `git diff --check`.
 - Removed FMO allocation/apply ownership per `remove-fmo-allocation-apply`:
   canonical pipeline no longer runs `allocation`, `diff`, or `apply`; allocator,
   applier, apply guard, rollback, allocation-plan and combo-snapshot repositories,

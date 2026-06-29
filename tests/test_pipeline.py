@@ -36,8 +36,6 @@ def test_starting_run_persists_run_record(repository):
 
 @pytest.mark.spec("pipeline-orchestration::Run is identified")
 @pytest.mark.spec("pipeline-orchestration::Stages run in order")
-@pytest.mark.spec("scheduler::External metadata before discovery and scoring")
-@pytest.mark.spec("telemetry-sync::Daily sync before scoring")
 @pytest.mark.spec("persistence::Stages do not embed schema SQL")
 def test_stages_execute_in_order_and_record_status(repository):
     calls = []
@@ -98,19 +96,19 @@ def test_partial_stale_output_does_not_abort_dependent_stages(repository):
         calls.append("discovery")
         return StageResult(status="partial_stale", idempotency_key="discovery-v1")
 
-    def matcher(context):
-        calls.append("matcher")
-        return StageResult(status="success", idempotency_key="matcher-v1")
+    def second_current(context):
+        calls.append("second")
+        return StageResult(status="success", idempotency_key="second-v1")
 
     result = PipelineRunner(
         repository,
         stages=[
             Stage("discovery", discovery, idempotency_key="discovery-v1"),
-            Stage("matcher", matcher, idempotency_key="matcher-v1"),
+            Stage("second", second_current, idempotency_key="second-v1"),
         ],
     ).run(trigger="manual")
 
-    assert calls == ["discovery", "matcher"]
+    assert calls == ["discovery", "second"]
     assert result.exit_code == 2
     assert result.status == "partial_stale"
 
@@ -153,7 +151,7 @@ def test_external_dependency_failure_maps_to_code_4(repository):
 def test_success_stage_without_declared_effect_fails_effect_harness(repository):
     runner = PipelineRunner(
         repository,
-        stages=[Stage("model-matching", lambda context: StageResult(status="success", idempotency_key="fake"))],
+        stages=[Stage("role-lifecycle", lambda context: StageResult(status="success", idempotency_key="fake"))],
     )
 
     result = runner.run(trigger="manual")

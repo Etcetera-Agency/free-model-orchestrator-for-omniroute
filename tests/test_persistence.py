@@ -1,39 +1,22 @@
 import importlib
 import inspect
 import pkgutil
-from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 
 from fmo.db import MigrationRunner
 from fmo.persistence import Database, Repository
-from fmo.registry import FreeRegistry, FreeRegistrySyncOutcome
-
-# Relative probe timestamps so stored-evidence fixtures never drift past a
-# wall-clock freshness window. Computed once per run; dedup keys off request_hash,
-# not these values.
-_PROBE_STARTED_AT = (datetime.now(UTC) - timedelta(minutes=1)).isoformat()
-_PROBE_FINISHED_AT = (datetime.now(UTC) - timedelta(minutes=1) + timedelta(seconds=1)).isoformat()
 
 _PUBLIC_PERSISTENCE_CLASSES = {
     "AuditRepository",
-    "CanonicalModelRepository",
     "Database",
-    "ExternalMetadataRepository",
-    "FreeRegistryRepository",
     "LockRepository",
-    "ProbeRepository",
-    "ProviderAccountRepository",
-    "ProviderCatalogRepository",
-    "ProviderEndpointRepository",
-    "ProviderRepository",
+    "PublishedGenerationRepository",
     "Repository",
     "RoleConsumerRepository",
     "RoleRepository",
     "RunRepository",
-    "ScoreRepository",
-    "SnapshotRepository",
 }
 
 
@@ -47,29 +30,32 @@ def test_persistence_public_api_reexports_repository_classes():
 
 
 @pytest.mark.spec("system-architecture::Persistence layer is split into per-aggregate modules")
-def test_persistence_layer_is_package_with_small_aggregate_modules():
+def test_persistence_layer_is_package_with_current_aggregate_modules():
     package = importlib.import_module("fmo.persistence")
 
     assert hasattr(package, "__path__")
     modules = {item.name for item in pkgutil.iter_modules(package.__path__)}
-    assert "_base" in modules
+    assert {
+        "_base",
+        "audit",
+        "lock",
+        "published_generation",
+        "role",
+        "role_consumer",
+        "run",
+    }.issubset(modules)
     assert {
         "account",
-        "audit",
         "canonical_model",
         "catalog",
         "endpoint",
         "external_metadata",
-        "lock",
         "probe",
         "provider",
         "registry",
-        "role",
-        "role_consumer",
-        "run",
         "score",
         "snapshot",
-    }.issubset(modules)
+    }.isdisjoint(modules)
 
     base = importlib.import_module("fmo.persistence._base")
     assert base.Database is Database
@@ -77,23 +63,13 @@ def test_persistence_layer_is_package_with_small_aggregate_modules():
     for helper in ("_one", "_optional", "_many", "_jsonb", "_content_hash"):
         assert callable(getattr(base, helper))
 
-    package_dir = Path(package.__path__[0])
-    oversized = {
-        path.name: len(path.read_text(encoding="utf-8").splitlines())
-        for path in package_dir.glob("*.py")
-        if path.name not in {"__init__.py", "_base.py"} and len(path.read_text(encoding="utf-8").splitlines()) > 250
-    }
-    assert oversized == {}
-
 
 @pytest.fixture()
 def repository(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
-    database = Database(postgres_url)
-    return Repository(database)
+    return Repository(Database(postgres_url))
 
 
-@pytest.mark.spec("persistence::Failed write rolls back")
 @pytest.mark.spec("persistence::Failed write rolls back")
 def test_failed_transaction_rolls_back_rows(repository):
     with pytest.raises(RuntimeError, match="boom"):
@@ -113,7 +89,6 @@ def test_failed_transaction_rolls_back_rows(repository):
 
 
 @pytest.mark.spec("persistence::Committed write is durable")
-@pytest.mark.spec("persistence::Committed write is durable")
 def test_committed_transaction_is_visible_to_new_connection(repository):
     with repository.database.transaction() as transaction:
         run = repository.runs.create(
@@ -129,54 +104,10 @@ def test_committed_transaction_is_visible_to_new_connection(repository):
         assert repository.runs.get(transaction, run["id"]) == run
 
 
-@pytest.mark.spec("persistence::Round-trip a provider endpoint")
-@pytest.mark.spec("persistence::Round-trip a provider endpoint")
 @pytest.mark.spec("data-model::Role reference type")
 @pytest.mark.spec("data-model::Repository is the only writer")
-@pytest.mark.spec("persistence::Sync writes metadata through the repository")
-def test_domain_repository_round_trips(repository):
+def test_current_domain_repository_round_trips(repository):
     with repository.database.transaction() as transaction:
-        provider = repository.providers.upsert(
-            transaction,
-            omniroute_instance_id="local",
-            omniroute_provider_id="openai",
-            provider_type="api",
-            display_name="OpenAI",
-        )
-        account = repository.provider_accounts.upsert(
-            transaction,
-            provider_id=provider["id"],
-            omniroute_connection_id="conn-openai",
-            external_account_ref="acct",
-        )
-        model = repository.canonical_models.upsert(
-            transaction,
-            canonical_slug="gpt-test",
-            lab="OpenAI",
-            family="gpt",
-            version="test",
-        )
-        endpoint = repository.provider_endpoints.upsert(
-            transaction,
-            provider_account_id=account["id"],
-            provider_model_id="gpt-test",
-            model_type="chat",
-            canonical_model_id=model["id"],
-            lifecycle_status="active",
-            access_status="allowed",
-            capabilities={"chat": True},
-            metadata_hash="endpoint-key",
-        )
-        probe = repository.probes.record(
-            transaction,
-            endpoint_id=endpoint["id"],
-            suite_version="v1",
-            probe_type="basic",
-            request_hash="probe-key",
-            passed=True,
-            started_at=_PROBE_STARTED_AT,
-            finished_at=_PROBE_FINISHED_AT,
-        )
         role = repository.roles.upsert(
             transaction,
             role_id="coder",
@@ -184,306 +115,47 @@ def test_domain_repository_round_trips(repository):
             expected_load={"requests": 1},
             criticality=5,
         )
-        score = repository.scores.upsert(
+        consumer = repository.role_consumers.upsert(
             transaction,
             role_id=role["id"],
-            endpoint_id=endpoint["id"],
-            score_version="v1",
-            total_score=95,
-            component_scores={"quality": 95},
-            eligibility=True,
-            input_state_hash="score-key",
+            consumer_type="agent_profile",
+            consumer_key="agent:coder",
+            cadence="manual",
+            calls_per_run=1,
+            source_hash="hash",
+        )
+        generation = repository.published_generations.upsert(
+            transaction,
+            generation="2026-06-29T00:00:00Z",
+            payload_hash="payload",
+            payload_json={"pools": []},
+            status="acked",
         )
         audit = repository.audit.record(
             transaction,
-            entity_type="combo",
+            entity_type="pool",
             entity_id=role["id"],
-            action="planned",
-            after_json={"models": ["gpt-test"]},
+            action="published",
+            after_json={"generation": generation["generation"]},
             reason_codes=["test"],
         )
 
     with repository.database.transaction() as transaction:
-        assert repository.provider_endpoints.get(transaction, endpoint["id"]) == endpoint
-        assert repository.probes.get(transaction, probe["id"]) == probe
-        assert repository.scores.get(transaction, score["id"]) == score
+        assert repository.roles.get(transaction, role["id"]) == role
+        assert repository.role_consumers.get(transaction, consumer["id"]) == consumer
+        assert repository.published_generations.get(transaction, generation["generation"], generation["payload_hash"])
         assert repository.audit.get(transaction, audit["id"]) == audit
 
 
-@pytest.mark.spec("persistence::Re-run does not duplicate")
-@pytest.mark.spec("persistence::Re-run does not duplicate")
-def test_idempotent_repository_writes_do_not_duplicate(repository):
-    with repository.database.transaction() as transaction:
-        provider = repository.providers.upsert(
-            transaction,
-            omniroute_instance_id="local",
-            omniroute_provider_id="openai",
-            provider_type="api",
-        )
-        account = repository.provider_accounts.upsert(
-            transaction,
-            provider_id=provider["id"],
-            omniroute_connection_id="conn-openai",
-        )
-        endpoint = repository.provider_endpoints.upsert(
-            transaction,
-            provider_account_id=account["id"],
-            provider_model_id="gpt-test",
-            model_type="chat",
-            lifecycle_status="active",
-            access_status="allowed",
-            metadata_hash="endpoint-key",
-        )
-        first_probe = repository.probes.record(
-            transaction,
-            endpoint_id=endpoint["id"],
-            suite_version="v1",
-            probe_type="basic",
-            request_hash="same-key",
-            passed=True,
-            started_at=_PROBE_STARTED_AT,
-            finished_at=_PROBE_FINISHED_AT,
-        )
-        second_probe = repository.probes.record(
-            transaction,
-            endpoint_id=endpoint["id"],
-            suite_version="v1",
-            probe_type="basic",
-            request_hash="same-key",
-            passed=True,
-            started_at=_PROBE_STARTED_AT,
-            finished_at=_PROBE_FINISHED_AT,
-        )
+@pytest.mark.spec("system-architecture::Row access helpers are defined once in the persistence base")
+def test_row_access_helpers_have_one_persistence_definition():
+    helper_names = {"_one", "_optional", "_many", "_jsonb", "_content_hash"}
+    definitions: dict[str, list[Path]] = {name: [] for name in helper_names}
 
-    assert second_probe["id"] == first_probe["id"]
-    with repository.database.transaction() as transaction:
-        assert repository.probes.count_by_request_hash(transaction, "same-key") == 1
+    for path in Path("src/fmo").rglob("*.py"):
+        source = path.read_text(encoding="utf-8")
+        for name in helper_names:
+            if f"def {name}(" in source:
+                definitions[name].append(path)
 
-
-@pytest.mark.spec("persistence::Provider endpoint upsert overwrites provider/model identity")
-def test_provider_endpoint_upsert_overwrites_provider_model_identity(repository):
-    with repository.database.transaction() as transaction:
-        provider = repository.providers.upsert(
-            transaction,
-            omniroute_instance_id="local",
-            omniroute_provider_id="nvidia",
-            provider_type="api",
-        )
-        first_account = repository.provider_accounts.upsert(
-            transaction,
-            provider_id=provider["id"],
-            omniroute_connection_id="pool-a",
-        )
-        second_account = repository.provider_accounts.upsert(
-            transaction,
-            provider_id=provider["id"],
-            omniroute_connection_id="pool-b",
-        )
-
-        first = repository.provider_endpoints.upsert(
-            transaction,
-            provider_account_id=first_account["id"],
-            provider_model_id="nvidia/google/gemma-3n-e2b-it",
-            model_type="chat",
-            lifecycle_status="discovered",
-            access_status="access_pending",
-            metadata_hash="first",
-        )
-        second = repository.provider_endpoints.upsert(
-            transaction,
-            provider_account_id=second_account["id"],
-            provider_model_id="nvidia/google/gemma-3n-e2b-it",
-            model_type="chat",
-            lifecycle_status="active",
-            access_status="confirmed",
-            metadata_hash="second",
-        )
-
-        total = transaction.execute(
-            """
-            SELECT count(*) AS total
-            FROM provider_endpoints
-            WHERE provider_id = %(provider_id)s
-              AND provider_model_id = 'nvidia/google/gemma-3n-e2b-it'
-              AND model_type = 'chat'
-            """,
-            {"provider_id": provider["id"]},
-        ).fetchone()["total"]
-
-    assert second["id"] == first["id"]
-    assert second["provider_account_id"] == second_account["id"]
-    assert second["metadata_hash"] == "second"
-    assert total == 1
-
-
-
-
-@pytest.mark.spec("data-model::Role carries a maximum quality bound")
-def test_role_quality_band_upper_bound_round_trips(repository):
-    with repository.database.transaction() as transaction:
-        banded = repository.roles.upsert(
-            transaction,
-            role_id="banded",
-            requirements={"capabilities": []},
-            expected_load={"requests": 1},
-            criticality=1,
-            minimum_quality_metric="intelligence_index",
-            minimum_quality_value=40,
-            maximum_quality_metric="intelligence_index",
-            maximum_quality_value=60,
-            quality_gate_index_version="4.1",
-        )
-        unbounded = repository.roles.upsert(
-            transaction,
-            role_id="unbounded",
-            requirements={"capabilities": []},
-            expected_load={"requests": 1},
-            criticality=1,
-        )
-
-    assert banded["maximum_quality_metric"] == "intelligence_index"
-    assert float(banded["maximum_quality_value"]) == 60
-    assert unbounded["maximum_quality_metric"] is None
-    assert unbounded["maximum_quality_value"] is None
-
-
-@pytest.mark.spec("persistence::Duplicate payload is one snapshot")
-@pytest.mark.spec("persistence::Duplicate payload is one snapshot")
-def test_content_hashed_snapshots_are_immutable_and_deduplicated(repository):
-    payload = {"provider": "openai", "limits": {"requests": 10}}
-
-    with repository.database.transaction() as transaction:
-        first = repository.snapshots.store_quota_source(
-            transaction,
-            source_url="https://quota.test/openai",
-            source_type="docs",
-            payload=payload,
-        )
-        second = repository.snapshots.store_quota_source(
-            transaction,
-            source_url="https://quota.test/openai",
-            source_type="docs",
-            payload=payload,
-        )
-
-    assert second["id"] == first["id"]
-    with repository.database.transaction() as transaction:
-        assert repository.snapshots.count_by_hash(transaction, first["content_hash"]) == 1
-
-
-@pytest.mark.spec("persistence::Round-trip a provider endpoint")
-@pytest.mark.spec("provider-scanner::Catalog fetched before scan")
-@pytest.mark.spec("provider-scanner::Successful catalog snapshot is stored")
-@pytest.mark.spec("provider-scanner::Unchanged catalog is detected")
-@pytest.mark.spec("persistence::Discovery repository writes remain idempotent")
-def test_provider_catalog_repository_round_trips_and_deduplicates(repository):
-    catalog = {"models": [{"id": "provider-a/chat"}]}
-
-    with repository.database.transaction() as transaction:
-        provider = repository.providers.upsert(
-            transaction,
-            omniroute_instance_id="local",
-            omniroute_provider_id="provider-a",
-            provider_type="oauth",
-        )
-        account = repository.provider_accounts.upsert(
-            transaction,
-            provider_id=provider["id"],
-            omniroute_connection_id="provider-a-account",
-            external_account_ref="provider-a-account",
-        )
-        snapshot = repository.provider_catalogs.store_snapshot(
-            transaction,
-            provider_id=provider["id"],
-            catalog=catalog,
-            fetch_status="success",
-        )
-        repeated = repository.provider_catalogs.store_snapshot(
-            transaction,
-            provider_id=provider["id"],
-            catalog=catalog,
-            fetch_status="success",
-        )
-        endpoint = repository.provider_endpoints.upsert(
-            transaction,
-            provider_account_id=account["id"],
-            provider_model_id="provider-a/chat",
-            lifecycle_status="discovered",
-            access_status="access_pending",
-        )
-
-    assert snapshot["catalog_hash"] == repeated["catalog_hash"]
-    assert repeated["is_unchanged"] is True
-    with repository.database.transaction() as transaction:
-        assert repository.provider_endpoints.get(transaction, endpoint["id"]) == endpoint
-
-
-@pytest.mark.spec("persistence::Duplicate payload is one snapshot")
-@pytest.mark.spec("persistence::Discovery repository writes remain idempotent")
-@pytest.mark.spec("free-provider-registry-sync::Registry fetched before build")
-@pytest.mark.spec("free-provider-registry-sync::Registry outcome is persisted")
-def test_free_registry_repository_round_trips_model_definitions(repository):
-    free_models_payload = {
-        "models": [
-            {
-                "provider": "gemini",
-                "modelId": "gemini-2.0-flash",
-                "displayName": "Gemini 2.0 Flash",
-                "freeType": "recurring-daily",
-                "monthlyTokens": 25000000,
-                "authType": "api_key",
-            },
-            {
-                "provider": "browser-only",
-                "modelId": "cookie-model",
-                "freeType": "cookie",
-                "authType": "web_cookie",
-            },
-        ]
-    }
-    outcome = FreeRegistrySyncOutcome(
-        registry=FreeRegistry(models={}, pool_budgets={}),
-        free_models_payload=free_models_payload,
-        rankings_payload={"providers": []},
-        model_count=2,
-        drift=[],
-        errors=[],
-    )
-
-    with repository.database.transaction() as transaction:
-        snapshot = repository.free_registry.store_outcome(transaction, outcome=outcome)
-        stored = transaction.execute(
-            """
-            SELECT provider_id, provider_model_id, display_name, free_type, monthly_tokens
-            FROM free_model_definitions
-            ORDER BY provider_id, provider_model_id
-            """
-        ).fetchall()
-
-    assert snapshot["raw_json"]["sync_outcome"]["model_count"] == 2
-    assert [(row["provider_id"], row["provider_model_id"]) for row in stored] == [("gemini", "gemini-2.0-flash")]
-    assert stored[0]["display_name"] == "Gemini 2.0 Flash"
-    assert int(stored[0]["monthly_tokens"]) == 25000000
-
-
-@pytest.mark.spec("data-model::Repository is the only writer")
-@pytest.mark.spec("persistence::Discovery writers use repository")
-@pytest.mark.spec("provider-scanner::Scanner does not own SQL writes")
-@pytest.mark.spec("free-provider-registry-sync::Registry writer does not own SQL writes")
-def test_scanner_and_registry_modules_do_not_embed_table_sql():
-    forbidden = (
-        "psycopg",
-        "INSERT INTO providers",
-        "INSERT INTO provider_accounts",
-        "INSERT INTO provider_catalog_snapshots",
-        "INSERT INTO provider_endpoints",
-        "INSERT INTO free_provider_registry_snapshots",
-        "INSERT INTO free_model_definitions",
-        "FROM provider_catalog_snapshots",
-        "FROM free_provider_registry_snapshots",
-        "FROM free_model_definitions",
-    )
-
-    for path in (Path("src/fmo/scanner.py"), Path("src/fmo/registry.py")):
-        source = path.read_text()
-        assert not any(sql in source for sql in forbidden), path
+    assert definitions == {name: [Path("src/fmo/persistence/_base.py")] for name in helper_names}

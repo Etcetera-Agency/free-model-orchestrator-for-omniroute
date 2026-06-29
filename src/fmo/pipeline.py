@@ -15,16 +15,8 @@ EXIT_CODES = {
 }
 
 CANONICAL_STAGE_NAMES = [
-    "external-metadata-sync",
-    "free-candidate-discovery",
-    "account-discovery",
-    "model-matching",
-    "access-classification",
-    "probing",
-    "telemetry-sync",
     "hermes-inventory",
     "role-lifecycle",
-    "role-scoring",
     "demand-forecast",
     "audit",
 ]

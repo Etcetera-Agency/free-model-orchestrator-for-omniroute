@@ -126,7 +126,7 @@ def test_production_dispatch_composes_and_runs_stage_without_injected_runner(pos
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
 
     exit_code = main(
-        ["scan-providers"],
+        ["sync-hermes-inventory"],
         env=valid_env(DATABASE_URL=postgres_url),
         health_check=lambda: {"ok": True},
     )
@@ -134,10 +134,10 @@ def test_production_dispatch_composes_and_runs_stage_without_injected_runner(pos
     repository = Repository(Database(postgres_url))
     with repository.database.transaction() as transaction:
         runs = repository.runs.list(transaction)
-    assert exit_code == 4
+    assert exit_code == 0
     assert len(runs) == 1
-    assert runs[0]["status"] == "external_dependency_failed"
-    assert [stage["name"] for stage in runs[0]["error_json"]["stages"]] == ["free-candidate-discovery"]
+    assert runs[0]["status"] == "success"
+    assert [stage["name"] for stage in runs[0]["error_json"]["stages"]] == ["hermes-inventory"]
 
 
 @pytest.mark.spec("runtime-bootstrap::Diagnostics read persisted state by default")

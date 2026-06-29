@@ -17,7 +17,7 @@ class FakeRunner:
 
 @pytest.mark.spec("cli-and-operations::Stage command invokes its stage")
 @pytest.mark.parametrize(
-    "command", ["scan-providers", "match-models", "probe-models", "score-roles", "forecast-demand"]
+    "command", ["sync-hermes-inventory", "reconcile-roles", "forecast-demand"]
 )
 def test_stage_commands_invoke_pipeline_runner(command):
     runner = FakeRunner()
@@ -36,33 +36,6 @@ def test_stage_failure_surfaces_runner_exit_code():
     result = run_cli(["forecast-demand"], preconditions_ok=True, pipeline_runner=runner)
 
     assert result.exit_code == 4
-
-
-@pytest.mark.spec("cli-and-operations::aa-index subcommand routes to the handler")
-def test_aa_index_subcommand_invokes_handler_instead_of_default_noop():
-    calls = []
-
-    def handler(command, args):
-        calls.append((command, args.aa_command))
-        return CliResult(exit_code=0, changed=True)
-
-    result = run_cli(["aa-index", "analyze"], preconditions_ok=True, aa_index_handler=handler)
-
-    assert result.exit_code == 0
-    assert result.changed is True
-    assert calls == [("analyze", "analyze")]
-
-
-@pytest.mark.spec("cli-and-operations::aa-index failure maps to an exit code")
-def test_aa_index_failure_surfaces_handler_exit_code():
-    result = run_cli(
-        ["aa-index", "proposal"],
-        preconditions_ok=True,
-        aa_index_handler=lambda _command, _args: CliResult(exit_code=4, changed=False),
-    )
-
-    assert result.exit_code == 4
-    assert result.changed is False
 
 
 @pytest.mark.spec("cli-and-operations::Normalize command dispatches to normalization")
@@ -133,25 +106,18 @@ def test_full_dry_run_runs_pipeline_and_surfaces_real_outcome():
     assert runner.calls[0][1].dry_run is True
 
 
-@pytest.mark.spec("cli-and-operations::Explain an endpoint")
 @pytest.mark.spec("runtime-bootstrap::Diagnostics read persisted state by default")
-def test_explain_endpoint_and_role_read_diagnostics():
+def test_explain_role_reads_diagnostics():
     calls = []
 
     def diagnostics(kind, identifier):
         calls.append((kind, identifier))
         return f"{kind}:{identifier}:score=95 selected"
 
-    endpoint = run_cli(
-        ["explain-endpoint", "--endpoint", "endpoint-1"],
-        preconditions_ok=True,
-        diagnostics_reader=diagnostics,
-    )
     role = run_cli(["explain-role", "--role", "coder"], preconditions_ok=True, diagnostics_reader=diagnostics)
 
-    assert endpoint.output == "endpoint:endpoint-1:score=95 selected"
     assert role.output == "role:coder:score=95 selected"
-    assert calls == [("endpoint", "endpoint-1"), ("role", "coder")]
+    assert calls == [("role", "coder")]
 
 
 @pytest.mark.spec("scheduler::Service fires the daily run")

@@ -2,17 +2,13 @@
 
 ## Purpose
 
-**Free Model Orchestrator** — a standalone service that keeps the set of
-no-cost-usable models in OmniRoute up to date. It discovers, verifies and
-allocates models that can be used without monetary charges (zero-price models,
-paid models reachable inside a confirmed provider free quota, and temporary
-promo/free-tier models), then builds and updates per-role combos. OmniRoute
-itself executes runtime routing, fallback and retries; this service does not
-participate in request runtime.
+**Free Model Orchestrator** — a standalone publisher that converts Hermes role
+inventory and demand into `fmo-pools/v1` pool specs for OmniRoute. OmniRoute owns
+free model discovery, model matching, probing, scoring, solving, combo apply,
+runtime routing, fallback and retries.
 
-**Core invariant:** no probe or production request may exceed confirmed free
-capacity. If free access cannot be confirmed or safely bounded, the endpoint is
-not used.
+**Core invariant:** FMO does not probe endpoints or write combos. It publishes
+role policy and demand only; OmniRoute is the model/capacity source of truth.
 
 The main process runs once per day (daily batch); ad-hoc runs are manual or
 event-driven.
@@ -21,39 +17,26 @@ event-driven.
 
 - PostgreSQL (schema in `reference/db/schema.sql`, migrations in `reference/db/migrations/`)
 - Python services calling the OmniRoute OpenAI-compatible / management API
-- `Instructor` + Pydantic for all structured-LLM steps — no separate agent
-  framework. There are exactly **four** Instructor/LLM call sites:
-  1. quota-research inspector (`add-quota`) — extracts quota from search;
-  2. Hermes role Inspector forecast (`hermes-inventory`) — demand estimate;
-  3. smart-combo-reviewer (`add-advisory-llm`) — advisory combo diffs;
-  4. aa-index migration agent (`add-advisory-llm`) — threshold proposals.
-
-  All four are part of the project. Sites 3–4 are **advisory / fail-open**: if
-  the LLM is unavailable or returns nothing usable, the deterministic pipeline
-  proceeds without it. Nothing here is out-of-scope or skippable.
-- OmniRoute as the upstream gateway (`/v1/*` OpenAI-compatible, `/api/*` management,
-  `/v1/search` for quota research via `gemini-grounded-search`)
-- External data: models.dev catalog (`api.json` / `catalog.json`), Artificial
-  Analysis `/api/v2/language/models`
+- `Instructor` + Pydantic only for Hermes role inspection and intelligence
+  hints. Deterministic code owns publish validation.
+- OmniRoute as the upstream gateway and pool-contract owner (`/api/fmo/pools`,
+  `/api/fmo/usage`, role combo runtime after solve/apply).
 
 ## Project Conventions
 
 ### Code Style
 
-- Deterministic code owns validation, capacity checks, dry-run and rollout.
-- LLM steps only produce structured proposals; they are never a source of truth.
-- Every external fetch is stored as an immutable, content-hashed snapshot.
+- Deterministic code owns inventory validation, demand forecasts, pool payload
+  construction, idempotency, and publish/audit records.
+- LLM steps only produce structured Hermes role hints; they are never a source
+  of truth for model selection.
 
 ### Architecture Patterns
 
-- Unit of management is the `provider_endpoint` (provider account + model id),
-  not the canonical model.
-- One combo per role; combos are broad (many independent endpoints) so OmniRoute
-  absorbs intraday failures without a rebuild.
-- Global quota allocation across all roles (not per-role independent build).
-- Minimal-diff apply with snapshot + audit + rollback.
-- Idempotency keys per stage (catalog/quota/probe/combo) — see
-  `reference/docs/architecture/00-system-flow.md`.
+- Unit of FMO management is a Hermes role plus its consumers and demand.
+- Pool publication is idempotent by payload hash.
+- OmniRoute owns provider endpoint identity, combo solving, apply, smoke, and
+  rollback.
 
 ### Testing Strategy
 
@@ -81,11 +64,6 @@ network boundary, and only with responses recorded from the real services:
   `open-sse/config/searchRegistry.ts` (provider ids incl. `gemini-grounded-search`),
   and the `/api/*` route handlers under `src/app/api/`. Do not invent `/api/*` or
   `/v1/*` response fields.
-- **models.dev** — record a trimmed real `api.json`/`catalog.json` slice
-  (provider→model with real `cost`); cover a zero-cost, a priced, and a
-  no-`cost` entry.
-- **Artificial Analysis** — record one real `/api/v2/language/models` item
-  (fields under `evaluations`: `artificial_analysis_*`).
 - **Hermes inventory** — record real `~/.hermes/cron/jobs.json` and `state.db`
   shapes from `NousResearch/hermes-agent` (`cron/jobs.py`, profiles, webhook subs).
 - **LLM / Instructor** — record representative structured completions (valid AND
@@ -118,19 +96,12 @@ attribution): `confirmed | inferred | assumed_shared | unknown`.
 
 ## Important Constraints
 
-- Never exceed confirmed free capacity (the core invariant above).
-- `require_hard_stop` and `exclude_unknown` gate endpoints lacking a safe bound.
-- Multiple accounts of one provider are NOT independent capacity unless
-  `confirmed`.
-- Quota research summary-sourced rules are capped (`summary_confidence_cap`) and
-  treated as opportunistic capacity.
+- Never write OmniRoute combos directly from FMO.
+- Never probe provider/model endpoints from FMO.
+- Do not keep local provider/model/capacity caches as a fallback source.
 
 ## External Dependencies
 
-- **OmniRoute** — gateway; management API (`/api/providers`, `/api/free-models`,
-  `/api/free-provider-rankings`, `/api/free-tier/summary`, `/api/rate-limits`),
-  search (`/v1/search`), OpenAI-compatible chat (`/v1`).
-- **models.dev** — free-candidate catalog; cost lives per provider→model.
-- **Artificial Analysis** — intelligence/coding/agentic indices + speed metrics.
+- **OmniRoute** — gateway and pool contract owner.
 - **Hermes** — role registry + demand source (`~/.hermes/cron/jobs.json`,
   `~/.hermes/state.db`); consumes the combos but is not part of this service.

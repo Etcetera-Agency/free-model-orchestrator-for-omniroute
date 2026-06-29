@@ -2,12 +2,14 @@
 
 ## Deferred follow-up
 
-- Bind post-quota-removal spec coverage pending scenarios. The FMO quota owner
-  deletion intentionally removed quota-only executable tests, leaving active
-  pending coverage for access-classifier, LLM runtime, account-discovery,
-  pipeline, inventory, smart-reviewer, AA migration, and architecture scenarios
-  in `tests/spec_coverage_pending.txt`; follow-up slices must either implement
-  new non-quota tests or rewrite/delete obsolete living spec scenarios.
+- Bind remaining publisher-only spec coverage pending scenarios. The FMO
+  matching/probing deletion removed retired local discovery, access, AA,
+  probing, telemetry, scorer, smart-reviewer, and apply scenarios from living
+  specs. Remaining pending coverage in `tests/spec_coverage_pending.txt` is
+  current-scope only: data model migration/auxiliary consumers, demand forecast
+  edge cases, Hermes inspector resolver behavior, shared LLM runtime hardening,
+  OmniRoute combo-test denial, current-combo recency, publisher audit records,
+  and the OmniRoute-owned intraday-failure behavior.
 
 - Finish OmniRoute active-pool migration and single-writer cutover follow-up.
   Gate audit 2026-06-29 before FMO removal: FMO publisher slice was archived

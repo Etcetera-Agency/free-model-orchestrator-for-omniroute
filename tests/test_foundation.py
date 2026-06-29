@@ -14,7 +14,6 @@ from fmo.db import MigrationRunner
 from fmo.idempotency import stable_hash
 from fmo.llm_runtime import LlmSiteConfig, assemble_prompt, redact_secrets
 from fmo.omniroute import OmniRouteClient, OmniRouteVersionGate, _retry_after_seconds
-from fmo.state import ComboState, EndpointState, transition_combo, transition_endpoint
 
 
 class FakeTransport:
@@ -61,7 +60,8 @@ def test_schema_sql_applies_on_real_postgres(postgres_url):
     runner = MigrationRunner(postgres_url)
     runner.apply_schema(Path("reference/db/schema.sql"))
     tables = runner.table_names()
-    assert "provider_endpoints" in tables
+    assert "published_generations" in tables
+    assert "roles" in tables
     assert "sync_runs" in tables
 
 
@@ -426,44 +426,6 @@ def test_static_config_rejects_http_mode_bad_inventory_url(inventory_url):
 def test_startup_validation_rejects_non_object_health_payload():
     with pytest.raises(ValueError, match="non-object"):
         validate_startup(valid_startup_config(), health_check=lambda: ["ok"])
-
-
-@pytest.mark.spec("system-architecture::Reactivate failed endpoint too early")
-@pytest.mark.parametrize(
-    ("state", "target"),
-    [
-        (EndpointState.EXCLUDED_UNKNOWN, EndpointState.ACTIVE),
-        (EndpointState.QUOTA_EXHAUSTED, EndpointState.ACTIVE),
-        (EndpointState.PROBE_FAILED, EndpointState.ACTIVE),
-    ],
-)
-def test_forbidden_endpoint_transitions_rejected(state, target):
-    with pytest.raises(ValueError):
-        transition_endpoint(state, target)
-
-
-@pytest.mark.spec("system-architecture::Missing snapshot blocks apply")
-def test_planned_combo_cannot_apply_without_snapshot():
-    with pytest.raises(ValueError):
-        transition_combo(ComboState.PLANNED, ComboState.APPLIED)
-
-
-@pytest.mark.parametrize(
-    ("state", "target"),
-    [
-        (ComboState.SNAPSHOT_SAVED, ComboState.COMMITTED),
-        (ComboState.APPLIED, ComboState.COMMITTED),
-        (ComboState.COMMITTED, ComboState.APPLIED),
-        (ComboState.SMOKE_PASSED, ComboState.APPLIED),
-        (ComboState.VALIDATED, ComboState.PLANNED),
-    ],
-)
-@pytest.mark.spec("data-model::Snapshot directly committed")
-@pytest.mark.spec("data-model::Applied directly committed")
-@pytest.mark.spec("data-model::Backward combo transition")
-def test_forbidden_combo_transitions_rejected(state, target):
-    with pytest.raises(ValueError):
-        transition_combo(state, target)
 
 
 @pytest.mark.spec("system-architecture::Re-run with unchanged inputs")
