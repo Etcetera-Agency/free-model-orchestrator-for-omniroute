@@ -13,6 +13,8 @@ from fmo.persistence import Database, Repository
 from fmo.pool_publisher import compose_pool_generation, publish_pool_generation, usage_feedback
 
 GOLDEN_POOL_GENERATION = Path("reference/fixtures/fmo-pools-v1-generation.json")
+OMNIROUTE_POOL_GENERATION = Path("../OmniRoute/tests/fixtures/fmo/fmo-pools-v1.golden.json")
+CANONICAL_GENERATED_AT = "2026-06-29T00:00:00.000Z"
 SHARED_CAPABILITY_TOKENS = {
     "api:openai",
     "chat",
@@ -46,18 +48,24 @@ def test_compose_pool_generation_uses_role_policy_and_forecast_only():
             "requirements": {
                 "pool_id": "pool-fast",
                 "combo_id": "combo-fast",
+                "workload_class": "reasoning",
                 "capabilities": ["chat", "tools", "thinking", "api:openai"],
-                "min_context_tokens": 8192,
+                "min_context_tokens": 32768,
                 "quality_relax": {"when": "underfilled", "max_delta": 12},
             },
             "minimum_quality_metric": "coding_index",
             "minimum_quality_value": 55,
             "maximum_quality_value": 85,
-            "consumer_count": 3,
+            "consumer_count": 4,
         }
     ]
 
-    generation = compose_pool_generation(roles, {"routing_fast": 42}, generation="gen-1")
+    generation = compose_pool_generation(
+        roles,
+        {"routing_fast": 1000},
+        generation="gen-1",
+        generated_at=CANONICAL_GENERATED_AT,
+    )
 
     assert generation == _golden_generation(generation="gen-1")
     _assert_canonical_pool_generation(generation)
@@ -75,21 +83,32 @@ def test_shared_golden_fixture_matches_deterministic_composition():
             "requirements": {
                 "pool_id": "pool-fast",
                 "combo_id": "combo-fast",
+                "workload_class": "reasoning",
                 "capabilities": ["tools", "api:openai", "thinking", "chat"],
-                "min_context_tokens": 8192,
+                "min_context_tokens": 32768,
                 "quality_relax": {"max_delta": 12, "when": "underfilled"},
             },
             "minimum_quality_metric": "coding_index",
             "minimum_quality_value": 55,
             "maximum_quality_value": 85,
-            "consumer_count": 3,
+            "consumer_count": 4,
         }
     ]
 
-    generation = compose_pool_generation(roles, {"routing_fast": 42}, generation="gen-001")
+    generation = compose_pool_generation(
+        roles,
+        {"routing_fast": 1000},
+        generation="gen-001",
+        generated_at=CANONICAL_GENERATED_AT,
+    )
 
     assert generation == _golden_generation()
     _assert_canonical_pool_generation(generation)
+    assert GOLDEN_POOL_GENERATION.read_text(encoding="utf-8") == OMNIROUTE_POOL_GENERATION.read_text(
+        encoding="utf-8"
+    )
+    assert type(generation["pools"][0]["demand"]["requests_per_day"]) is int
+    assert type(generation["pools"][0]["demand"]["consumers"]) is int
 
 
 def test_capability_aliases_use_omniroute_matching_tokens():
@@ -122,7 +141,7 @@ def _golden_generation(*, generation: str = "gen-001") -> dict[str, Any]:
 
 
 def _assert_canonical_pool_generation(generation: dict[str, Any]) -> None:
-    assert set(generation) == {"contract_version", "generation", "pools"}
+    assert set(generation) == {"contract_version", "generation", "generated_at", "pools"}
     assert generation["contract_version"] == "fmo-pools/v1"
     assert isinstance(generation["pools"], list)
     assert generation["pools"]
@@ -153,6 +172,7 @@ def _generation(generation: str, *, requests: float) -> dict:
     return {
         "contract_version": "fmo-pools/v1",
         "generation": generation,
+        "generated_at": CANONICAL_GENERATED_AT,
         "pools": [
             {
                 "pool_id": "pool-fast",

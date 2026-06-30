@@ -37,8 +37,10 @@ def compose_pool_generation(
     demand: Mapping[str, float],
     *,
     generation: str | None = None,
+    generated_at: str | None = None,
 ) -> dict[str, Any]:
     pools = []
+    timestamp = datetime.now(UTC).isoformat()
     for role in roles:
         if role.get("role_lifecycle_status") not in {"active", "bootstrap_pending"}:
             continue
@@ -51,7 +53,7 @@ def compose_pool_generation(
                 "pool_id": requirements.get("pool_id") or role["id"],
                 "combo_id": requirements.get("combo_id") or f"fmo-{role['id']}",
                 "demand": {
-                    "requests_per_day": float(demand.get(role["id"], 0.0)),
+                    "requests_per_day": round(demand.get(role["id"], 0.0)),
                     "consumers": int(role.get("consumer_count") or 0),
                     "workload_class": requirements.get("workload_class") or "standard",
                 },
@@ -66,7 +68,8 @@ def compose_pool_generation(
         )
     return {
         "contract_version": POOL_CONTRACT_VERSION,
-        "generation": generation or datetime.now(UTC).isoformat(),
+        "generation": generation or timestamp,
+        "generated_at": generated_at or timestamp,
         "pools": pools,
     }
 

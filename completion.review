@@ -1,5 +1,13 @@
 # Completion Review
 
+- Fixed `adopt-shared-fmo-pools-fixture`: FMO now uses the byte-identical
+  canonical `fmo-pools/v1` fixture shared with OmniRoute, emits
+  `demand.requests_per_day` as a rounded integer count, keeps `consumers` as an
+  integer count, and asserts fixture byte equality plus payload-hash idempotency
+  in publisher tests. Code Simplifier pass reused a single compose timestamp and
+  tightened touched test formatting. Verification: focused
+  `tests/test_pool_publisher.py` pytest, ruff on touched FMO files, OmniRoute
+  contract test, and FMO fixture -> OmniRoute schema cross-check.
 - Locked the FMO publisher wire contract per
   `lock-pool-publisher-wire-contract`: added the shared
   `reference/fixtures/fmo-pools-v1-generation.json` golden fixture, locked
