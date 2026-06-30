@@ -2,11 +2,81 @@
 
 ## Deferred follow-up
 
+- Bind remaining publisher-only spec coverage pending scenarios. The FMO
+  matching/probing deletion removed retired local discovery, access, AA,
+  probing, telemetry, scorer, smart-reviewer, and apply scenarios from living
+  specs. Remaining pending coverage in `tests/spec_coverage_pending.txt` is
+  current-scope only: data model migration/auxiliary consumers, demand forecast
+  edge cases, Hermes inspector resolver behavior, shared LLM runtime hardening,
+  OmniRoute combo-test denial, current-combo recency, publisher audit records,
+  and the OmniRoute-owned intraday-failure behavior.
+
+- Finish OmniRoute active-pool migration and single-writer cutover follow-up.
+  Gate audit 2026-06-29 before FMO removal: FMO publisher slice was archived
+  and pushed, but production `etc2nd-shlink` `127.0.0.1:20129` returned bridge
+  `404` for `/api/fmo/pools` and `/api/fmo/usage`; `127.0.0.1:20128` refused
+  connection from the same shell. Local OmniRoute repo still had unimplemented
+  active proposals `add-fmo-pools-contract`, `add-fmo-pools-planning`,
+  `add-fmo-pools-solve-tail`, and `add-fmo-pools-apply`.
+  User decision on 2026-06-29: implement pure FMO removal specs first and
+  resolve OmniRoute cutover later. Remaining follow-up: make OmniRoute accept
+  `fmo-pools/v1`, run shadow solve, apply atomically, and verify OmniRoute as
+  the only combo writer before relying on live pool ownership.
+
 - Server-side default combo grid bootstrap — separate deploy task. Regenerate
   seed models with the live FMO matcher, back up `GET /api/combos`, then create
   the default one-seed combos from `docs/combo-grid-bootstrap.md` on OmniRoute.
+- Continue post-deploy quota/access verification after the `/v1/search` query
+  length fix. The previous `research-quotas --dry-run` `http_error` was caused
+  by 716-character quota queries exceeding OmniRoute's 500-character schema
+  limit; active quota rules and eligible endpoints are now present, but provider
+  coverage still needs broadening beyond the current Nvidia seed path.
+- Add group-pattern quota topology support for providers whose free tier varies
+  by model family/group (for example Antigravity-style pools). Current live fix
+  fails such provider/account answers closed instead of widening them to
+  `model_pattern='*'`; next work should extract stable model patterns, store
+  narrower quota rules, and teach access classification to match those patterns.
+- Fix OmniRoute `gemini-grounded-search` provider configuration. Live
+  `/v1/search` succeeds through default routing (`exa-search`) but pinned
+  `provider='gemini-grounded-search'` returns HTTP 429 even for `hello world`;
+  FMO now has a fallback, but the intended grounded-search provider still needs
+  platform-side setup/repair.
+- Investigate Nvidia per-model timeouts through OmniRoute's model-test route.
+  On 2026-06-24, live `POST /api/models/test` with the active Nvidia
+  connection timed out after 20s for `nvidia/z-ai/glm-5.1` and
+  `nvidia/minimaxai/minimax-m2.7`; after FMO `e3ecf74` deployed, the
+  model-test-backed `sweep-provider-models` command reproduced the same timeout
+  for both models at offsets 125 and 45. Nvidia was later disabled in OmniRoute,
+  so FMO must not use cached Nvidia rows while the provider is inactive. If
+  Nvidia is re-enabled, rerun OmniRoute `/api/models/test-all` on Nvidia batches
+  to separate upstream outage, queue timeout, and per-model failures.
 ## Resolved
 
+- Nvidia/provider model sweep tooling — deployed 2026-06-24, then corrected to
+  use OmniRoute's per-model test API in FMO `e3ecf74`. FMO `be61cf7` added the
+  explicit `sweep-provider-models` operator command with provider, limit,
+  offset, delay, timeout, dry-run, force, JSON, and live flushed progress logs.
+  The follow-up correction changes the command from an FMO-only raw chat probe
+  to `/api/models/test`, passing stored provider/model/connection identity so
+  sweep evidence matches OmniRoute UI/test-all behavior. Live verification after
+  the corrected deploy: `codestral/codestral-latest` passed; the two
+  user-flagged Nvidia models timed out through the same corrected model-test
+  path.
+- Live OmniRoute catalog preflight — FMO now refreshes active provider/account
+  and model availability from OmniRoute before decision commands and scheduled
+  pipelines use cached rows. Disabled or absent providers/accounts are marked
+  disabled, inactive or absent active models are tombstoned, reappearing models
+  clear tombstones, and downstream stages ignore disabled/tombstoned rows.
+- Live combo rebalance readiness — deployed 2026-06-24. The live server is on
+  FMO `f0cf757`; provider/model endpoint duplicates are removed, target Nvidia
+  aliases bind to canonical AA slugs, active quota rules exist, two endpoints
+  have passed probes, allocation produces non-duplicated targets for
+  `fmo-grid-aux-text` and `fmo-grid-int-med`, real `apply` exits successfully
+  with streaming combo smoke, degraded empty-target combos are skipped without
+  destructive writes, and final `full --dry-run` exited successfully with
+  `unmanaged_combos=[]`. Later Nvidia provider sweep evidence supersedes the
+  old seed probe state; current Nvidia availability is tracked in the deferred
+  repair item above.
 - `update-aa-index-migration-inspector` — archived 2026-06-23. AA migration
   now renders the external prompt file with deterministic migration context,
   leaves model selection to the shared resolver, normalizes proposals to typed
@@ -98,6 +168,14 @@
   liveness without overwriting research/calibration capacity. Apply now requires
   confirmed-free, hard-stop, fresh probe, known daily budget above buffer, fresh
   liveness above floor, and no lockout; null `resetAt` is healthy.
+- Live quota research follow-up — many OmniRoute free models return useful
+  search summaries but no numeric daily/monthly amount, and their live
+  `/api/usage/quota` rows may expose only liveness (`percentRemaining`) without
+  `quotaTotal`. Keep those endpoints fail-closed as `quota_rule_missing` while
+  allowing endpoints with active rules to classify/probe/allocate. Main quota
+  research is provider/account scoped; add calibration or provider-specific
+  quota sources for silent provider pools before treating them as usable
+  capacity.
 - `fix-selection-correctness` — archived 2026-06-22. Production role scoring now
   uses AA metrics, latency source priority, health/stability telemetry, and
   missing-AA uncertainty instead of constant placeholders. Allocation now uses

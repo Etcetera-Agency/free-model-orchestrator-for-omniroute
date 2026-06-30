@@ -195,7 +195,6 @@ def _recalibration_scheduler(repository, calls):
     )
 
 
-@pytest.mark.spec("scheduler::Weekly recalibration fires")
 def test_scheduler_fires_weekly_recalibration_at_configured_cron(repository):
     calls = []
     scheduler = _recalibration_scheduler(repository, calls)
@@ -207,7 +206,6 @@ def test_scheduler_fires_weekly_recalibration_at_configured_cron(repository):
     assert calls == ["recalibrate"]
 
 
-@pytest.mark.spec("scheduler::Non-matching tick is a no-op")
 def test_scheduler_weekly_recalibration_non_matching_tick_noops(repository):
     calls = []
     scheduler = _recalibration_scheduler(repository, calls)
@@ -218,7 +216,6 @@ def test_scheduler_weekly_recalibration_non_matching_tick_noops(repository):
     assert calls == []
 
 
-@pytest.mark.spec("scheduler::Recalibration does not overlap a running job")
 def test_scheduler_weekly_recalibration_noops_when_daily_lock_held(repository):
     calls = []
     lock = RunLockManager(repository).acquire("daily")

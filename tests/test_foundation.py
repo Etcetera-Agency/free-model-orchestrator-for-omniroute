@@ -3,7 +3,6 @@ from pathlib import Path
 import httpx
 import pytest
 
-from fmo.apply_guard import ApplyPreconditions, check_apply_preconditions
 from fmo.config import (
     DEFAULT_AUTO_ROUTER_TAIL,
     StartupConfig,
@@ -15,7 +14,6 @@ from fmo.db import MigrationRunner
 from fmo.idempotency import stable_hash
 from fmo.llm_runtime import LlmSiteConfig, assemble_prompt, redact_secrets
 from fmo.omniroute import OmniRouteClient, OmniRouteVersionGate, _retry_after_seconds
-from fmo.state import ComboState, EndpointState, transition_combo, transition_endpoint
 
 
 class FakeTransport:
@@ -46,9 +44,15 @@ class FakeResponse:
         self.status_code = status_code
         self._payload = payload or {}
         self.headers = headers or {}
+        self.text = "data: ok"
 
     def json(self):
         return self._payload
+
+
+class TextResponse(FakeResponse):
+    def json(self):
+        raise ValueError("not json")
 
 
 @pytest.mark.spec("data-model::Fresh install")
@@ -56,9 +60,9 @@ def test_schema_sql_applies_on_real_postgres(postgres_url):
     runner = MigrationRunner(postgres_url)
     runner.apply_schema(Path("reference/db/schema.sql"))
     tables = runner.table_names()
-    assert "provider_endpoints" in tables
+    assert "published_generations" in tables
+    assert "roles" in tables
     assert "sync_runs" in tables
-    assert "quota_attribution_groups" in tables
 
 
 @pytest.mark.spec("omniroute-client::429 with Retry-After")
@@ -197,7 +201,54 @@ def test_omniroute_client_post_carries_idempotency_key_and_is_not_retried():
     assert headers["X-Request-Id"]
 
 
-@pytest.mark.spec("combo-applier::Apply writes existing combos through management API bridge")
+@pytest.mark.spec("omniroute-client::POST preserves call-site headers")
+def test_omniroute_client_post_preserves_call_site_headers_with_management_headers():
+    transport = FakeTransport([FakeResponse(200, {"ok": True})])
+    client = OmniRouteClient(base_url="https://omniroute.test/api", api_key="manage-key", transport=transport)
+
+    client.post(
+        "/v1/providers/provider-a/chat/completions",
+        {"model": "model-a"},
+        headers={"X-OmniRoute-No-Cache": "true"},
+        idempotency_key="probe:model-a",
+    )
+
+    headers = transport.requests[0]["headers"]
+    assert headers["X-OmniRoute-No-Cache"] == "true"
+    assert headers["Authorization"] == "Bearer manage-key"
+    assert headers["Idempotency-Key"] == "probe:model-a"
+    assert headers["X-Request-Id"]
+
+
+@pytest.mark.spec("omniroute-client::POST can return non-2xx JSON")
+def test_omniroute_client_post_response_preserves_non_2xx_body():
+    transport = FakeTransport([FakeResponse(500, {"status": "error", "error": "Timeout (20s)"})])
+    client = OmniRouteClient(base_url="https://omniroute.test/api", api_key="manage-key", transport=transport)
+
+    response = client.post_response(
+        "/api/models/test",
+        {"providerId": "nvidia", "modelId": "nvidia/z-ai/glm-5.1"},
+        headers={"X-OmniRoute-No-Cache": "true"},
+    )
+
+    assert response.status_code == 500
+    assert response.body == {"status": "error", "error": "Timeout (20s)"}
+    assert transport.requests[0]["headers"]["Authorization"] == "Bearer manage-key"
+    assert transport.requests[0]["headers"]["X-OmniRoute-No-Cache"] == "true"
+
+
+@pytest.mark.spec("omniroute-client::POST returns text content for non-JSON success")
+def test_omniroute_client_post_returns_text_content_for_non_json_success():
+    transport = FakeTransport([TextResponse(200, headers={"content-type": "text/event-stream"})])
+    client = OmniRouteClient(base_url="https://omniroute.test/api", transport=transport)
+
+    response = client.post("/v1/chat/completions", {"model": "model-a"})
+
+    assert response["status_code"] == 200
+    assert response["content"] == "data: ok"
+    assert response["headers"]["content-type"] == "text/event-stream"
+
+
 def test_omniroute_client_put_carries_idempotency_key_and_is_not_retried():
     transport = FakeTransport([FakeResponse(503, {"error": "busy"})])
     client = OmniRouteClient(base_url="https://omniroute.test/api", transport=transport, max_get_retries=3)
@@ -241,7 +292,6 @@ def test_omniroute_client_leading_slash_path_stays_under_base_path():
     assert transport.requests[0]["url"] == "https://omniroute.test/api/providers"
 
 
-@pytest.mark.spec("omniroute-client::Unknown OmniRoute version")
 def test_unknown_omniroute_version_read_only_forbids_apply():
     known = OmniRouteVersionGate({"1.4.0"})
     assert known.evaluate("1.4.0").can_apply is True
@@ -305,12 +355,6 @@ def test_static_config_rejects_bad_omniroute_url_scheme_or_empty(omniroute_url):
 def test_static_config_rejects_missing_database_url():
     with pytest.raises(ValueError, match="DATABASE_URL"):
         validate_static_config(valid_startup_config(database_url=None))
-
-
-@pytest.mark.spec("quota-manager::Tokens-per-request config validated")
-def test_static_config_rejects_non_positive_tokens_per_request():
-    with pytest.raises(ValueError, match="TOKENS_PER_REQUEST"):
-        validate_static_config(valid_startup_config(tokens_per_request=0))
 
 
 @pytest.mark.spec("role-scorer::Configured router is recognized")
@@ -384,58 +428,6 @@ def test_startup_validation_rejects_non_object_health_payload():
         validate_startup(valid_startup_config(), health_check=lambda: ["ok"])
 
 
-@pytest.mark.spec("system-architecture::Reactivate exhausted endpoint too early")
-@pytest.mark.parametrize(
-    ("state", "target"),
-    [
-        (EndpointState.EXCLUDED_UNKNOWN, EndpointState.ACTIVE),
-        (EndpointState.QUOTA_EXHAUSTED, EndpointState.ACTIVE),
-        (EndpointState.PROBE_FAILED, EndpointState.ACTIVE),
-    ],
-)
-def test_forbidden_endpoint_transitions_rejected(state, target):
-    with pytest.raises(ValueError):
-        transition_endpoint(state, target)
-
-
-@pytest.mark.spec("system-architecture::Missing snapshot blocks apply")
-def test_planned_combo_cannot_apply_without_snapshot():
-    with pytest.raises(ValueError):
-        transition_combo(ComboState.PLANNED, ComboState.APPLIED)
-
-
-@pytest.mark.parametrize(
-    ("state", "target"),
-    [
-        (ComboState.SNAPSHOT_SAVED, ComboState.COMMITTED),
-        (ComboState.APPLIED, ComboState.COMMITTED),
-        (ComboState.COMMITTED, ComboState.APPLIED),
-        (ComboState.SMOKE_PASSED, ComboState.APPLIED),
-        (ComboState.VALIDATED, ComboState.PLANNED),
-    ],
-)
-@pytest.mark.spec("data-model::Snapshot directly committed")
-@pytest.mark.spec("data-model::Applied directly committed")
-@pytest.mark.spec("data-model::Backward combo transition")
-def test_forbidden_combo_transitions_rejected(state, target):
-    with pytest.raises(ValueError):
-        transition_combo(state, target)
-
-
-@pytest.mark.spec("system-architecture::Missing snapshot blocks apply")
-def test_apply_refused_when_any_precondition_fails():
-    preconditions = ApplyPreconditions(
-        db_available=True,
-        snapshot_saved=True,
-        desired_state_valid=True,
-        quota_safe=False,
-        probes_passed=True,
-    )
-
-    with pytest.raises(ValueError, match="quota_safe"):
-        check_apply_preconditions(preconditions)
-
-
 @pytest.mark.spec("system-architecture::Re-run with unchanged inputs")
 def test_stable_hash_makes_unchanged_inputs_skip_changes():
     left = stable_hash({"models": ["b", "a"], "role": "coder"})
@@ -451,7 +443,7 @@ def test_stable_hash_makes_unchanged_inputs_skip_changes():
 def test_llm_prompt_loads_external_file_and_redacts_secrets(tmp_path):
     prompt_file = tmp_path / "prompt.md"
     prompt_file.write_text("Use endpoint {{ endpoint_id }} with {{ OMNIROUTE_API_KEY }}", encoding="utf-8")
-    site = LlmSiteConfig(name="quota-research", model="free-model", prompt_path=prompt_file)
+    site = LlmSiteConfig(name="smart-combo-review", model="free-model", prompt_path=prompt_file)
     prompt = assemble_prompt(site, {"endpoint_id": "provider-account-1", "OMNIROUTE_API_KEY": "secret"})
 
     assert "provider-account-1" in prompt
@@ -496,7 +488,7 @@ def test_llm_prompt_omits_secret_like_context_keys_and_database_url(tmp_path):
         "{{ safe }} {{ DATABASE_URL }} {{ API_KEY }} {{ TOKEN }} {{ SECRET }}",
         encoding="utf-8",
     )
-    site = LlmSiteConfig(name="quota-research", model="free-model", prompt_path=prompt_file)
+    site = LlmSiteConfig(name="smart-combo-review", model="free-model", prompt_path=prompt_file)
 
     prompt = assemble_prompt(
         site,
@@ -516,7 +508,7 @@ def test_llm_prompt_omits_secret_like_context_keys_and_database_url(tmp_path):
 def test_llm_prompt_removes_unresolved_placeholders(tmp_path):
     prompt_file = tmp_path / "prompt.md"
     prompt_file.write_text("Use {{ endpoint_id }} {{ missing }}", encoding="utf-8")
-    site = LlmSiteConfig(name="quota-research", model="free-model", prompt_path=prompt_file)
+    site = LlmSiteConfig(name="smart-combo-review", model="free-model", prompt_path=prompt_file)
 
     prompt = assemble_prompt(site, {"endpoint_id": "e1"})
 

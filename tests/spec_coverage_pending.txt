@@ -1,7 +1,23 @@
 # Scenarios not yet bound to an executable test (pending allowlist).
 # Remove a line once a test carries @pytest.mark.spec("<that id>").
-# This file must shrink over time; the coverage gate forbids leaving a
-# scenario both here and already covered.
-#
-# Active proposal slices awaiting TDD implementation (see openspec/TODO.md and
-# openspec/changes/<id>/). Each line is dropped when its test lands.
+data-model::Auxiliary consumer type persists
+data-model::Migration keeps existing databases compatible
+demand-forecast::Bursty weekly load
+demand-forecast::Cold start floor applied
+demand-forecast::Demand comes from the forecast
+demand-forecast::Dependency cycle
+demand-forecast::Multiple agents and a shared role
+demand-forecast::Reserve applied once
+demand-forecast::Unknown new role
+hermes-inventory::Inspector uses resolver-selected provider model
+hermes-inventory::Resolver-less inspector fails closed
+llm-runtime::Add or change runtime defaults
+llm-runtime::Advisory site fails open
+llm-runtime::All sites use the adapter
+llm-runtime::Inspector sites fail closed without a resolver model
+llm-runtime::Inspector sites use one resolver approach
+llm-runtime::Malformed completion repaired or rejected
+omniroute-client::Bridge denies combo test helper
+persistence::Re-run refreshes current combo snapshot recency
+pipeline-orchestration::Audit persists records
+system-architecture::Intraday failure not rebuilt

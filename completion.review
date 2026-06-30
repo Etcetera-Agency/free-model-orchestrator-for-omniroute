@@ -1,5 +1,301 @@
 # Completion Review
 
+- Archived `align-fmo-publisher-quality-band-scale`: publisher now normalizes
+  `quality_band.min/max` to OmniRoute's `[0..1]` `model_intelligence.score`
+  scale, rejects un-mappable/out-of-order bands before publish, maps legacy or
+  unknown `workload_class` values to contract default `chat`, and keeps emitted
+  classes inside `{light, chat, reasoning, tools}`. The shared golden fixture is
+  updated to `0.55..0.85`; spec coverage pending lines for the two new scenarios
+  were removed after binding tests. Verification: focused publisher/spec-coverage
+  pytest, ruff check/format on touched Python, `openspec validate
+  align-fmo-publisher-quality-band-scale --strict`, OmniRoute single contract
+  test with bundled Node, and `git diff --check`.
+- Archived `adopt-shared-fmo-pools-fixture`: merged the shared fixture and
+  integer demand/consumers contract into living `pool-spec-publisher`, moved the
+  change package to `openspec/changes/archive/2026-06-30-adopt-shared-fmo-pools-fixture`,
+  and fixed stale pytest spec markers after the scenario names changed. The
+  pending coverage file only carries the next active `align-fmo-publisher-quality-band-scale`
+  scenarios until that slice lands. Verification: focused
+  `tests/test_pool_publisher.py` + `tests/test_spec_coverage.py`,
+  `openspec validate --all --strict`, and `git diff --check`.
+- Fixed `adopt-shared-fmo-pools-fixture`: FMO now uses the byte-identical
+  canonical `fmo-pools/v1` fixture shared with OmniRoute, emits
+  `demand.requests_per_day` as a rounded integer count, keeps `consumers` as an
+  integer count, and asserts fixture byte equality plus payload-hash idempotency
+  in publisher tests. Code Simplifier pass reused a single compose timestamp and
+  tightened touched test formatting. Verification: focused
+  `tests/test_pool_publisher.py` pytest, ruff on touched FMO files, OmniRoute
+  contract test, and FMO fixture -> OmniRoute schema cross-check.
+- Locked the FMO publisher wire contract per
+  `lock-pool-publisher-wire-contract`: added the shared
+  `reference/fixtures/fmo-pools-v1-generation.json` golden fixture, locked
+  composed payloads to canonical `contract_version`, `demand`, `constraints`,
+  `quality_band.relax`, and tail intent shape, normalized tool capability
+  aliases to OmniRoute's `tool_call` matching token, and documented the
+  model-intelligence category mapping used by OmniRoute
+  `getResolvedTaskFitness`. Payload-hash idempotency is asserted to differ
+  from the generation marker. `tests/spec_coverage_pending.txt` required no
+  line changes because all new scenarios are directly bound in
+  `tests/test_pool_publisher.py`. Code Simplifier pass tightened touched code
+  types/formatting. Verification: focused publisher/spec-coverage pytest,
+  ruff check/format on touched files, `openspec validate
+  lock-pool-publisher-wire-contract --strict`, and `git diff --check`.
+- Removed FMO matching/probing ownership per `remove-fmo-matching-probing`:
+  canonical runtime now owns only Hermes inventory, role lifecycle, demand
+  forecast, audit, and pool publishing; discovery, model matching, provider
+  scanning, Artificial Analysis metadata, probing, telemetry health, role
+  scoring, smart review, web-cookie, and related persistence modules are gone.
+  Fresh schema is reduced to publisher-owned tables and migration
+  `0016_v3.28_remove_fmo_matching_probing.sql` drops retired provider/model/
+  endpoint/AA/probe/scoring/free-definition tables for existing databases.
+  Living OpenSpec docs now describe the publisher-only surface and
+  `tests/spec_coverage_pending.txt` tracks only remaining current-scope
+  uncovered scenarios. Code Simplifier review removed the leftover metadata/LLM
+  adapter compatibility exports and unused composition parameters after the
+  destructive removal. Focused checks: `uv run python -m compileall -q src/fmo`;
+  focused CLI/bootstrap/persistence/pipeline/foundation/pool-publisher/scheduler
+  pytest plus spec coverage/runtime docs; ruff on changed src/tests; OpenSpec
+  strict validation; `git diff --check`.
+- Removed FMO allocation/apply ownership per `remove-fmo-allocation-apply`:
+  canonical pipeline no longer runs `allocation`, `diff`, or `apply`; allocator,
+  applier, apply guard, rollback, allocation-plan and combo-snapshot repositories,
+  tables, config knobs, and dead tests are gone. Demand forecasting now lives in
+  its own stage module, read-only combo lookup moved to `combo_reader`, and audit
+  is a no-op because OmniRoute is the single combo writer. Archived the OpenSpec
+  package, removed living allocator/combo-applier specs, and expanded pending
+  coverage for stale living docs that still need publisher-only cleanup. Focused
+  checks: `uv run python -m compileall -q src/fmo`; spec coverage/runtime docs
+  plus CLI/bootstrap/persistence/foundation/composition focused pytest; ruff on
+  changed src/tests; `openspec validate --all --strict`; `git diff --check`.
+- Removed FMO quota ownership per `remove-fmo-quota`: quota research/manager
+  modules, quota stages, prompt, repository, config knobs, quota tables, and
+  dead quota tests are gone. Access classification now records
+  OmniRoute-delegated free access state, apply safety accepts that delegated
+  evidence during the transition, and schema migration
+  `0014_v3.26_remove_fmo_quota.sql` drops retired quota tables/FKs. Focused
+  Code Simplifier pass removed dead missing-quota helpers, empty quota-pool
+  remaining lookups, the obsolete request-window apply helper/test, and the old
+  local quota-rule access-classifier branch after the table removal. Focused
+  checks: `uv run python -m compileall -q src/fmo`; spec coverage/runtime docs
+  plus focused apply/persistence/foundation/scoring/account-discovery pytest;
+  ruff on changed src/tests; `openspec validate --all --strict`; `git diff --check`.
+- Feature: added the additive `fmo-pools/v1` publisher slice. FMO can now build
+  publisher stages (`hermes-inventory`, `role-lifecycle`, `demand-forecast`,
+  `compose`, `publish`, `usage-feedback`), compose pool specs from role policy
+  plus demand forecasts without capacity/model-score reads, fail closed when a
+  pool lacks `min_context_tokens`, publish one payload to `/api/fmo/pools` with
+  payload-hash idempotency, and persist acknowledgements in
+  `published_generations`. Coverage drift from existing dirty spec work was
+  fixed by aligning stale markers and updating `tests/spec_coverage_pending.txt`.
+  Code Simplifier review reused one stage-adapter set and added explicit fake
+  client annotations. Verification: focused publisher/spec-coverage pytest,
+  ruff on touched files, `git diff --check`, and OpenSpec strict validation.
+- Deploy fix: daily probe now delegates live model health to OmniRoute's
+  `/api/models/test-all` instead of the removed raw `/v1/chat/completions`
+  probe helper. The probe stage uses the current live catalog preflight rows,
+  skips final-path `-auto` aliases, groups eligible models by provider and
+  connection, chunks `modelIds` at 100, sends `respectRateLimit=true` and
+  `autoHideFailed=true`, persists each returned model-test entry as a separate
+  endpoint probe, and fail-closes missing/rate-limited batch entries. After
+  test-all runs, FMO immediately rereads `/api/providers` and `/v1/models`
+  instead of parsing OmniRoute visibility internals; the existing live catalog
+  scanner tombstones anything no longer active in the same daily run. The old
+  raw probe endpoint helper and tests were removed rather than kept for
+  compatibility. Verification: focused runtime/sweep/scoring/catalog/e2e tests,
+  ruff on touched files,
+  `git diff --check`, and OpenSpec strict validation.
+- Deploy fix: FMO now treats OmniRoute active provider/model state as the
+  source of truth before any decision stage. The composed runtime refreshes
+  `GET /api/providers` and `GET /v1/models` before commands and scheduled
+  pipelines read cached endpoint rows; disabled/absent providers and accounts
+  are marked disabled, absent active models are tombstoned, and reappearing
+  models clear `removed_at`. Old cache rows from a previous OmniRoute instance
+  id are disabled too. Matching, quota research, access classification, probing,
+  telemetry, role scoring, allocation, and provider sweep candidate reads now
+  exclude disabled or tombstoned rows, and direct `apply` blocks old diffs whose
+  desired endpoints are no longer active. This fixes the stale-cache failure
+  where FMO could still test/allocate Nvidia rows after Nvidia was disabled in
+  OmniRoute. Verification: focused catalog/sweep/runtime/apply tests, ruff on
+  touched files, `git diff --check`, and OpenSpec strict validation.
+- Feature: added explicit `sweep-provider-models` operator command for provider
+  catalog probing. It walks stored endpoints for one provider with
+  `--limit`, `--offset`, `--delay-seconds`, `--timeout-seconds`, `--dry-run`,
+  `--force`, and `--json`, now calls OmniRoute's `/api/models/test` model-test
+  route with stored provider/model/connection identity, records
+  `endpoint_probes`, updates endpoint `probe_status`, and prints a per-model
+  pass/fail/skip report. Live specs document that this command is the
+  intentional full-provider sweep path, while the default `probe-models` stage
+  remains seed-bounded for live safety. The first deployed sweep used an
+  FMO-only raw chat probe; that was the wrong truth source for OmniRoute UI
+  model availability. The corrected command records model-test evidence matching
+  OmniRoute `/api/models/test` and live flushed `model_test_start` /
+  `model_test_done` logs identify which model hangs or fails. Direct live checks
+  through `/api/models/test` timed out after 20s for
+  `nvidia/z-ai/glm-5.1` and `nvidia/minimaxai/minimax-m2.7`, and the
+  post-deploy corrected sweep reproduced the same 20s timeout for both models.
+  The corrected sweep also passed `codestral/codestral-latest`, so the command
+  path is valid. OmniRoute's provider connection test still returns
+  `valid:true` for bogus model payloads, proving it is provider-key preflight
+  only. OpenSpec TODO now tracks Nvidia model-test timeout investigation through
+  OmniRoute logs or `/api/models/test-all` batches. Verification: provider
+  sweep and CLI tests; ruff on touched files; `git diff --check`; and OpenSpec
+  strict validation.
+- Deploy fix: apply smoke now sends `stream=true` and treats non-empty SSE/text
+  responses from the shared OmniRoute client as a smoke pass. Live real `apply`
+  showed `fmo-grid-aux-text` returns HTTP 400 without streaming but succeeds
+  with streaming, and combo smoke responses may be text/event-stream rather than
+  JSON `choices`. Verification: focused apply/bootstrap tests, ruff on touched
+  files, `git diff --check`, and OpenSpec strict validation.
+- Deploy fix: apply now treats an empty desired target list as a degraded
+  no-target skip, not as an instruction to delete every combo member. Live real
+  `apply` hit this when `fmo-grid-aux-struct` had a degraded/no-primary plan and
+  an existing seed combo; applying `[]` made smoke fail and rolled back. Empty
+  target diffs are now reported as `skipped_empty_combos` with no PUT or smoke.
+  Verification: focused apply/bootstrap tests, ruff on touched files, and
+  OpenSpec strict validation.
+- Deploy fix: apply now writes live combos through the UUID returned by
+  `GET /api/combos` while still using the managed `name` for diff/drift/smoke
+  identity. Live real `apply` proved the bridge returns UUID `id` plus
+  `name=fmo-*`, but `PUT /api/combos/{name}` returns 404 whereas
+  `PUT /api/combos/{uuid}` succeeds. Verification: focused apply/bootstrap
+  tests, ruff on touched files, and OpenSpec strict validation.
+- Deploy fix: request-window hard-stop apply safety now survives the
+  `quota-sync` liveness overlay. Live `full --dry-run` refreshed Nvidia evidence
+  to `remaining_source=live_observed`, `percent_remaining=0`, and
+  `locked_out=true` from a future reset, even though the researched RPM
+  hard-stop rule still had request capacity above the safety buffer. The apply
+  gate now treats minute/hour request-window rules as request capacity and does
+  not require daily/monthly liveness to pass for that case. Verification:
+  focused apply/bootstrap tests, ruff on touched files, and OpenSpec strict
+  validation.
+- Deploy fix: apply now evaluates only the newest diff snapshot per role, so
+  stale legacy `fmo-fmo-*` diff rows from the earlier combo-id bug no longer
+  appear as unmanaged combos during `full --dry-run`. The bootstrap precondition
+  path reuses the same latest-diff selector. Code Simplifier review kept the
+  selector as one small apply-stage helper shared by bootstrap. Verification:
+  focused apply/bootstrap tests, ruff on touched files, and OpenSpec strict
+  validation.
+- Deploy fix: provider endpoints now use provider/model/type identity, not
+  provider-account/model/type identity, so catalog updates overwrite a single
+  endpoint row even when OmniRoute exposes several account/pool rows for the
+  same provider. The v3.23 migration backfills `provider_id`, moves dependent
+  rows from duplicates to a keeper endpoint, deletes duplicate endpoints, and
+  adds the provider-level unique constraint. Code Simplifier review kept the
+  repository upsert as the single production writer. Verification: focused
+  persistence/foundation/catalog/bootstrap/apply tests and ruff on touched
+  files.
+- Deploy fix: the service entrypoint now derives apply preconditions from the
+  latest diff snapshots with the same quota/probe safety as the apply stage.
+  Live `apply --dry-run` had passed the stage-local Nvidia request-window quota
+  check, but the older bootstrap guard still rejected apply by checking all
+  historical probes and stale allocation-plan flags. Code Simplifier review kept
+  bootstrap as a thin caller of the apply-stage safety logic. Verification:
+  focused bootstrap/apply tests, ruff on touched files, `git diff --check`, and
+  OpenSpec strict validation.
+- Deploy fix: model matching now prefers existing canonical AA slugs before the
+  provider-catalog fallback and carries the matched canonical slug into the
+  endpoint binding. Provider punctuation/tuning aliases such as
+  `minimax-m2.7` -> `minimax-m2-7` and `gemma-3n-e2b-it` -> `gemma-3n-e2b` are
+  accepted as exact-slug matches. Live evidence showed AA did contain both
+  canonical families, but model matching had created separate provider slugs,
+  leaving passed Nvidia seeds without scorer metrics. Follow-up fix makes
+  AA-backed canonical slugs win alias collisions against stale provider-specific
+  canonical rows left by previous matching and removes unreferenced stale aliases
+  during rematch so updates overwrite canonical binding instead of accumulating
+  duplicates.
+- Deploy fix: `sync-metadata` now routes through the composed production
+  external-metadata stage instead of returning a no-op success when a runtime
+  pipeline runner is present. The metadata repository also persists Artificial
+  Analysis snapshot rows into `artificial_analysis_model_metrics`, so role
+  scoring can read canonical AA metrics instead of only provider-quality
+  observations. This addresses live `quality_gate:unverifiable` rows caused by
+  an empty scorer metrics table after a successful-looking metadata command.
+  Follow-up fix switches production metadata sync to the AA free-tier endpoint
+  required by the live spec; live pro endpoint returned `http_error` after the
+  key was installed.
+  Code Simplifier review kept the CLI dispatch and persistence changes explicit.
+  Verification: focused metadata/CLI/runtime tests, ruff on touched files,
+  `git diff --check`, and OpenSpec strict validation.
+- Deploy fix: context eligibility now treats `minimum_context_window = 0` as no
+  hard context requirement, so live seed endpoints with unknown context are not
+  rejected from no-minimum roles. Unknown context still fails closed for roles
+  with a real positive minimum unless manual override is set. Follow-up fix
+  bumps the immutable role score version to `production-v2-context`, because
+  live `production-v1` rows reused the old context rejection when input hashes
+  did not change. Code Simplifier review kept the fix to explicit versioning
+  plus a scorer anchor. Verification: focused scoring/runtime tests, ruff on
+  touched files, `git diff --check`, and OpenSpec strict validation.
+- Deploy fix: quota research now retries `/v1/search` without a pinned provider
+  when `gemini-grounded-search` returns 429, and falls back from `answer.text` to
+  result titles/snippets. This matches live OmniRoute: default search succeeds
+  through `exa-search` while `gemini-grounded-search` is rate-limited. Probe
+  requests now set `stream=true`, fixing Nvidia-style providers that reject
+  OmniRoute-injected `stream_options` unless streaming is enabled. Code
+  Simplifier review added the probe stream anchor and split fallback test
+  responsibilities. Follow-up fix narrows provider-wide probing to current
+  one-member combo seeds when wildcard quota rules confirm many endpoints, so
+  live Nvidia probing no longer blasts unavailable catalog entries before
+  scoring can start. Streaming probe evidence uses a new suite version/hash, so
+  old same-day failed probe rows no longer block apply after a fixed probe pass.
+- Deploy fix: quota research now treats provider/account search as a topology
+  discovery step before quota activation. Provider-wide or RPM-only answers can
+  still write wildcard rules, but model-group/per-model answers fail closed
+  instead of being widened to `model_pattern='*'`. Requests-per-minute/hour are
+  now usable request capacity and normalize to conservative daily request
+  ceilings, matching providers such as Nvidia that publish RPM without daily or
+  monthly token caps. Code Simplifier review added an anchor at the topology
+  guard and kept group-pattern extraction deferred in OpenSpec TODO.
+- Deploy fix: provider/account quota research filters now cast optional CLI
+  filters to text before `IS NULL` checks, matching live Postgres parameter
+  typing. Live `research-quotas --provider antigravity` previously failed before
+  running search with `could not determine data type of parameter`. Code
+  Simplifier review kept the fix to SQL typing only. Verification: ruff on the
+  quota stage, `git diff --check`, and OpenSpec strict validation.
+- Deploy fix: quota research now defaults to provider/account pool scope instead
+  of per-model scanning. A triggered recalc searches each provider/account once,
+  persists wildcard rules with `model_pattern='*'`, and access classification
+  applies exact model rules first, then provider/account wildcard rules. The
+  explicit `--endpoint` path remains only for diagnostics and writes an exact
+  model rule. Code Simplifier review replaced repeated `DISTINCT ON` expressions
+  with explicit grouping keys and `row_number()`. Focused verification:
+  provider-pool/access/quota-filter tests invoked on Python 3.12 venv (skipped
+  locally due PostgreSQL `/dev/shm` exhaustion), ruff on touched files, and
+  OpenSpec strict validation.
+- Deploy fix: provider probes now use the shared `/v1/chat/completions` route
+  with a tiny completion budget and no-cache header, and the shared OmniRoute
+  client returns text/SSE bodies as probe content when a successful response is
+  not JSON. Probe content that is actually a free-resource denial now fails
+  closed even with HTTP 200. Quota research also honors `--endpoint` so live
+  seed endpoints can be researched one at a time instead of scanning all 698
+  free models. Code Simplifier review kept the client fallback, probe route, and
+  endpoint filter as separate simple changes. Focused verification:
+  probe/client/quota-filter tests on Python 3.12 venv (DB-backed filter test
+  skipped locally due PostgreSQL `/dev/shm` exhaustion), ruff on touched files,
+  and OpenSpec strict validation.
+- Deploy fix: probing now persists shared-client HTTP errors as failed endpoint
+  probes instead of crashing the stage. Live `probe-models` hit HTTP 400 from a
+  provider completion route; the stage now records status/reason details, marks
+  that endpoint `probe_status=failed`, and keeps the batch moving. Code
+  Simplifier review extracted suite selection once for normal/error paths.
+  Focused verification: probe/scoring tests on Python 3.12 venv (DB-backed
+  probe-stage tests skipped locally due PostgreSQL `/dev/shm` exhaustion), ruff
+  on touched files, and OpenSpec strict validation.
+- Deploy fix: shared OmniRoute client `post`/`put` now preserve call-site
+  headers while still adding management auth, `Idempotency-Key`, and
+  `X-Request-Id`. Live probing needed this for `X-OmniRoute-No-Cache`; before
+  the fix `probe-models` crashed with an unexpected `headers` keyword before any
+  provider probe could run. Code Simplifier review kept the change at the client
+  boundary. Focused verification: foundation/probe/e2e tests, ruff on touched
+  files, and OpenSpec strict validation.
+- Deploy fix: access classification now treats missing quota research as
+  endpoint-local fail-closed state (`unknown` / `quota_rule_missing`) instead of
+  aborting the whole batch. This lets live endpoints with active quota rules
+  continue into probe/score/allocation while silent models stay unusable until a
+  numeric quota source or calibration exists. Code Simplifier review kept the
+  fix scoped to the access stage plus live spec/TODO docs. Focused verification:
+  ruff on touched files, OpenSpec strict validation, and focused pytest invoked
+  on the project Python 3.12 venv (skipped locally because PostgreSQL initdb
+  cannot allocate `/dev/shm`).
 - Deploy fix: production Postgres and the baseline schema now allow
   `role_consumers.consumer_type='auxiliary'`, matching Hermes inventory output
   for auxiliary model slots. The live shlinker FMO dry-run no longer fails on
@@ -317,3 +613,23 @@
   keeps stage definitions in domain modules, and removes the helper alias layer;
   final spec-coverage audit bound the newly archived architecture scenarios to
   the structural runtime-doc tests.
+- Live matcher cleanup now loads the previous endpoint canonical binding before
+  rematch, so AA-backed canonical aliases overwrite stale provider-specific
+  aliases and stale canonical rows are deleted instead of duplicated, including
+  orphan alias rows left by earlier rematches.
+- Live quality-band seeding now counts capacity only from probe-passed
+  confirmed-free endpoints, so failed Nvidia candidates cannot narrow a seed
+  band and exclude the actually routable free models.
+- Allocation now filters scored endpoints per role before combo construction
+  and deduplicates endpoint ids inside each priority combo, preventing a single
+  live endpoint from being emitted twice for one combo.
+- Global allocation now respects role-scoped score rows before reserving a
+  primary, so an endpoint eligible for one role cannot make an unrelated role
+  appear planned with an empty combo.
+- Combo diff snapshot re-runs now refresh the existing content-identical row's
+  recency and run id instead of leaving an older empty diff hidden behind a newer
+  superseded diff.
+- Apply quota safety now accepts researched hard-stop request-window providers
+  such as Nvidia RPM-only free tiers when request remaining is above the safety
+  buffer, treating future reset timestamps as the next rate-window reset rather
+  than lockout while plain assumed quota without such a rule still fails closed.

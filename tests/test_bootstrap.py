@@ -1,4 +1,3 @@
-from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -122,48 +121,12 @@ def test_main_uses_real_argv_and_validation_state(postgres_url):
     assert calls == [(["full", "--dry-run"], True)]
 
 
-@pytest.mark.spec("combo-applier::Failing guard input blocks apply")
-def test_apply_entrypoint_fails_closed_when_guard_inputs_missing(postgres_url):
-    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
-
-    exit_code = main(
-        ["apply"],
-        env=valid_env(DATABASE_URL=postgres_url),
-        health_check=lambda: {"ok": True},
-    )
-
-    repository = Repository(Database(postgres_url))
-    with repository.database.transaction() as transaction:
-        assert repository.runs.list(transaction) == []
-    assert exit_code == 5
-
-
-@pytest.mark.spec("runtime-bootstrap::Entrypoint uses real arguments")
-def test_apply_entrypoint_uses_apply_adapter_guard(postgres_url):
-    MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
-    _seed_healthy_apply_guard(postgres_url)
-
-    exit_code = main(
-        ["apply"],
-        env=valid_env(DATABASE_URL=postgres_url),
-        health_check=lambda: {"ok": True},
-    )
-
-    repository = Repository(Database(postgres_url))
-    with repository.database.transaction() as transaction:
-        runs = repository.runs.list(transaction)
-    assert exit_code == 5
-    assert len(runs) == 1
-    assert runs[0]["status"] == "unsafe_to_apply"
-    assert [stage["name"] for stage in runs[0]["error_json"]["stages"]] == ["apply"]
-
-
 @pytest.mark.spec("runtime-bootstrap::Production dispatch executes a real stage")
 def test_production_dispatch_composes_and_runs_stage_without_injected_runner(postgres_url):
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
 
     exit_code = main(
-        ["scan-providers"],
+        ["sync-hermes-inventory"],
         env=valid_env(DATABASE_URL=postgres_url),
         health_check=lambda: {"ok": True},
     )
@@ -171,10 +134,10 @@ def test_production_dispatch_composes_and_runs_stage_without_injected_runner(pos
     repository = Repository(Database(postgres_url))
     with repository.database.transaction() as transaction:
         runs = repository.runs.list(transaction)
-    assert exit_code == 4
+    assert exit_code == 0
     assert len(runs) == 1
-    assert runs[0]["status"] == "external_dependency_failed"
-    assert [stage["name"] for stage in runs[0]["error_json"]["stages"]] == ["free-candidate-discovery"]
+    assert runs[0]["status"] == "success"
+    assert [stage["name"] for stage in runs[0]["error_json"]["stages"]] == ["hermes-inventory"]
 
 
 @pytest.mark.spec("runtime-bootstrap::Diagnostics read persisted state by default")
@@ -182,20 +145,12 @@ def test_production_dispatch_reads_diagnostics_without_injected_reader(postgres_
     MigrationRunner(postgres_url).apply_schema(Path("reference/db/schema.sql"))
     repository = Repository(Database(postgres_url))
     with repository.database.transaction() as transaction:
-        role = repository.roles.upsert(
+        repository.roles.upsert(
             transaction,
             role_id="coder",
             requirements={"minimum_context_window": 8192},
             expected_load={"requests": 1},
             criticality=5,
-        )
-        repository.allocation_plans.upsert(
-            transaction,
-            role_id=role["id"],
-            status="planned",
-            targets=[],
-            constraint_report={"ok": True},
-            input_state_hash="plan-key",
         )
 
     exit_code = main(
@@ -205,62 +160,3 @@ def test_production_dispatch_reads_diagnostics_without_injected_reader(postgres_
     )
 
     assert exit_code == 0
-
-
-def _seed_healthy_apply_guard(postgres_url):
-    repository = Repository(Database(postgres_url))
-    with repository.database.transaction() as transaction:
-        provider = repository.providers.upsert(
-            transaction,
-            omniroute_instance_id="local",
-            omniroute_provider_id="openai",
-            provider_type="api",
-        )
-        account = repository.provider_accounts.upsert(
-            transaction,
-            provider_id=provider["id"],
-            omniroute_connection_id="conn-openai",
-        )
-        endpoint = repository.provider_endpoints.upsert(
-            transaction,
-            provider_account_id=account["id"],
-            provider_model_id="gpt-test",
-            lifecycle_status="active",
-            access_status="free_quota_available",
-        )
-        role = repository.roles.upsert(
-            transaction,
-            role_id="coder",
-            requirements={"minimum_context_window": 8192},
-            expected_load={"requests": 1},
-            criticality=5,
-        )
-        repository.combo_snapshots.upsert(
-            transaction,
-            role_id=role["id"],
-            state_hash="current-key",
-            state_json={"models": ["openai/gpt-test"]},
-            phase="current",
-        )
-        repository.allocation_plans.upsert(
-            transaction,
-            role_id=role["id"],
-            status="planned",
-            targets=[{"endpoint_id": str(endpoint["id"])}],
-            constraint_report={"ok": True, "quota_safe": True},
-            input_state_hash="plan-key",
-        )
-        # Keep the seeded smoke probe inside the apply staleness window
-        # (APPLY_STAGE_EVIDENCE_MAX_AGE = 1 day) so the guard stays "healthy"
-        # regardless of when the suite runs.
-        probe_started = datetime.now(UTC) - timedelta(minutes=1)
-        repository.probes.record(
-            transaction,
-            endpoint_id=endpoint["id"],
-            suite_version="v1",
-            probe_type="smoke",
-            request_hash="probe-key",
-            passed=True,
-            started_at=probe_started.isoformat(),
-            finished_at=(probe_started + timedelta(seconds=1)).isoformat(),
-        )

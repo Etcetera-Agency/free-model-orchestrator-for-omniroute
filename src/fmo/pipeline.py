@@ -12,28 +12,12 @@ EXIT_CODES = {
     "validation_failed": 3,
     "not_implemented": 3,
     "external_dependency_failed": 4,
-    "unsafe_to_apply": 5,
-    "apply_failed_rolled_back": 6,
-    "rollback_failed": 7,
 }
 
 CANONICAL_STAGE_NAMES = [
-    "external-metadata-sync",
-    "free-candidate-discovery",
-    "account-discovery",
-    "model-matching",
-    "quota-research",
-    "access-classification",
-    "probing",
-    "telemetry-sync",
-    "quota-sync",
     "hermes-inventory",
     "role-lifecycle",
-    "role-scoring",
     "demand-forecast",
-    "allocation",
-    "diff",
-    "apply",
     "audit",
 ]
 
@@ -41,9 +25,6 @@ STOP_STATUSES = {
     "validation_failed",
     "not_implemented",
     "external_dependency_failed",
-    "unsafe_to_apply",
-    "apply_failed_rolled_back",
-    "rollback_failed",
 }
 
 

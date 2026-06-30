@@ -13,8 +13,6 @@ DEFAULT_AUTO_ROUTER_TAIL = (
     AutoRouterEntry("kilo-auto/free", ("text",)),
     AutoRouterEntry("openrouter/free", ("text", "image")),
 )
-DEFAULT_APPLY_MIN_SAFETY_BUFFER = 1.0
-DEFAULT_APPLY_MIN_PERCENT_REMAINING = 1.0
 
 
 @dataclass(frozen=True)
@@ -23,14 +21,6 @@ class StartupConfig:
     database_url: str | None
     hermes_inventory_mode: str
     omniroute_api_key: str | None = None
-    llm_bootstrap_model_id: str | None = None
-    llm_bootstrap_confirmed_free: bool = False
-    llm_quota_research_call_limit: int = 1
-    llm_smart_review_call_limit: int = 1
-    tokens_per_request: int = 2000
-    tokens_per_request_recalibration_cron: str = "0 5 * * 0"
-    apply_min_safety_buffer: float = DEFAULT_APPLY_MIN_SAFETY_BUFFER
-    apply_min_percent_remaining: float = DEFAULT_APPLY_MIN_PERCENT_REMAINING
     auto_router_tail: tuple[AutoRouterEntry, ...] = DEFAULT_AUTO_ROUTER_TAIL
     hermes_home: str | None = None
     hermes_agents_path: str | None = None
@@ -54,20 +44,6 @@ def validate_static_config(config: StartupConfig) -> None:
         raise ValueError("OMNIROUTE_URL must be http or https")
     if not config.omniroute_api_key:
         raise ValueError("OMNIROUTE_API_KEY is required")
-    if config.llm_bootstrap_model_id and not config.llm_bootstrap_confirmed_free:
-        raise ValueError("LLM_BOOTSTRAP_MODEL_CONFIRMED_FREE must be true when LLM_BOOTSTRAP_MODEL_ID is set")
-    if config.llm_quota_research_call_limit < 0:
-        raise ValueError("LLM_QUOTA_RESEARCH_CALL_LIMIT must be non-negative")
-    if config.llm_smart_review_call_limit < 0:
-        raise ValueError("LLM_SMART_REVIEW_CALL_LIMIT must be non-negative")
-    if config.tokens_per_request <= 0:
-        raise ValueError("TOKENS_PER_REQUEST must be positive")
-    if config.apply_min_safety_buffer <= 0:
-        raise ValueError("APPLY_MIN_SAFETY_BUFFER must be positive")
-    if config.apply_min_percent_remaining <= 0:
-        raise ValueError("APPLY_MIN_PERCENT_REMAINING must be positive")
-    if not _valid_cron(config.tokens_per_request_recalibration_cron):
-        raise ValueError("TOKENS_PER_REQUEST_RECALIBRATION_CRON is invalid")
     if not config.auto_router_tail:
         raise ValueError("AUTO_ROUTER_TAIL must not be empty")
     for entry in config.auto_router_tail:

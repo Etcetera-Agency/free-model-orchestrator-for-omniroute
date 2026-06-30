@@ -1,34 +1,29 @@
 # Free Model Orchestrator for OmniRoute
 
-Free Model Orchestrator keeps OmniRoute role combos filled with endpoints that
-can be used without paid spend. It discovers free candidates, validates quota
-safety, probes only confirmed-free capacity, scores usable endpoints, allocates
-role combos, and applies minimal diffs to OmniRoute.
+Free Model Orchestrator publishes Hermes role demand and policy as
+`fmo-pools/v1` pool specs for OmniRoute. OmniRoute owns provider/model
+discovery, matching, probing, scoring, solving, combo apply, and runtime
+routing.
 
 Main invariant:
 
 ```text
-No probe or production request may exceed confirmed free capacity.
+FMO must not write combos or probe model endpoints directly.
 ```
 
-If free access, hard-stop quota behavior, session health, probe result, or role
-capability support cannot be confirmed, the endpoint is excluded or degraded
-instead of used.
+If role policy or demand cannot be built, FMO fails the pool publish instead of
+guessing model capacity.
 
 ## Current Scope
 
 Implemented package modules live under `src/fmo/`:
 
-- OmniRoute client, startup config validation, DB migrations, idempotency, state guards.
-- Provider/account discovery, catalog snapshots, free candidate detection, model matching.
-- Quota research, access classification, quota attribution, quota manager safety gates.
-- Probe runner, telemetry normalization, quality gates, context-window eligibility.
-- Demand forecasting, global allocation, combo applier, audit, rollback.
+- OmniRoute client, startup config validation, DB migrations, idempotency.
 - Hermes inventory and dynamic role lifecycle.
-- Advisory smart combo review, Artificial Analysis index migration, LLM prompt safety.
-- Web-cookie candidate handling and CLI command surface.
-- Production CLI composition, repository-backed diagnostics, apply guard
-  preconditions, metadata persistence, and scheduler service entrypoint.
+- Demand forecasting from Hermes consumers.
+- Pool generation, publish acknowledgements, usage feedback, audit, scheduler.
+- Production CLI composition, repository-backed role diagnostics, profile
+  normalization, and service entrypoint.
 
 OpenSpec living specs are in `openspec/specs/`. Historical/implementation changes
 are in `openspec/changes/`.
@@ -119,30 +114,13 @@ Package entrypoint:
 Available commands:
 
 ```text
-sync-free-registry
-discover-accounts
-scan-providers
-research-quotas
-classify-access
-sync-metadata
-match-models
-probe-models
-sync-telemetry
-sync-quotas
 sync-hermes-inventory
 reconcile-roles
-score-roles
 forecast-demand
-allocate
-diff
-apply
-rollback
 full
 serve
-explain-endpoint
 explain-role
 normalize-profiles
-aa-index status|analyze|proposal|approve|reject|rollout|rollback
 ```
 
 Common flags:
@@ -158,9 +136,6 @@ Exit codes:
 2 partial_stale
 3 validation_failed
 4 external_dependency_failed
-5 unsafe_to_apply
-6 apply_failed_rolled_back
-7 rollback_failed
 ```
 
 ## Testing
@@ -227,15 +202,11 @@ must also be listed in `openspec/TODO.md`.
 
 The orchestrator fails closed:
 
-- Unknown or stale evidence does not become free access.
-- Paid charge evidence and manual denial override zero-price signals.
-- Free quota is usable only with confirmed hard-stop behavior, limit, remaining,
-  reset time, and remaining quota above safety buffer.
-- Probe runs only for confirmed-free endpoints with reserved capacity.
-- Apply is guarded by DB availability, saved snapshot, valid desired state,
-  quota safety, and passing smoke/probe checks.
-- Web-cookie endpoints are never auto-discovered and remain fallback-oriented
-  unless explicitly configured and capability-confirmed.
+- Unknown role demand does not become model capacity.
+- Pool specs without required role policy are not published.
+- FMO never writes OmniRoute combos directly.
+- FMO never probes provider/model endpoints directly.
+- OmniRoute version/contract mismatch blocks pool publishing.
 
 ## Development Flow
 
