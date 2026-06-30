@@ -38,8 +38,7 @@ def repository(postgres_url):
 @pytest.mark.spec("pool-spec-publisher::No capacity computation")
 @pytest.mark.spec("demand-forecast::Band is declared, not computed")
 @pytest.mark.spec("demand-forecast::Relax is delegated, not applied in FMO")
-@pytest.mark.spec("pool-spec-publisher::Emitted payload matches the golden fixture")
-@pytest.mark.spec("pool-spec-publisher::Capabilities and category use the shared vocabulary")
+@pytest.mark.spec("pool-spec-publisher::Emitted payload matches the shared fixture")
 def test_compose_pool_generation_uses_role_policy_and_forecast_only():
     roles = [
         {
@@ -75,6 +74,7 @@ def test_compose_pool_generation_uses_role_policy_and_forecast_only():
     assert "capacity" not in str(generation)
 
 
+@pytest.mark.spec("pool-spec-publisher::Shared fixture is byte-identical across repos")
 def test_shared_golden_fixture_matches_deterministic_composition():
     roles = [
         {

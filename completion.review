@@ -1,5 +1,13 @@
 # Completion Review
 
+- Archived `adopt-shared-fmo-pools-fixture`: merged the shared fixture and
+  integer demand/consumers contract into living `pool-spec-publisher`, moved the
+  change package to `openspec/changes/archive/2026-06-30-adopt-shared-fmo-pools-fixture`,
+  and fixed stale pytest spec markers after the scenario names changed. The
+  pending coverage file only carries the next active `align-fmo-publisher-quality-band-scale`
+  scenarios until that slice lands. Verification: focused
+  `tests/test_pool_publisher.py` + `tests/test_spec_coverage.py`,
+  `openspec validate --all --strict`, and `git diff --check`.
 - Fixed `adopt-shared-fmo-pools-fixture`: FMO now uses the byte-identical
   canonical `fmo-pools/v1` fixture shared with OmniRoute, emits
   `demand.requests_per_day` as a rounded integer count, keeps `consumers` as an
