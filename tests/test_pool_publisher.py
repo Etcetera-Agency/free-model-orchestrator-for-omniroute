@@ -24,6 +24,7 @@ SHARED_CAPABILITY_TOKENS = {
     "tool_call",
 }
 OMNIROUTE_QUALITY_CATEGORIES = {"agentic", "coding", "intelligence"}
+CONTRACT_WORKLOAD_CLASSES = {"light", "chat", "reasoning", "tools"}
 
 
 @pytest.fixture()
@@ -104,9 +105,7 @@ def test_shared_golden_fixture_matches_deterministic_composition():
 
     assert generation == _golden_generation()
     _assert_canonical_pool_generation(generation)
-    assert GOLDEN_POOL_GENERATION.read_text(encoding="utf-8") == OMNIROUTE_POOL_GENERATION.read_text(
-        encoding="utf-8"
-    )
+    assert GOLDEN_POOL_GENERATION.read_text(encoding="utf-8") == OMNIROUTE_POOL_GENERATION.read_text(encoding="utf-8")
     assert type(generation["pools"][0]["demand"]["requests_per_day"]) is int
     assert type(generation["pools"][0]["demand"]["consumers"]) is int
 
@@ -164,6 +163,7 @@ def _assert_canonical_pool_generation(generation: dict[str, Any]) -> None:
             "relax",
         }
         assert set(pool["constraints"]["quality_band"]["relax"]) == {"max_delta", "when"}
+        assert 0 <= pool["constraints"]["quality_band"]["min"] <= pool["constraints"]["quality_band"]["max"] <= 1
         assert set(pool["tail"]) == {"strategy", "mode", "compatibility"}
         assert "members" not in pool["tail"]
 
@@ -202,6 +202,64 @@ def test_compose_pool_generation_rejects_missing_context_bound():
     roles = [{"id": "routing_fast", "role_lifecycle_status": "active", "requirements": {}}]
 
     with pytest.raises(ValueError, match="missing min_context_tokens"):
+        compose_pool_generation(roles, {"routing_fast": 1}, generation="gen-1")
+
+
+@pytest.mark.spec("pool-spec-publisher::Quality band emitted on the normalized scale")
+@pytest.mark.spec("pool-spec-publisher::workload_class stays in the contract vocabulary")
+def test_compose_pool_generation_normalizes_quality_band_and_workload_class():
+    generation = compose_pool_generation(
+        [
+            {
+                "id": "routing_fast",
+                "role_lifecycle_status": "active",
+                "requirements": {
+                    "workload_class": "standard",
+                    "capabilities": ["chat"],
+                    "min_context_tokens": 8192,
+                },
+                "minimum_quality_value": 55,
+                "maximum_quality_value": 85,
+            },
+            {
+                "id": "routing_tools",
+                "role_lifecycle_status": "active",
+                "requirements": {
+                    "workload_class": "unknown",
+                    "capabilities": ["tools"],
+                    "min_context_tokens": 8192,
+                },
+                "minimum_quality_value": 0.25,
+                "maximum_quality_value": 0.75,
+            },
+        ],
+        {"routing_fast": 5, "routing_tools": 7},
+        generation="gen-1",
+    )
+
+    fast_pool, tools_pool = generation["pools"]
+    assert fast_pool["constraints"]["quality_band"]["min"] == 0.55
+    assert fast_pool["constraints"]["quality_band"]["max"] == 0.85
+    assert fast_pool["demand"]["workload_class"] == "chat"
+    assert tools_pool["constraints"]["quality_band"]["min"] == 0.25
+    assert tools_pool["constraints"]["quality_band"]["max"] == 0.75
+    assert tools_pool["demand"]["workload_class"] == "chat"
+    assert {pool["demand"]["workload_class"] for pool in generation["pools"]}.issubset(CONTRACT_WORKLOAD_CLASSES)
+
+
+@pytest.mark.spec("pool-spec-publisher::Quality band emitted on the normalized scale")
+def test_compose_pool_generation_rejects_unmappable_quality_band():
+    roles = [
+        {
+            "id": "routing_fast",
+            "role_lifecycle_status": "active",
+            "requirements": {"capabilities": ["chat"], "min_context_tokens": 8192},
+            "minimum_quality_value": 55,
+            "maximum_quality_value": 150,
+        }
+    ]
+
+    with pytest.raises(ValueError, match=r"quality_band max 150.0 cannot be normalized"):
         compose_pool_generation(roles, {"routing_fast": 1}, generation="gen-1")
 
 

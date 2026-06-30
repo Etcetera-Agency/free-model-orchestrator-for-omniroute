@@ -22,6 +22,8 @@ QUALITY_CATEGORY_BY_METRIC = {
     "coding_index": "coding",
     "agentic_index": "agentic",
 }
+WORKLOAD_CLASSES = {"light", "chat", "reasoning", "tools"}
+DEFAULT_WORKLOAD_CLASS = "chat"
 
 
 @dataclass(frozen=True)
@@ -55,7 +57,7 @@ def compose_pool_generation(
                 "demand": {
                     "requests_per_day": round(demand.get(role["id"], 0.0)),
                     "consumers": int(role.get("consumer_count") or 0),
-                    "workload_class": requirements.get("workload_class") or "standard",
+                    "workload_class": _workload_class(requirements.get("workload_class")),
                 },
                 "constraints": {
                     "free_only": bool(requirements.get("free_only", True)),
@@ -124,21 +126,43 @@ def usage_feedback(client: OmniRouteClient) -> dict[str, Any]:
 
 def _quality_band(role: dict[str, Any], requirements: dict[str, Any]) -> dict[str, Any]:
     metric = role.get("minimum_quality_metric") or requirements.get("quality_metric") or "intelligence_index"
-    minimum = role.get("minimum_quality_value")
-    maximum = role.get("maximum_quality_value")
+    minimum = _normalized_quality_bound(role.get("minimum_quality_value"), default=0.0, label="min")
+    maximum = _normalized_quality_bound(role.get("maximum_quality_value"), default=1.0, label="max")
+    if minimum > maximum:
+        raise ValueError(f"quality_band min {minimum} exceeds max {maximum}")
     relax = requirements.get("quality_relax") or {"when": "underfilled", "max_delta": 0}
     return {
         "source": "model_intelligence",
         "metric": "score",
         "category": _quality_category(metric),
-        "min": float(minimum) if minimum is not None else 0.0,
-        "max": float(maximum) if maximum is not None else 100.0,
+        "min": minimum,
+        "max": maximum,
         "relax": relax,
     }
 
 
+def _normalized_quality_bound(value: Any, *, default: float, label: str) -> float:
+    # AICODE-NOTE: OmniRoute resolves quality_band against model_intelligence.score
+    # on [0..1]; 0-100 role intents are publisher-normalized before crossing wire.
+    if value is None:
+        return default
+    number = float(value)
+    if 0.0 <= number <= 1.0:
+        return number
+    if 1.0 < number <= 100.0:
+        return number / 100.0
+    raise ValueError(f"quality_band {label} {number} cannot be normalized to [0..1]")
+
+
 def _quality_category(metric: str) -> str:
     return QUALITY_CATEGORY_BY_METRIC.get(metric, metric)
+
+
+def _workload_class(value: Any) -> str:
+    workload_class = str(value or "").strip().lower()
+    if workload_class in WORKLOAD_CLASSES:
+        return workload_class
+    return DEFAULT_WORKLOAD_CLASS
 
 
 def _shared_capabilities(capabilities: Iterable[Any]) -> list[str]:

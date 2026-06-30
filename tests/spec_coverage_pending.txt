@@ -20,6 +20,4 @@ llm-runtime::Malformed completion repaired or rejected
 omniroute-client::Bridge denies combo test helper
 persistence::Re-run refreshes current combo snapshot recency
 pipeline-orchestration::Audit persists records
-pool-spec-publisher::Quality band emitted on the normalized scale
-pool-spec-publisher::workload_class stays in the contract vocabulary
 system-architecture::Intraday failure not rebuilt

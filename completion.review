@@ -1,5 +1,15 @@
 # Completion Review
 
+- Archived `align-fmo-publisher-quality-band-scale`: publisher now normalizes
+  `quality_band.min/max` to OmniRoute's `[0..1]` `model_intelligence.score`
+  scale, rejects un-mappable/out-of-order bands before publish, maps legacy or
+  unknown `workload_class` values to contract default `chat`, and keeps emitted
+  classes inside `{light, chat, reasoning, tools}`. The shared golden fixture is
+  updated to `0.55..0.85`; spec coverage pending lines for the two new scenarios
+  were removed after binding tests. Verification: focused publisher/spec-coverage
+  pytest, ruff check/format on touched Python, `openspec validate
+  align-fmo-publisher-quality-band-scale --strict`, OmniRoute single contract
+  test with bundled Node, and `git diff --check`.
 - Archived `adopt-shared-fmo-pools-fixture`: merged the shared fixture and
   integer demand/consumers contract into living `pool-spec-publisher`, moved the
   change package to `openspec/changes/archive/2026-06-30-adopt-shared-fmo-pools-fixture`,
