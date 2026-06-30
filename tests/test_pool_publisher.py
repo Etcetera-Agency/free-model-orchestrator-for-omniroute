@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +11,17 @@ from fmo.idempotency import stable_hash
 from fmo.omniroute import OmniRouteVersionGate
 from fmo.persistence import Database, Repository
 from fmo.pool_publisher import compose_pool_generation, publish_pool_generation, usage_feedback
+
+GOLDEN_POOL_GENERATION = Path("reference/fixtures/fmo-pools-v1-generation.json")
+SHARED_CAPABILITY_TOKENS = {
+    "api:openai",
+    "chat",
+    "developer_role",
+    "protocol:openai",
+    "thinking",
+    "tool_call",
+}
+OMNIROUTE_QUALITY_CATEGORIES = {"agentic", "coding", "intelligence"}
 
 
 @pytest.fixture()
@@ -24,6 +36,8 @@ def repository(postgres_url):
 @pytest.mark.spec("pool-spec-publisher::No capacity computation")
 @pytest.mark.spec("demand-forecast::Band is declared, not computed")
 @pytest.mark.spec("demand-forecast::Relax is delegated, not applied in FMO")
+@pytest.mark.spec("pool-spec-publisher::Emitted payload matches the golden fixture")
+@pytest.mark.spec("pool-spec-publisher::Capabilities and category use the shared vocabulary")
 def test_compose_pool_generation_uses_role_policy_and_forecast_only():
     roles = [
         {
@@ -32,7 +46,7 @@ def test_compose_pool_generation_uses_role_policy_and_forecast_only():
             "requirements": {
                 "pool_id": "pool-fast",
                 "combo_id": "combo-fast",
-                "capabilities": ["chat"],
+                "capabilities": ["chat", "tools", "thinking", "api:openai"],
                 "min_context_tokens": 8192,
                 "quality_relax": {"when": "underfilled", "max_delta": 12},
             },
@@ -45,14 +59,105 @@ def test_compose_pool_generation_uses_role_policy_and_forecast_only():
 
     generation = compose_pool_generation(roles, {"routing_fast": 42}, generation="gen-1")
 
-    assert generation == {
+    assert generation == _golden_generation(generation="gen-1")
+    _assert_canonical_pool_generation(generation)
+    assert set(generation["pools"][0]["constraints"]["capabilities"]).issubset(SHARED_CAPABILITY_TOKENS)
+    assert generation["pools"][0]["constraints"]["quality_band"]["category"] in OMNIROUTE_QUALITY_CATEGORIES
+    assert "models" not in generation["pools"][0]
+    assert "capacity" not in str(generation)
+
+
+def test_shared_golden_fixture_matches_deterministic_composition():
+    roles = [
+        {
+            "id": "routing_fast",
+            "role_lifecycle_status": "active",
+            "requirements": {
+                "pool_id": "pool-fast",
+                "combo_id": "combo-fast",
+                "capabilities": ["tools", "api:openai", "thinking", "chat"],
+                "min_context_tokens": 8192,
+                "quality_relax": {"max_delta": 12, "when": "underfilled"},
+            },
+            "minimum_quality_metric": "coding_index",
+            "minimum_quality_value": 55,
+            "maximum_quality_value": 85,
+            "consumer_count": 3,
+        }
+    ]
+
+    generation = compose_pool_generation(roles, {"routing_fast": 42}, generation="gen-001")
+
+    assert generation == _golden_generation()
+    _assert_canonical_pool_generation(generation)
+
+
+def test_capability_aliases_use_omniroute_matching_tokens():
+    generation = compose_pool_generation(
+        [
+            {
+                "id": "routing_fast",
+                "role_lifecycle_status": "active",
+                "requirements": {
+                    "capabilities": ["tools", "tool_calling", "tool_call", "api:openai", "thinking"],
+                    "min_context_tokens": 8192,
+                },
+            }
+        ],
+        {"routing_fast": 1},
+        generation="gen-1",
+    )
+
+    assert generation["pools"][0]["constraints"]["capabilities"] == [
+        "api:openai",
+        "thinking",
+        "tool_call",
+    ]
+
+
+def _golden_generation(*, generation: str = "gen-001") -> dict[str, Any]:
+    payload = json.loads(GOLDEN_POOL_GENERATION.read_text(encoding="utf-8"))
+    payload["generation"] = generation
+    return payload
+
+
+def _assert_canonical_pool_generation(generation: dict[str, Any]) -> None:
+    assert set(generation) == {"contract_version", "generation", "pools"}
+    assert generation["contract_version"] == "fmo-pools/v1"
+    assert isinstance(generation["pools"], list)
+    assert generation["pools"]
+    for pool in generation["pools"]:
+        assert set(pool) == {"pool_id", "combo_id", "demand", "constraints", "tail"}
+        assert set(pool["demand"]) == {"requests_per_day", "consumers", "workload_class"}
+        assert set(pool["constraints"]) == {
+            "free_only",
+            "capabilities",
+            "min_context_tokens",
+            "quality_band",
+        }
+        assert type(pool["constraints"]["min_context_tokens"]) is int
+        assert set(pool["constraints"]["quality_band"]) == {
+            "source",
+            "metric",
+            "category",
+            "min",
+            "max",
+            "relax",
+        }
+        assert set(pool["constraints"]["quality_band"]["relax"]) == {"max_delta", "when"}
+        assert set(pool["tail"]) == {"strategy", "mode", "compatibility"}
+        assert "members" not in pool["tail"]
+
+
+def _generation(generation: str, *, requests: float) -> dict:
+    return {
         "contract_version": "fmo-pools/v1",
-        "generation": "gen-1",
+        "generation": generation,
         "pools": [
             {
                 "pool_id": "pool-fast",
                 "combo_id": "combo-fast",
-                "demand": {"requests_per_day": 42.0, "consumers": 3, "workload_class": "standard"},
+                "demand": {"requests_per_day": requests, "consumers": 1, "workload_class": "standard"},
                 "constraints": {
                     "free_only": True,
                     "capabilities": ["chat"],
@@ -60,18 +165,16 @@ def test_compose_pool_generation_uses_role_policy_and_forecast_only():
                     "quality_band": {
                         "source": "model_intelligence",
                         "metric": "score",
-                        "category": "coding",
-                        "min": 55.0,
-                        "max": 85.0,
-                        "relax": {"when": "underfilled", "max_delta": 12},
+                        "category": "intelligence",
+                        "min": 50,
+                        "max": 90,
+                        "relax": {"when": "underfilled", "max_delta": 10},
                     },
                 },
                 "tail": {"strategy": "auto", "mode": "fallback", "compatibility": "strict"},
             }
         ],
     }
-    assert "models" not in generation["pools"][0]
-    assert "capacity" not in str(generation)
 
 
 @pytest.mark.spec("pool-spec-publisher::Missing context bound fails closed")
@@ -84,6 +187,7 @@ def test_compose_pool_generation_rejects_missing_context_bound():
 
 @pytest.mark.spec("pool-spec-publisher::Retry is idempotent")
 @pytest.mark.spec("pool-spec-publisher::Changed payload gets new idempotency key")
+@pytest.mark.spec("pool-spec-publisher::Idempotency stays payload-hash based")
 @pytest.mark.spec("omniroute-client::Supported version publishes")
 def test_publish_pool_generation_uses_payload_hash_idempotency(repository):
     client = FakePoolClient(version="1.4.0")
@@ -110,6 +214,7 @@ def test_publish_pool_generation_uses_payload_hash_idempotency(repository):
     assert client.requests[1]["idempotency_key"] == first.payload_hash
     assert client.requests[3]["idempotency_key"] == first.payload_hash
     assert client.requests[5]["idempotency_key"] == third.payload_hash
+    assert client.requests[1]["idempotency_key"] != generation["generation"]
     with repository.database.transaction() as transaction:
         same_payload = repository.published_generations.get(transaction, "gen-1", first.payload_hash)
         changed_payload = repository.published_generations.get(transaction, "gen-1", third.payload_hash)
@@ -149,34 +254,6 @@ def test_build_publisher_stages_keeps_pipeline_runner_contract():
     ]
 
 
-def _generation(generation: str, *, requests: float) -> dict:
-    return {
-        "contract_version": "fmo-pools/v1",
-        "generation": generation,
-        "pools": [
-            {
-                "pool_id": "pool-fast",
-                "combo_id": "combo-fast",
-                "demand": {"requests_per_day": requests, "consumers": 1, "workload_class": "standard"},
-                "constraints": {
-                    "free_only": True,
-                    "capabilities": ["chat"],
-                    "min_context_tokens": 8192,
-                    "quality_band": {
-                        "source": "model_intelligence",
-                        "metric": "score",
-                        "category": "intelligence",
-                        "min": 50,
-                        "max": 90,
-                        "relax": {"when": "underfilled", "max_delta": 10},
-                    },
-                },
-                "tail": {"strategy": "auto", "mode": "fallback", "compatibility": "strict"},
-            }
-        ],
-    }
-
-
 class FakePoolClient:
     def __init__(self, *, version: str, usage: dict | None = None):
         self.version = version
@@ -192,9 +269,7 @@ class FakePoolClient:
         raise AssertionError(path)
 
     def put(self, path: str, payload: dict[str, Any], *, idempotency_key: str | None = None) -> dict[str, str]:
-        self.requests.append(
-            {"method": "PUT", "path": path, "payload": payload, "idempotency_key": idempotency_key}
-        )
+        self.requests.append({"method": "PUT", "path": path, "payload": payload, "idempotency_key": idempotency_key})
         if path != "/api/fmo/pools":
             raise AssertionError(path)
         return {"status": "accepted"}

@@ -1,5 +1,19 @@
 # Completion Review
 
+- Locked the FMO publisher wire contract per
+  `lock-pool-publisher-wire-contract`: added the shared
+  `reference/fixtures/fmo-pools-v1-generation.json` golden fixture, locked
+  composed payloads to canonical `contract_version`, `demand`, `constraints`,
+  `quality_band.relax`, and tail intent shape, normalized tool capability
+  aliases to OmniRoute's `tool_call` matching token, and documented the
+  model-intelligence category mapping used by OmniRoute
+  `getResolvedTaskFitness`. Payload-hash idempotency is asserted to differ
+  from the generation marker. `tests/spec_coverage_pending.txt` required no
+  line changes because all new scenarios are directly bound in
+  `tests/test_pool_publisher.py`. Code Simplifier pass tightened touched code
+  types/formatting. Verification: focused publisher/spec-coverage pytest,
+  ruff check/format on touched files, `openspec validate
+  lock-pool-publisher-wire-contract --strict`, and `git diff --check`.
 - Removed FMO matching/probing ownership per `remove-fmo-matching-probing`:
   canonical runtime now owns only Hermes inventory, role lifecycle, demand
   forecast, audit, and pool publishing; discovery, model matching, provider

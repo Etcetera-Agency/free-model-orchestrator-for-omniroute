@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
@@ -10,6 +10,18 @@ from fmo.omniroute import OmniRouteClient, OmniRouteVersionGate
 from fmo.persistence import Repository
 
 POOL_CONTRACT_VERSION = "fmo-pools/v1"
+SHARED_CAPABILITY_ALIASES = {
+    "tool_calling": "tool_call",
+    "tools": "tool_call",
+}
+QUALITY_CATEGORY_BY_METRIC = {
+    # AICODE-NOTE: OmniRoute resolves these category names through
+    # getResolvedTaskFitness(model, category); keep FMO metrics mapped to
+    # categories persisted in OmniRoute's model_intelligence table.
+    "intelligence_index": "intelligence",
+    "coding_index": "coding",
+    "agentic_index": "agentic",
+}
 
 
 @dataclass(frozen=True)
@@ -45,7 +57,7 @@ def compose_pool_generation(
                 },
                 "constraints": {
                     "free_only": bool(requirements.get("free_only", True)),
-                    "capabilities": list(requirements.get("capabilities") or []),
+                    "capabilities": _shared_capabilities(requirements.get("capabilities") or []),
                     "min_context_tokens": int(min_context_tokens),
                     "quality_band": _quality_band(role, requirements),
                 },
@@ -123,8 +135,14 @@ def _quality_band(role: dict[str, Any], requirements: dict[str, Any]) -> dict[st
 
 
 def _quality_category(metric: str) -> str:
-    return {
-        "intelligence_index": "intelligence",
-        "coding_index": "coding",
-        "agentic_index": "agentic",
-    }.get(metric, metric)
+    return QUALITY_CATEGORY_BY_METRIC.get(metric, metric)
+
+
+def _shared_capabilities(capabilities: Iterable[Any]) -> list[str]:
+    tokens = []
+    for capability in capabilities:
+        token = str(capability).strip().lower()
+        if not token:
+            continue
+        tokens.append(SHARED_CAPABILITY_ALIASES.get(token, token))
+    return sorted(set(tokens))
