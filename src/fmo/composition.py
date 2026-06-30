@@ -110,7 +110,7 @@ def compose_runtime(
     return ComposedRuntime(
         repository=repository,
         omniroute_client=client,
-        stages=build_canonical_stages(dependencies=dependencies, adapters=selected_adapters),
+        stages=build_publisher_stages(dependencies=dependencies),
         cron=config.hermes_inventory_cron,
         llm_runtime=llm_runtime,
         config=config,
@@ -151,7 +151,7 @@ def build_publisher_stages(
     known_contract_versions: set[str] | None = None,
 ) -> list[Stage]:
     stage_adapters = StageAdapters()
-    version_gate = OmniRouteVersionGate(known_contract_versions or {"1.4.0"})
+    version_gate = OmniRouteVersionGate(known_contract_versions or {">=3.7.0"})
     return [
         Stage("hermes-inventory", _adapter_stage("hermes-inventory", dependencies, stage_adapters)),
         Stage("role-lifecycle", _adapter_stage("role-lifecycle", dependencies, stage_adapters)),

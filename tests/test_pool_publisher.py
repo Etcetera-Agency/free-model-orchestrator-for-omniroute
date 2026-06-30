@@ -4,8 +4,9 @@ from typing import Any
 
 import pytest
 
-from fmo.composition import build_publisher_stages
+from fmo.composition import build_publisher_stages, compose_runtime
 from fmo.composition_stages import StageDependencies
+from fmo.config import StartupConfig
 from fmo.db import MigrationRunner
 from fmo.idempotency import stable_hash
 from fmo.omniroute import OmniRouteVersionGate
@@ -73,6 +74,25 @@ def test_compose_pool_generation_uses_role_policy_and_forecast_only():
     assert generation["pools"][0]["constraints"]["quality_band"]["category"] in OMNIROUTE_QUALITY_CATEGORIES
     assert "models" not in generation["pools"][0]
     assert "capacity" not in str(generation)
+
+
+def test_compose_pool_generation_preserves_grid_combo_id_and_normalizes_empty_context():
+    roles = [
+        {
+            "id": "fmo-grid-int-med",
+            "role_lifecycle_status": "active",
+            "requirements": {"minimum_context_window": 0},
+            "minimum_quality_value": 20,
+            "maximum_quality_value": 20,
+            "consumer_count": 1,
+        }
+    ]
+
+    generation = compose_pool_generation(roles, {"fmo-grid-int-med": 10}, generation="gen-1")
+
+    pool = generation["pools"][0]
+    assert pool["combo_id"] == "fmo-grid-int-med"
+    assert pool["constraints"]["min_context_tokens"] == 1
 
 
 @pytest.mark.spec("pool-spec-publisher::Shared fixture is byte-identical across repos")
@@ -282,22 +302,39 @@ def test_publish_pool_generation_uses_payload_hash_idempotency(repository):
     assert third.payload_hash == stable_hash(changed)
     assert third.payload_hash != first.payload_hash
     assert [request["path"] for request in client.requests] == [
-        "/api/version",
+        "/api/monitoring/health",
+        "/api/combos",
         "/api/fmo/pools",
-        "/api/version",
+        "/api/monitoring/health",
+        "/api/combos",
         "/api/fmo/pools",
-        "/api/version",
+        "/api/monitoring/health",
+        "/api/combos",
         "/api/fmo/pools",
     ]
-    assert client.requests[1]["idempotency_key"] == first.payload_hash
-    assert client.requests[3]["idempotency_key"] == first.payload_hash
-    assert client.requests[5]["idempotency_key"] == third.payload_hash
-    assert client.requests[1]["idempotency_key"] != generation["generation"]
+    assert client.requests[2]["idempotency_key"] == first.payload_hash
+    assert client.requests[5]["idempotency_key"] == first.payload_hash
+    assert client.requests[8]["idempotency_key"] == third.payload_hash
+    assert client.requests[2]["idempotency_key"] != generation["generation"]
     with repository.database.transaction() as transaction:
         same_payload = repository.published_generations.get(transaction, "gen-1", first.payload_hash)
         changed_payload = repository.published_generations.get(transaction, "gen-1", third.payload_hash)
     assert same_payload is not None
     assert changed_payload is not None
+
+
+@pytest.mark.spec("pool-spec-publisher::Publish references live combos")
+def test_publish_pool_generation_resolves_combo_names_before_put(repository):
+    client = FakePoolClient(version="1.4.0", combos=[{"id": "combo-uuid", "name": "fmo-grid-int-med"}])
+    gate = OmniRouteVersionGate({"1.4.0"})
+    generation = _generation("gen-1", requests=5)
+    generation["pools"][0]["combo_id"] = "fmo-grid-int-med"
+
+    result = publish_pool_generation(repository, client, generation, run_id=None, version_gate=gate)
+
+    sent_payload = client.requests[2]["payload"]
+    assert sent_payload["pools"][0]["combo_id"] == "combo-uuid"
+    assert result.payload_hash == stable_hash(sent_payload)
 
 
 @pytest.mark.spec("omniroute-client::Unsupported contract version refuses publish")
@@ -308,7 +345,7 @@ def test_publish_pool_generation_rejects_unsupported_contract(repository):
     with pytest.raises(ValueError, match="unsupported pool contract"):
         publish_pool_generation(repository, client, _generation("gen-1", requests=5), run_id=None, version_gate=gate)
 
-    assert [request["path"] for request in client.requests] == ["/api/version"]
+    assert [request["path"] for request in client.requests] == ["/api/monitoring/health"]
 
 
 @pytest.mark.spec("pool-spec-publisher::Feedback adjusts next demand")
@@ -332,16 +369,45 @@ def test_build_publisher_stages_keeps_pipeline_runner_contract():
     ]
 
 
+def test_compose_runtime_uses_publisher_stages(monkeypatch):
+    monkeypatch.setattr("fmo.composition.Database", lambda url: {"url": url})
+    monkeypatch.setattr("fmo.composition.Repository", lambda database: {"database": database})
+    monkeypatch.setattr("fmo.composition.OmniRouteClient", lambda **kwargs: {"client": kwargs})
+
+    runtime = compose_runtime(
+        StartupConfig(
+            omniroute_url="https://omniroute.test",
+            database_url="postgresql://example/fmo",
+            omniroute_api_key="secret",
+            hermes_inventory_mode="filesystem",
+            hermes_home="/tmp/hermes",
+            hermes_inventory_cron="0 4 * * *",
+        )
+    )
+
+    assert [stage.name for stage in runtime.stages] == [
+        "hermes-inventory",
+        "role-lifecycle",
+        "demand-forecast",
+        "compose",
+        "publish",
+        "usage-feedback",
+    ]
+
+
 class FakePoolClient:
-    def __init__(self, *, version: str, usage: dict | None = None):
+    def __init__(self, *, version: str, usage: dict | None = None, combos: list[dict[str, Any]] | None = None):
         self.version = version
         self.usage = usage or {"pools": []}
+        self.combos = combos or [{"id": "combo-fast", "name": "combo-fast"}]
         self.requests: list[dict[str, Any]] = []
 
     def get(self, path: str) -> dict[str, Any]:
         self.requests.append({"method": "GET", "path": path})
-        if path == "/api/version":
+        if path == "/api/monitoring/health":
             return {"version": self.version}
+        if path == "/api/combos":
+            return {"combos": self.combos}
         if path == "/api/fmo/usage":
             return self.usage
         raise AssertionError(path)

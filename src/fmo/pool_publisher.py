@@ -53,7 +53,7 @@ def compose_pool_generation(
         pools.append(
             {
                 "pool_id": requirements.get("pool_id") or role["id"],
-                "combo_id": requirements.get("combo_id") or f"fmo-{role['id']}",
+                "combo_id": requirements.get("combo_id") or _default_combo_id(str(role["id"])),
                 "demand": {
                     "requests_per_day": round(demand.get(role["id"], 0.0)),
                     "consumers": int(role.get("consumer_count") or 0),
@@ -62,7 +62,7 @@ def compose_pool_generation(
                 "constraints": {
                     "free_only": bool(requirements.get("free_only", True)),
                     "capabilities": _shared_capabilities(requirements.get("capabilities") or []),
-                    "min_context_tokens": int(min_context_tokens),
+                    "min_context_tokens": _min_context_tokens(min_context_tokens),
                     "quality_band": _quality_band(role, requirements),
                 },
                 "tail": {"strategy": "auto", "mode": "fallback", "compatibility": "strict"},
@@ -85,10 +85,11 @@ def publish_pool_generation(
     version_gate: OmniRouteVersionGate,
     server_version: str | None = None,
 ) -> PoolPublishResult:
-    version = server_version or str(client.get("/api/version").get("version") or "")
+    version = server_version or str(client.get("/api/monitoring/health").get("version") or "")
     decision = version_gate.evaluate(version)
     if not decision.can_apply:
         raise ValueError(f"unsupported pool contract {POOL_CONTRACT_VERSION} on OmniRoute {version}")
+    generation = _resolve_combo_ids(client, generation)
     payload_hash = stable_hash(generation)
     # AICODE-NOTE: Pool publish idempotency is payload-hash based; generation
     # markers may repeat during retries or operator-triggered replays.
@@ -122,6 +123,34 @@ def publish_pool_generation(
 
 def usage_feedback(client: OmniRouteClient) -> dict[str, Any]:
     return client.get("/api/fmo/usage")
+
+
+def _resolve_combo_ids(client: OmniRouteClient, generation: dict[str, Any]) -> dict[str, Any]:
+    # AICODE-NOTE: FMO policy names combos as fmo-grid-*; OmniRoute's pool
+    # contract persists combo UUIDs, so publisher resolves names at wire time.
+    combo_payload = client.get("/api/combos")
+    combos = combo_payload.get("combos", []) if isinstance(combo_payload, dict) else []
+    combo_ids: set[str] = set()
+    combo_id_by_name: dict[str, str] = {}
+    for combo in combos:
+        if not isinstance(combo, dict):
+            continue
+        combo_id = str(combo.get("id") or "")
+        if not combo_id:
+            continue
+        combo_ids.add(combo_id)
+        combo_name = str(combo.get("name") or "")
+        if combo_name:
+            combo_id_by_name[combo_name] = combo_id
+
+    resolved_pools = []
+    for pool in generation.get("pools", []):
+        combo_ref = str(pool.get("combo_id") or "")
+        combo_id = combo_ref if combo_ref in combo_ids else combo_id_by_name.get(combo_ref)
+        if not combo_id:
+            raise ValueError(f"referenced combo not found: {combo_ref}")
+        resolved_pools.append({**pool, "combo_id": combo_id})
+    return {**generation, "pools": resolved_pools}
 
 
 def _quality_band(role: dict[str, Any], requirements: dict[str, Any]) -> dict[str, Any]:
@@ -163,6 +192,19 @@ def _workload_class(value: Any) -> str:
     if workload_class in WORKLOAD_CLASSES:
         return workload_class
     return DEFAULT_WORKLOAD_CLASS
+
+
+def _default_combo_id(role_id: str) -> str:
+    if role_id.startswith("fmo-grid-"):
+        return role_id
+    return f"fmo-{role_id}"
+
+
+def _min_context_tokens(value: Any) -> int:
+    tokens = int(value)
+    if tokens <= 0:
+        return 1
+    return tokens
 
 
 def _shared_capabilities(capabilities: Iterable[Any]) -> list[str]:

@@ -19,7 +19,7 @@ class OmniRouteVersionGate:
         self.known_apply_versions = known_apply_versions
 
     def evaluate(self, version: str) -> VersionDecision:
-        can_apply = version in self.known_apply_versions
+        can_apply = any(_version_matches(version, rule) for rule in self.known_apply_versions)
         return VersionDecision(version=version, can_read=True, can_apply=can_apply)
 
 
@@ -192,3 +192,21 @@ def _retry_after_seconds(value: str | None) -> float:
         return max(0.0, float(value))
     except ValueError:
         return 0.0
+
+
+def _version_matches(version: str, rule: str) -> bool:
+    if rule.startswith(">="):
+        return _version_tuple(version) >= _version_tuple(rule[2:])
+    return version == rule
+
+
+def _version_tuple(value: str) -> tuple[int, ...]:
+    parts = value.strip().split(".")
+    numbers = []
+    for part in parts:
+        if not part.isdigit():
+            break
+        numbers.append(int(part))
+    while len(numbers) < 3:
+        numbers.append(0)
+    return tuple(numbers)

@@ -1,5 +1,12 @@
 # Completion Review
 
+- Deploy fix: publisher now resolves FMO combo names to live OmniRoute combo ids
+  before sending `fmo-pools/v1`, so generated `fmo-grid-*` policy refs satisfy
+  OmniRoute's UUID-backed `combo_id` lookup. The idempotency key is computed from
+  the resolved wire payload, and the living `pool-spec-publisher` spec now covers
+  that publish-time resolution. Code Simplifier pass kept the resolver explicit
+  and fail-closed for missing combos. Verification: full pytest
+  (`142 passed, 28 skipped`) and `git diff --check`.
 - Archived `align-fmo-publisher-quality-band-scale`: publisher now normalizes
   `quality_band.min/max` to OmniRoute's `[0..1]` `model_intelligence.score`
   scale, rejects un-mappable/out-of-order bands before publish, maps legacy or

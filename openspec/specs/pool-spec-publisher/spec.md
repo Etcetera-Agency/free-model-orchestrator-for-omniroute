@@ -119,6 +119,13 @@ name OmniRoute's model-intelligence resolver recognizes. Generation publish SHAL
 idempotent by payload hash (`Idempotency-Key` = payload hash) and SHALL NOT key
 idempotency on the generation string.
 
+#### Scenario: Publish references live combos
+
+- GIVEN a composed generation whose pool references an OmniRoute combo by name
+- WHEN the generation is published
+- THEN the published payload references the live OmniRoute combo id
+- AND the payload hash is computed from the published payload
+
 #### Scenario: Emitted payload matches the shared fixture
 
 - GIVEN a composed generation from a Hermes inventory
@@ -139,4 +146,3 @@ idempotency on the generation string.
 - WHEN it is published
 - THEN the `Idempotency-Key` is the payload hash
 - AND it is not the generation string
-

@@ -300,6 +300,13 @@ def test_unknown_omniroute_version_read_only_forbids_apply():
     assert unknown.can_apply is False
 
 
+def test_omniroute_version_gate_accepts_minimum_version_rule():
+    known = OmniRouteVersionGate({">=3.7.0"})
+
+    assert known.evaluate("3.8.42").can_apply is True
+    assert known.evaluate("3.6.99").can_apply is False
+
+
 @pytest.mark.spec("runtime-bootstrap::Invalid environment fails before running")
 @pytest.mark.spec("environment-and-connections::Secret in repo config")
 def test_startup_validation_fails_before_model_endpoint_call(monkeypatch):
